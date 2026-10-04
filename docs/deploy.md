@@ -66,15 +66,20 @@ Instale as CLIs: `npm i -g eas-cli` e o `flyctl` ([fly.io/docs/flyctl/install](h
 
 1. Crie o projeto em **supabase.com → New project**, região **South America (São Paulo)**, senha forte
    (guarde no gerenciador de senhas).
-2. Em **Project Settings → Database**, copie as strings de conexão:
-   - **Conexão direta** (`db.<projeto>.supabase.co:5432`) → será o `DIRECT_URL` (migrations).
-   - **Session pooler** (porta 5432) → será o `DATABASE_URL` da API.
-   Troque `[YOUR-PASSWORD]` pela senha. *(Nomes e telas do painel mudam; se algo não bater, siga a documentação do Supabase.)*
+2. Clique em **Connect** (botão no topo da página do projeto; as strings já não ficam em *Project Settings → Database*) e copie:
+   - **Session pooler** (porta 5432, usuário `postgres.<projeto>`) → será o `DATABASE_URL` da API **e também o `DIRECT_URL`** das migrations.
+     Ela funciona em redes só IPv4 (a maioria das residenciais e o Render).
+   - A **Direct connection** (`db.<projeto>.supabase.co:5432`) é **IPv6** por padrão (IPv4 só com um add-on pago), então tende a falhar
+     da sua máquina e do Render. Use-a só se a sua rede tiver IPv6.
+   Troque `[YOUR-PASSWORD]` pela senha; **caracteres reservados da senha precisam de percent-encoding** (`@` → `%40`, `#` → `%23`,
+   `?` → `%3F`, `&` → `%26`, espaço → `%20`), por isso o mais simples é uma senha só com letras e números.
+   Para trocar a senha: *Database* (menu lateral) → *Settings* → *Reset database password*.
+   *(Nomes e telas do painel mudam; se algo não bater, siga a [documentação do Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres), consultada em 2026-10-04.)*
 3. Aplique as migrations da sua máquina (cria tabelas, restrições, RLS e o papel `app_user`):
 
    ```bash
-   # PowerShell
-   $env:DIRECT_URL = "postgresql://postgres:SENHA@db.PROJETO.supabase.co:5432/postgres"
+   # PowerShell (a mesma string do Session pooler do DATABASE_URL)
+   $env:DIRECT_URL = "postgresql://postgres.PROJETO:SENHA@HOST-DO-POOLER:5432/postgres"
    pnpm db:deploy
    pnpm db:seed          # catálogo de bancos
    ```

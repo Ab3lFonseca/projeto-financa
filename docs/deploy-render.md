@@ -29,7 +29,8 @@ Isso serve para **testar**. Para uso real e contínuo, prefira o Fly.io (ou um p
 ## 3. Passo a passo
 
 1. **Supabase** (uma vez): siga as seções 4 e 5 do [deploy.md](deploy.md) — projeto, migrations (`pnpm db:deploy` e `pnpm db:seed` da
-   sua máquina) e as chaves. Você vai precisar de: `DATABASE_URL` (**Session pooler**, que funciona em IPv4), `SUPABASE_URL`,
+   sua máquina, com a string do **Session pooler** também no `DIRECT_URL`) e as chaves. Você vai precisar de: `DATABASE_URL` (**Session pooler**, que funciona em IPv4;
+   a *Direct connection* é IPv6 e costuma falhar), `SUPABASE_URL`,
    `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY`. A imagem da API não tem o CLI do Prisma e o Render free não roda tarefas avulsas: as migrations
    são sempre aplicadas por você, da sua máquina (ou pelo workflow do GitHub).
 2. No [Render](https://render.com): **New → Blueprint** → conecte o GitHub e escolha este repositório. Ele lê o `render.yaml` e
