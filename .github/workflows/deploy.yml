@@ -1,0 +1,50 @@
+﻿name: Deploy da API
+
+# Manual de propósito: deploy em produção nunca acontece por acidente.
+# Segredos necessários (Settings → Secrets and variables → Actions):
+#   FLY_API_TOKEN  → fly tokens create deploy
+#   DIRECT_URL     → conexão DIRETA do Postgres (porta 5432, não o pooler de transação), para migrations (docs/deploy.md)
+on:
+  workflow_dispatch:
+    inputs:
+      migrate:
+        description: "Aplicar migrations do banco antes do deploy"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        if: ${{ inputs.migrate }}
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        if: ${{ inputs.migrate }}
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Migrations do banco (Prisma exige conexão direta/sessão)
+        if: ${{ inputs.migrate }}
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          pnpm install --frozen-lockfile --filter @app/database...
+          pnpm db:deploy
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy no Fly
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only

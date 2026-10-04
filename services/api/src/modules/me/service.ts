@@ -1,0 +1,64 @@
+import type { ProfileDTO } from "@app/shared";
+import { notificationPrefs, type EntitlementsDTO, type MeDTO } from "@app/shared";
+import type { Config } from "../../config";
+import { Errors } from "../../lib/errors";
+import { countUsage, limitsFor } from "../../lib/plan";
+import type { Tx } from "../../lib/db";
+import type { AuthUser } from "../../types";
+
+type ProfileRow = {
+  displayName: string | null;
+  locale: string;
+  timezone: string;
+  currency: string;
+  theme: "SYSTEM" | "LIGHT" | "DARK";
+  notificationPrefs: unknown;
+  onboardingCompletedAt: Date | null;
+};
+
+export function toProfileDTO(p: ProfileRow): ProfileDTO {
+  return {
+    displayName: p.displayName,
+    locale: p.locale,
+    timezone: p.timezone,
+    currency: p.currency,
+    theme: p.theme,
+    onboardingCompleted: p.onboardingCompletedAt !== null,
+    notificationPrefs: notificationPrefs.parse(p.notificationPrefs ?? {}),
+  };
+}
+
+export async function buildEntitlements(tx: Tx, user: AuthUser, config: Config): Promise<EntitlementsDTO> {
+  const limits = limitsFor(user.plan);
+  const usage = await countUsage(tx, user.id);
+  return {
+    plan: user.plan,
+    billingEnforced: config.BILLING_ENFORCED,
+    limits: {
+      accounts: limits.accounts,
+      cards: limits.cards,
+      goals: limits.goals,
+      recurringRules: limits.recurringRules,
+    },
+    features: {
+      openFinance: limits.openFinance && config.OPEN_FINANCE_ENABLED,
+      advancedReports: limits.advancedReports,
+      advancedInsights: limits.advancedInsights,
+    },
+    usage,
+  };
+}
+
+export async function buildMe(tx: Tx, user: AuthUser, config: Config): Promise<MeDTO> {
+  const profile = await tx.profile.findUnique({ where: { userId: user.id } });
+  if (!profile) throw Errors.notFound("Perfil");
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    profile: toProfileDTO(profile),
+    consentRequired: !user.consentOk,
+    legalVersions: { terms: config.LEGAL_TERMS_VERSION, privacy: config.LEGAL_PRIVACY_VERSION },
+    entitlements: await buildEntitlements(tx, user, config),
+  };
+}

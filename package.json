@@ -1,0 +1,22 @@
+{
+  "name": "projeto-financa",
+  "private": true,
+  "version": "0.0.0",
+  "description": "App de gestão financeira pessoal (mobile + API)",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev:db": "pnpm --filter @app/dev-db start",
+    "dev:api": "pnpm --filter @app/api dev",
+    "dev:seed": "pnpm --filter @app/api seed:demo",
+    "db:generate": "pnpm --filter @app/database generate",
+    "db:validate": "pnpm --filter @app/database validate",
+    "db:migrate": "pnpm --filter @app/database migrate:dev",
+    "db:deploy": "pnpm --filter @app/database migrate:deploy",
+    "db:seed": "pnpm --filter @app/database seed",
+    "db:test": "pnpm --filter @app/database test",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  }
+}

@@ -1,0 +1,24 @@
+// Reexporta o Zod para que API e app usem a MESMA instância (tipos e schemas compatíveis).
+export { z } from "zod";
+export * from "./money";
+export * from "./dates";
+export * from "./cards";
+export * from "./recurrence";
+export * from "./plans";
+export * from "./ranges";
+export * from "./enums";
+export * from "./schemas/common";
+export * from "./schemas/auth";
+export * from "./schemas/me";
+export * from "./schemas/categories";
+export * from "./schemas/accounts";
+export * from "./schemas/transactions";
+export * from "./schemas/cards";
+export * from "./schemas/recurring";
+export * from "./schemas/budgets-goals";
+export * from "./schemas/reports";
+export * from "./schemas/dashboard";
+export * from "./schemas/notifications";
+export * from "./schemas/open-finance";
+export * from "./schemas/diagnostics";
+export * from "./schemas/admin";

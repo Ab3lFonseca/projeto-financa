@@ -1,0 +1,38 @@
+# dependências e builds
+node_modules/
+dist/
+build/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# segredos — NUNCA versionar
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+google-services.json
+GoogleService-Info.plist
+
+# cluster do Postgres de desenvolvimento
+.data/
+
+# código gerado
+packages/database/src/generated/
+
+# expo / react native
+.expo/
+.expo-shared/
+ios/
+android/
+
+# sistema / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log

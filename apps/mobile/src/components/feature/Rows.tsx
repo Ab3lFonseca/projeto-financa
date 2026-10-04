@@ -1,0 +1,225 @@
+import { PAYMENT_METHOD_LABEL_PT } from "@app/shared";
+import { Pressable, View } from "react-native";
+import { Icon } from "@/components/Icon";
+import { Badge, ProgressBar } from "@/components/ui/Controls";
+import { Card, IconBadge, Row } from "@/components/ui/Layout";
+import { Money } from "@/components/ui/Money";
+import { Text } from "@/components/ui/Text";
+import type { Account, Budget, Card as CardModel, Goal, Transaction } from "@/lib/api/endpoints";
+import { formatDateShort, formatPct } from "@/lib/format";
+import { useTheme } from "@/theme/ThemeProvider";
+
+/** Linha de lançamento: ícone da categoria, descrição, origem e valor (verde/vermelho). */
+export function TransactionRow({ tx, onPress, showDate }: { tx: Transaction; onPress?: () => void; showDate?: boolean }) {
+  const { colors } = useTheme();
+  const isTransfer = tx.type === "TRANSFER";
+  const isIncome = tx.type === "INCOME" || (isTransfer && tx.transferSide === "IN");
+  const signed = isIncome ? tx.amountCents : -tx.amountCents;
+  const source = tx.card?.name ?? tx.account?.name;
+  const parts = [
+    isTransfer ? (tx.transferSide === "OUT" ? `para ${tx.counterpartAccount?.name ?? "outra conta"}` : `de ${tx.counterpartAccount?.name ?? "outra conta"}`) : (tx.category?.name ?? "Sem categoria"),
+    tx.card ? tx.card.name : tx.paymentMethod !== "OTHER" ? PAYMENT_METHOD_LABEL_PT[tx.paymentMethod] : source,
+    showDate ? formatDateShort(tx.occurredOn) : null,
+  ].filter(Boolean);
+
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11 }}>
+        <IconBadge
+          icon={isTransfer ? "arrow-left-right" : (tx.category?.icon ?? "circle-help")}
+          color={isTransfer ? colors.primary : (tx.category?.color ?? colors.textFaint)}
+        />
+        <View style={{ flex: 1, gap: 3 }}>
+          <Row gap={6}>
+            <Text weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {tx.description}
+            </Text>
+            {tx.installment ? <Badge label={`${tx.installment.number}/${tx.installment.total}`} /> : null}
+            {tx.status === "PENDING" ? <Badge label="Pendente" tone="warning" /> : null}
+          </Row>
+          <Text variant="caption" tone="muted" numberOfLines={1}>
+            {parts.join(" · ")}
+          </Text>
+        </View>
+        <Money cents={signed} colorize={!isTransfer} signed={!isTransfer} tone={isTransfer ? "muted" : undefined} />
+      </View>
+    </Pressable>
+  );
+}
+
+/** Resumo de conta (lista horizontal na Início e na Carteira). */
+export function AccountTile({ account, onPress, width }: { account: Account; onPress?: () => void; width?: number }) {
+  const { colors } = useTheme();
+  const tint = account.color ?? colors.primary;
+  return (
+    <Card onPress={onPress} style={{ width, gap: 14 }}>
+      <Row>
+        <IconBadge icon={account.type === "WALLET" ? "wallet" : account.type === "INVESTMENT" ? "trending-up" : account.type === "SAVINGS" ? "piggy-bank" : "landmark"} color={tint} size={36} />
+        <View style={{ flex: 1 }}>
+          <Text weight="600" numberOfLines={1}>
+            {account.name}
+          </Text>
+          <Text variant="caption" tone="muted" numberOfLines={1}>
+            {account.bank?.shortName ?? account.bank?.name ?? ACCOUNT_LABEL[account.type]}
+          </Text>
+        </View>
+      </Row>
+      <Money cents={account.balanceCents} variant="heading" weight="700" tone={account.balanceCents < 0 ? "negative" : undefined} />
+    </Card>
+  );
+}
+
+const ACCOUNT_LABEL: Record<Account["type"], string> = {
+  CHECKING: "Conta corrente",
+  SAVINGS: "Poupança",
+  WALLET: "Carteira",
+  DIGITAL: "Conta digital",
+  INVESTMENT: "Investimentos",
+};
+
+/** Cartão de crédito "visual": cor do cartão, final, limite usado e fatura atual. */
+export function CreditCardView({ card, onPress }: { card: CardModel; onPress?: () => void }) {
+  const { colors, radius } = useTheme();
+  const tint = card.color ?? colors.primary;
+  const usedPct = card.limitCents > 0 ? (card.usedCents / card.limitCents) * 100 : 0;
+  const inv = card.currentInvoice;
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
+      <View style={{ borderRadius: radius.lg, backgroundColor: tint, padding: 18, gap: 18 }}>
+        <Row style={{ justifyContent: "space-between" }}>
+          <View style={{ flex: 1 }}>
+            <Text weight="700" style={{ color: "#fff" }} numberOfLines={1}>
+              {card.name}
+            </Text>
+            <Text variant="caption" style={{ color: "rgba(255,255,255,0.8)" }}>
+              {card.bank?.shortName ?? card.brand} {card.last4 ? `• • • • ${card.last4}` : ""}
+            </Text>
+          </View>
+          <Icon name="credit-card" size={26} color="rgba(255,255,255,0.9)" />
+        </Row>
+        <View style={{ gap: 6 }}>
+          <Row style={{ justifyContent: "space-between" }}>
+            <Text variant="caption" style={{ color: "rgba(255,255,255,0.8)" }}>
+              Limite disponível
+            </Text>
+            <Money cents={card.availableCents} variant="bodySm" weight="700" style={{ color: "#fff" }} />
+          </Row>
+          <ProgressBar value={usedPct} color="#FFFFFF" track="rgba(255,255,255,0.3)" height={6} />
+          <Row style={{ justifyContent: "space-between" }}>
+            <Text variant="caption" style={{ color: "rgba(255,255,255,0.8)" }}>
+              {inv ? `Fatura atual · vence ${formatDateShort(inv.dueDate)}` : "Sem fatura em aberto"}
+            </Text>
+            <Money cents={inv?.totalCents ?? 0} variant="bodySm" weight="700" style={{ color: "#fff" }} />
+          </Row>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+const STATUS_TONE = { OK: "positive", WARNING: "warning", EXCEEDED: "negative" } as const;
+const STATUS_LABEL = { OK: "Dentro do limite", WARNING: "Atenção", EXCEEDED: "Estourado" } as const;
+
+/** Orçamento da categoria: gasto × limite com barra colorida pelo status. */
+export function BudgetRow({ budget, onPress }: { budget: Budget; onPress?: () => void }) {
+  const { colors } = useTheme();
+  const color = budget.status === "EXCEEDED" ? colors.negative : budget.status === "WARNING" ? colors.warning : colors.positive;
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+      <View style={{ gap: 10, paddingVertical: 12 }}>
+        <Row>
+          <IconBadge icon={budget.category.icon} color={budget.category.color} size={36} />
+          <View style={{ flex: 1 }}>
+            <Text weight="600" numberOfLines={1}>
+              {budget.category.name}
+            </Text>
+            <Text variant="caption" tone="muted">
+              <Money cents={budget.spentCents} variant="caption" weight="600" tone="muted" /> de <Money cents={budget.amountCents} variant="caption" tone="muted" weight="400" hideZeroCents />
+            </Text>
+          </View>
+          <View style={{ alignItems: "flex-end", gap: 4 }}>
+            <Text weight="700" style={{ color }} tabular>
+              {formatPct(budget.usedPct)}
+            </Text>
+            <Badge label={STATUS_LABEL[budget.status]} tone={STATUS_TONE[budget.status]} />
+          </View>
+        </Row>
+        <ProgressBar value={budget.usedPct} color={color} />
+      </View>
+    </Pressable>
+  );
+}
+
+/** Meta com progresso, valores e quanto guardar por mês. */
+export function GoalCard({ goal, onPress }: { goal: Goal; onPress?: () => void }) {
+  const { colors } = useTheme();
+  const done = goal.status === "ACHIEVED";
+  return (
+    <Card onPress={onPress} style={{ gap: 14 }}>
+      <Row>
+        <IconBadge icon={goal.icon ?? GOAL_ICON[goal.kind]} color={goal.color ?? colors.primary} />
+        <View style={{ flex: 1 }}>
+          <Text weight="600" numberOfLines={1}>
+            {goal.name}
+          </Text>
+          <Text variant="caption" tone="muted">
+            {done ? "Meta atingida 🎉" : goal.deadline ? `Até ${formatDateShort(goal.deadline)}` : "Sem prazo"}
+          </Text>
+        </View>
+        <Text variant="heading" tone={done ? "positive" : "primary"} tabular>
+          {formatPct(goal.progressPct)}
+        </Text>
+      </Row>
+      <ProgressBar value={goal.progressPct} color={done ? colors.positive : (goal.color ?? colors.primary)} height={10} />
+      <Row style={{ justifyContent: "space-between" }}>
+        <Money cents={goal.currentCents} variant="bodySm" weight="700" />
+        <Text variant="caption" tone="muted">
+          de <Money cents={goal.targetCents} variant="caption" tone="muted" weight="400" hideZeroCents />
+        </Text>
+      </Row>
+      {goal.monthlyNeededCents ? (
+        <Text variant="caption" tone="muted">
+          Guarde <Money cents={goal.monthlyNeededCents} variant="caption" weight="600" /> por mês para chegar lá.
+        </Text>
+      ) : null}
+    </Card>
+  );
+}
+
+const GOAL_ICON: Record<Goal["kind"], string> = {
+  EMERGENCY_FUND: "shield",
+  TRAVEL: "plane",
+  VEHICLE: "car",
+  HOME: "house",
+  EDUCATION: "graduation-cap",
+  RETIREMENT: "sprout",
+  EVENT: "party-popper",
+  OTHER: "target",
+};
+export { GOAL_ICON };
+
+/** Número do mês (Receitas / Despesas / Economia) com variação. */
+export function SummaryTile({ label, cents, change, tone, goodWhenDown }: { label: string; cents: number; change?: number | null; tone: "positive" | "negative" | "primary"; goodWhenDown?: boolean }) {
+  const { colors } = useTheme();
+  const good = change === null || change === undefined ? null : goodWhenDown ? change <= 0 : change >= 0;
+  return (
+    <Card style={{ flex: 1, gap: 6, padding: 14 }}>
+      <Row gap={6}>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: tone === "positive" ? colors.positive : tone === "negative" ? colors.negative : colors.primary }} />
+        <Text variant="caption" tone="muted" weight="600">
+          {label}
+        </Text>
+      </Row>
+      <Money cents={cents} variant="bodySm" weight="700" hideZeroCents style={{ fontSize: 17 }} />
+      {change !== null && change !== undefined ? (
+        <Text variant="caption" tone={good ? "positive" : "negative"} weight="600">
+          {formatPct(change, { signed: true })} <Text variant="caption" tone="faint">vs mês anterior</Text>
+        </Text>
+      ) : (
+        <Text variant="caption" tone="faint">
+          —
+        </Text>
+      )}
+    </Card>
+  );
+}

@@ -1,0 +1,17 @@
+﻿# O contexto do build é a raiz do monorepo. Fora da imagem: segredos, dependências locais e o app mobile.
+**/node_modules
+**/dist
+**/.expo
+.git
+.github
+.data
+.env
+.env.*
+!.env.example
+*.log
+apps/mobile/**
+# O pnpm precisa do manifesto de todos os projetos do workspace para validar o lockfile.
+!apps/mobile/package.json
+docs
+scripts
+packages/database/src/generated

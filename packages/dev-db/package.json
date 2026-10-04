@@ -1,0 +1,26 @@
+{
+  "name": "@app/dev-db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Postgres embutido para desenvolvimento local e testes de integração (sem Docker)",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/cli.ts start",
+    "reset": "tsx src/cli.ts reset",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@app/database": "workspace:*",
+    "embedded-postgres": "18.4.0-beta.17",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

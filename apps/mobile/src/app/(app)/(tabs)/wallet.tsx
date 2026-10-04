@@ -1,0 +1,152 @@
+import { router, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
+import { View } from "react-native";
+import { Icon } from "@/components/Icon";
+import { AccountTile, CreditCardView } from "@/components/feature/Rows";
+import { Button } from "@/components/ui/Button";
+import { Segmented } from "@/components/ui/Controls";
+import { EmptyState, ErrorState, SkeletonCard } from "@/components/ui/Feedback";
+import { Card, Reveal, Row, Screen, Section } from "@/components/ui/Layout";
+import { Money } from "@/components/ui/Money";
+import { Text } from "@/components/ui/Text";
+import { useAccounts, useCards } from "@/lib/hooks";
+import { useTheme } from "@/theme/ThemeProvider";
+
+type Tab = "accounts" | "cards";
+const go = (p: string) => router.push(p as never);
+
+export default function WalletScreen() {
+  const { colors } = useTheme();
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<Tab>(params.tab === "cards" ? "cards" : "accounts");
+  const accounts = useAccounts();
+  const cards = useCards();
+
+  const list = accounts.data?.data ?? [];
+  const total = list.filter((a) => a.includeInTotal).reduce((s, a) => s + a.balanceCents, 0);
+  const cardList = cards.data?.data ?? [];
+  const totalLimit = cardList.reduce((s, c) => s + c.limitCents, 0);
+  const totalUsed = cardList.reduce((s, c) => s + c.usedCents, 0);
+  const active = tab === "accounts" ? accounts : cards;
+
+  const header = (
+    <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 12 }}>
+      <Text variant="title">Carteira</Text>
+      <Segmented<Tab> options={[{ value: "accounts", label: "Contas" }, { value: "cards", label: "Cartões" }]} value={tab} onChange={setTab} />
+    </View>
+  );
+
+  return (
+    <Screen tabs header={header} refreshing={active.isRefetching} onRefresh={() => void Promise.all([accounts.refetch(), cards.refetch()])}>
+      {tab === "accounts" ? (
+        accounts.isLoading && !accounts.data ? (
+          <SkeletonCard />
+        ) : accounts.isError && !accounts.data ? (
+          <ErrorState error={accounts.error} onRetry={() => void accounts.refetch()} />
+        ) : (
+          <>
+            <Reveal>
+              <Card style={{ gap: 4 }}>
+                <Text variant="caption" tone="muted">
+                  Saldo nas contas
+                </Text>
+                <Money cents={total} variant="title" weight="700" tone={total < 0 ? "negative" : undefined} />
+                <Text variant="caption" tone="faint">
+                  {list.length} conta{list.length === 1 ? "" : "s"}
+                </Text>
+              </Card>
+            </Reveal>
+            {list.length === 0 ? (
+              <Card>
+                <EmptyState icon="landmark" title="Nenhuma conta ainda" message="Cadastre sua conta bancária ou carteira para começar." action="Criar conta" onAction={() => go("/account/new")} />
+              </Card>
+            ) : (
+              <Section title="Suas contas">
+                <View style={{ gap: 12 }}>
+                  {list.map((a, i) => (
+                    <Reveal key={a.id} index={i + 1}>
+                      <AccountTile account={a} onPress={() => go(`/account/${a.id}`)} />
+                    </Reveal>
+                  ))}
+                </View>
+              </Section>
+            )}
+            <Button label="Adicionar conta" icon="plus" variant="secondary" onPress={() => go("/account/new")} />
+            <OpenFinanceCard />
+          </>
+        )
+      ) : cards.isLoading && !cards.data ? (
+        <SkeletonCard />
+      ) : cards.isError && !cards.data ? (
+        <ErrorState error={cards.error} onRetry={() => void cards.refetch()} />
+      ) : (
+        <>
+          {cardList.length > 0 ? (
+            <Reveal>
+              <Card style={{ flexDirection: "row", gap: 12 }}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text variant="caption" tone="muted">
+                    Limite total
+                  </Text>
+                  <Money cents={totalLimit} weight="700" hideZeroCents />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text variant="caption" tone="muted">
+                    Comprometido
+                  </Text>
+                  <Money cents={totalUsed} weight="700" hideZeroCents />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text variant="caption" tone="muted">
+                    Disponível
+                  </Text>
+                  <Money cents={totalLimit - totalUsed} weight="700" tone="positive" hideZeroCents />
+                </View>
+              </Card>
+            </Reveal>
+          ) : null}
+          {cardList.length === 0 ? (
+            <Card>
+              <EmptyState icon="credit-card" title="Nenhum cartão cadastrado" message="Cadastre um cartão para acompanhar fatura, limite e parcelas." action="Adicionar cartão" onAction={() => go("/card/new")} />
+            </Card>
+          ) : (
+            <View style={{ gap: 12 }}>
+              {cardList.map((c, i) => (
+                <Reveal key={c.id} index={i + 1}>
+                  <CreditCardView card={c} onPress={() => go(`/card/${c.id}`)} />
+                </Reveal>
+              ))}
+            </View>
+          )}
+          <Button label="Adicionar cartão" icon="plus" variant="secondary" onPress={() => go("/card/new")} />
+        </>
+      )}
+      <View style={{ height: 8 }} />
+      <Row style={{ justifyContent: "center" }} gap={6}>
+        <Icon name="shield-check" size={14} color={colors.textFaint} />
+        <Text variant="caption" tone="faint">
+          Nunca pedimos senhas de banco nem números completos de cartão.
+        </Text>
+      </Row>
+    </Screen>
+  );
+}
+
+/** Convite para conectar bancos automaticamente (Open Finance, recurso Premium). */
+function OpenFinanceCard() {
+  const { colors, radius } = useTheme();
+  return (
+    <Card onPress={() => go("/open-finance")} tone="primarySoft" style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+      <View style={{ width: 44, height: 44, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
+        <Icon name="link" size={22} color={colors.onPrimary} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text weight="700">Conectar banco automaticamente</Text>
+        <Text variant="bodySm" tone="muted">
+          Open Finance: traga saldos e transações do seu banco com segurança.
+        </Text>
+      </View>
+      <Icon name="chevron-right" size={18} color={colors.textMuted} />
+    </Card>
+  );
+}

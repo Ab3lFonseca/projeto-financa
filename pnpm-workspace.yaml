@@ -1,0 +1,17 @@
+packages:
+  - "apps/*"
+  - "services/*"
+  - "packages/*"
+
+# pnpm bloqueia scripts de instalação de dependências por padrão (proteção contra supply chain).
+# Liberamos apenas os pacotes que precisam (binários do Prisma e esbuild).
+allowBuilds:
+  "@prisma/engines": true
+  prisma: true
+  esbuild: true
+  # Binários do Postgres embutido (dev/testes).
+  embedded-postgres: true
+  "@embedded-postgres/windows-x64": true
+  "@embedded-postgres/linux-x64": true
+  "@embedded-postgres/darwin-arm64": true
+  "@embedded-postgres/darwin-x64": true
