@@ -27,6 +27,10 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   em vez de ficar em branco, e o erro é registrado.
 - Este `CHANGELOG.md`.
 
+### Alterado
+- `pnpm dev:db` e `pnpm dev:api` agora explicam, em português, quando a porta já está em uso (o banco ou a API já
+  estão rodando em outro terminal) e como achar o processo, em vez de falhar com `undefined`/`EADDRINUSE`.
+
 ### Corrigido
 - Gráfico de barras do Início: aviso de chaves duplicadas do React quando os valores do eixo eram pequenos
   (a escala repetia rótulos ao arredondar centavos).

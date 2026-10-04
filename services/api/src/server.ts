@@ -40,6 +40,15 @@ try {
   app.log.info({ port: config.PORT, env: config.NODE_ENV, auth: config.AUTH_MODE, jobs: config.JOBS_ENABLED, openFinance: config.OPEN_FINANCE_ENABLED }, "API no ar");
   if (config.JOBS_ENABLED) stopJobs = startJobs(app);
 } catch (err) {
-  app.log.error({ err }, "falha ao iniciar");
+  if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
+    // Erro comum em desenvolvimento: a API já está rodando em outro terminal.
+    app.log.error(
+      { port: config.PORT },
+      `A porta ${config.PORT} já está em uso: provavelmente a API já está rodando em outro terminal (ela continua funcionando). ` +
+        `Para achar o processo (PowerShell): Get-NetTCPConnection -LocalPort ${config.PORT} -State Listen | Select-Object OwningProcess`,
+    );
+  } else {
+    app.log.error({ err }, "falha ao iniciar");
+  }
   process.exit(1);
 }
