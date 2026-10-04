@@ -61,6 +61,9 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   consentimento no app do banco cobrir tudo o que o app mostra.
 
 ### Corrigido
+- Exclusão de conta (LGPD) com as **chaves novas do Supabase** (`sb_secret_...`): a chave era enviada também em
+  `Authorization: Bearer`, onde o Supabase só aceita JWT; agora as chaves novas vão só em `apikey` (as legadas seguem
+  nos dois cabeçalhos). Primeiros testes do provedor Supabase.
 - Gráfico de barras do Início: aviso de chaves duplicadas do React quando os valores do eixo eram pequenos
   (a escala repetia rótulos ao arredondar centavos).
 - Cartão ligado ao banco mostrava uma fatura em aberto maior que a real, porque o pagamento feito pela conta não era

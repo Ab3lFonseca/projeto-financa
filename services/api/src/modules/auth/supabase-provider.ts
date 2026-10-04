@@ -173,6 +173,9 @@ export class SupabaseAuthProvider implements AuthProvider {
   async deleteUser(userId: string): Promise<void> {
     const key = this.config.serviceRoleKey;
     if (!key) throw Errors.unavailable("Exclusão de conta indisponível: chave de serviço não configurada", "ADMIN_KEY_MISSING");
-    await this.request("DELETE", `/admin/users/${encodeURIComponent(userId)}`, { bearer: key, apiKey: key });
+    // Chave legada (service_role) é um JWT e também vai em Authorization. As chaves novas (sb_secret_...) NÃO são JWT:
+    // o Supabase manda enviá-las só no cabeçalho `apikey` (no Bearer a verificação do JWT falharia).
+    const isJwt = key.startsWith("eyJ");
+    await this.request("DELETE", `/admin/users/${encodeURIComponent(userId)}`, { bearer: isJwt ? key : undefined, apiKey: key });
   }
 }

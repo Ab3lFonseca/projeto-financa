@@ -101,7 +101,10 @@ Instale as CLIs: `npm i -g eas-cli` e o `flyctl` ([fly.io/docs/flyctl/install](h
    `financa://reset-password`.
 5. Em **Project Settings → API** copie: `Project URL` (`SUPABASE_URL`), chave **anon/publishable**
    (`SUPABASE_ANON_KEY`) e a chave **service_role** (`SUPABASE_SERVICE_ROLE_KEY` — **secreta**, só no servidor;
-   é com ela que a exclusão de conta LGPD apaga o usuário no Auth).
+   é com ela que a exclusão de conta LGPD apaga o usuário no Auth). **Chaves novas × legadas:** a chave *publishable* (`sb_publishable_...`)
+   entra em `SUPABASE_ANON_KEY` e a *secret* (`sb_secret_...`) em `SUPABASE_SERVICE_ROLE_KEY`; as legadas (`anon`/`service_role`, que começam
+   com `eyJ`) também servem. As novas não são JWT e a API as envia só no cabeçalho `apikey`. A verificação do login usa o JWKS do próprio
+   projeto (`SUPABASE_URL/auth/v1/.well-known/jwks.json`), sem variável extra e sem instalar `@supabase/server`.
 6. Traduza os templates de e-mail (Authentication → Email Templates) para português.
 
 > **Lacuna conhecida:** o app ainda **não tem a tela de redefinição de senha** que recebe o link do
