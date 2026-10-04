@@ -130,6 +130,15 @@ describe("configuração", () => {
     // com o Pluggy real ligado em produção, as credenciais continuam obrigatórias
     expect(() => loadConfig({ ...prod, OPEN_FINANCE_ENABLED: "true" })).toThrow(/PLUGGY_CLIENT_ID/);
   });
+
+  it("o conector MeuPluggy (teste pessoal) é opt-in e proibido em produção", () => {
+    const dev = { NODE_ENV: "development", DATABASE_URL: "postgres://x" };
+    expect(loadConfig(dev).PLUGGY_ALLOW_MEUPLUGGY).toBe(false);
+    expect(loadConfig({ ...dev, PLUGGY_ALLOW_MEUPLUGGY: "true" }).PLUGGY_ALLOW_MEUPLUGGY).toBe(true);
+    const prod = { NODE_ENV: "production", DATABASE_URL: "postgres://x", SUPABASE_URL: "https://x.supabase.co", SUPABASE_ANON_KEY: "a", SUPABASE_SERVICE_ROLE_KEY: "b", IP_HASH_PEPPER: "pepper-pepper-pepper-123", OPEN_FINANCE_ENABLED: "false" };
+    expect(() => loadConfig({ ...prod, PLUGGY_ALLOW_MEUPLUGGY: "true" })).toThrow(/PLUGGY_ALLOW_MEUPLUGGY/);
+    expect(() => loadConfig(prod)).not.toThrow();
+  });
 });
 
 describe("fluxo completo pela API com o banco de demonstração", () => {

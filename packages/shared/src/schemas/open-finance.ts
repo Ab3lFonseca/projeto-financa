@@ -23,6 +23,8 @@ export const connectorsDTO = z.object({
 export const connectTokenBody = z.strictObject({
   /** Reconexão/atualização de uma conexão existente (ex.: renovar o consentimento). */
   connectionId: uuid.optional(),
+  /** Onde o widget vai rodar: o banco devolve o usuário ao deep link do app (native) ou à página do app web (web). */
+  platform: z.enum(["native", "web"]).optional(),
 });
 
 export const connectTokenDTO = z.object({

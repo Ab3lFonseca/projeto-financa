@@ -117,7 +117,8 @@ export const openFinanceRoutes: FastifyPluginAsyncZod = async (app) => {
         if (!c) throw Errors.notFound("Conexão");
         return c.providerItemId;
       });
-      const token = await viaProvider(() => runtime.provider.createConnectToken({ clientUserId: user.id, itemId, redirectUri: runtime.deps.redirectUri }));
+      const redirectUri = req.body.platform === "web" ? runtime.deps.webRedirectUri : runtime.deps.redirectUri;
+      const token = await viaProvider(() => runtime.provider.createConnectToken({ clientUserId: user.id, itemId, redirectUri }));
       return { accessToken: token.accessToken, expiresAt: token.expiresAt.toISOString(), itemId: itemId ?? null };
     },
   );

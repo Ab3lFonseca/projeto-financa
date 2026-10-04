@@ -1,5 +1,6 @@
 import type * as S from "@app/shared";
 import type { z } from "@app/shared";
+import { Platform } from "react-native";
 import { http } from "./client";
 
 type In<T extends z.ZodType> = z.input<T>;
@@ -196,7 +197,8 @@ export const api = {
   openFinance: {
     status: () => http.get<OpenFinanceStatus>(`${v1}/open-finance/status`),
     connectors: () => http.get<{ data: { id: number; name: string }[] }>(`${v1}/open-finance/connectors`),
-    connectToken: (connectionId?: string) => http.post<ConnectToken>(`${v1}/open-finance/connect-token`, { connectionId }),
+    connectToken: (connectionId?: string) =>
+      http.post<ConnectToken>(`${v1}/open-finance/connect-token`, { connectionId, platform: Platform.OS === "web" ? "web" : "native" }),
     register: (itemId: string, autoImport?: boolean) => http.post<BankConnection>(`${v1}/open-finance/connections`, { itemId, autoImport }),
     setAutoImport: (id: string, autoImport: boolean) => http.patch<BankConnection>(`${v1}/open-finance/connections/${id}`, { autoImport }),
     refresh: (id: string) => http.post<{ requested: true; refreshesLeftToday: number }>(`${v1}/open-finance/connections/${id}/refresh`),

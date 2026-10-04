@@ -1,0 +1,70 @@
+# Render (plano gratuito) — API + app web. Passo a passo e limitações: docs/deploy-render.md
+#
+# Como usar: Render → New → Blueprint → escolha este repositório. O Render lê este arquivo, cria os dois
+# serviços e PERGUNTA os valores marcados com `sync: false` (segredos e endereços — nunca ficam no Git).
+#
+# Os nomes viram endereços públicos (https://NOME.onrender.com) e precisam ser únicos no Render:
+# se "financa-api"/"financa-web" já estiverem em uso, troque aqui e use os novos endereços nas variáveis.
+services:
+  # ---------------------------------------------------------------- API (Fastify, imagem Docker)
+  - type: web
+    name: financa-api
+    runtime: docker
+    plan: free
+    # Não existe região no Brasil; Virginia é a mais próxima das disponíveis (oregon, ohio, virginia, frankfurt, singapore).
+    region: virginia
+    dockerfilePath: ./services/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    # Só publica depois que o CI do GitHub passar.
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: TRUST_PROXY
+        value: "true"
+      # Os jobs rodam dentro da API; no plano gratuito ela "dorme" após 15 min sem tráfego (veja o guia).
+      - key: JOBS_ENABLED
+        value: "true"
+      - key: BILLING_ENFORCED
+        value: "false"
+      # Ligue (true) depois de cadastrar PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET e o endereço de retorno web.
+      - key: OPEN_FINANCE_ENABLED
+        value: "false"
+      - key: IP_HASH_PEPPER
+        generateValue: true
+      - key: PLUGGY_WEBHOOK_SECRET
+        generateValue: true
+      # Segredos e endereços (o Render pergunta ao criar):
+      - key: DATABASE_URL # Supabase → Session pooler (porta 5432), com a senha
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY # SECRETA: só no servidor
+        sync: false
+      - key: CORS_ORIGINS # endereço do app web abaixo, ex.: https://financa-web.onrender.com
+        sync: false
+
+  # ---------------------------------------------------------------- App web (Expo, site estático)
+  - type: web
+    name: financa-web
+    runtime: static
+    buildCommand: npm install -g pnpm@12.9.1 && pnpm install --frozen-lockfile --filter "@app/mobile..." && pnpm --filter @app/mobile exec expo export --platform web
+    staticPublishPath: apps/mobile/dist
+    # App de página única: qualquer caminho cai no index.html (o expo-router resolve a rota no navegador).
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: EXPO_NO_TELEMETRY
+        value: "1"
+      # Embutida no app na hora do build: mudou o endereço da API? Faça um novo deploy deste serviço.
+      - key: EXPO_PUBLIC_API_URL # ex.: https://financa-api.onrender.com (sem barra no final)
+        sync: false

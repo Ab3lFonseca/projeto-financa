@@ -73,8 +73,15 @@ const schema = z
     PLUGGY_WEBHOOK_URL: z.string().optional(),
     PLUGGY_WEBHOOK_SECRET: z.string().optional(),
     PLUGGY_BASE_URL: z.url().default("https://api.pluggy.ai"),
+    /**
+     * Aceita também o conector gratuito MeuPluggy (id 200) para testar com a SUA conta real sem contratar o Pluggy.
+     * Só desenvolvimento/uso pessoal: PROIBIDO em produção (limite de 5 conexões, sem SLA e sem controle de bancos).
+     */
+    PLUGGY_ALLOW_MEUPLUGGY: bool(false),
     /** Deep link do app para onde o banco devolve o usuário após autorizar (ex.: financa://open-finance). */
     OPEN_FINANCE_REDIRECT_URI: z.string().optional(),
+    /** Endereço do app WEB para onde o banco devolve o usuário (ex.: https://financa-web.onrender.com/open-finance). */
+    OPEN_FINANCE_WEB_REDIRECT_URI: z.url().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== "production") return;
@@ -92,6 +99,9 @@ const schema = z
     }
     if (env.OPEN_FINANCE_PROVIDER === "demo") {
       ctx.addIssue({ code: "custom", path: ["OPEN_FINANCE_PROVIDER"], message: "OPEN_FINANCE_PROVIDER=demo é proibido em produção" });
+    }
+    if (env.PLUGGY_ALLOW_MEUPLUGGY) {
+      ctx.addIssue({ code: "custom", path: ["PLUGGY_ALLOW_MEUPLUGGY"], message: "PLUGGY_ALLOW_MEUPLUGGY é só para desenvolvimento: proibido em produção" });
     }
     if (env.OPEN_FINANCE_ENABLED && env.OPEN_FINANCE_PROVIDER === "pluggy") {
       need("PLUGGY_CLIENT_ID");

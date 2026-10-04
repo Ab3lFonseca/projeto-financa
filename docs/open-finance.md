@@ -27,8 +27,10 @@ CSV/OFX** (não implementado; seria um novo "provedor" que alimenta a mesma tabe
    (filtro `isOpenFinance=true`, pessoa física, Brasil). Se a lista não carregar, o app **não abre o widget**.
 3. O app pede `POST /v1/open-finance/connect-token`: a API gera um token de 30 min **amarrado ao usuário**
    (`clientUserId`) e com o deep link de retorno (`oauthRedirectUri`).
-4. O app abre o **widget do Pluggy** (`react-native-pluggy-connect`) com `connectorIds` = lista do passo 2. O
-   usuário é levado ao app/site **do próprio banco**, autoriza e volta. **Nós nunca vemos senha.**
+4. O app abre o **widget do Pluggy** com `connectorIds` = lista do passo 2: no celular, `react-native-pluggy-connect`
+   (WebView); no navegador, `react-pluggy-connect` (modal com iframe). O usuário é levado ao app/site **do próprio banco**,
+   autoriza e volta (celular: deep link `OPEN_FINANCE_REDIRECT_URI`; navegador: `OPEN_FINANCE_WEB_REDIRECT_URI`).
+   **Nós nunca vemos senha.**
 5. O widget devolve o `itemId`; o app chama `POST /v1/open-finance/connections`. A API confere no Pluggy que
    (a) o item pertence àquele usuário e (b) o conector é regulado; senão recusa (e remove o item no provedor).
 6. O que acontece depois depende de `autoImport` (por conexão; **ligado por padrão**, o usuário escolhe na tela):
@@ -102,7 +104,9 @@ por produto, instituição e CPF (ex.: lista de investimentos 30/mês, saldo 120
 | `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET` | Credenciais da sua conta Pluggy (**segredos**, só no servidor) |
 | `PLUGGY_WEBHOOK_SECRET` | Segredo (>= 24 caracteres) que o Pluggy enviará no cabeçalho do webhook |
 | `PLUGGY_BASE_URL` | Padrão `https://api.pluggy.ai` |
-| `OPEN_FINANCE_REDIRECT_URI` | Deep link de retorno, ex.: `financa://open-finance` (o esquema `financa` já está no app) |
+| `OPEN_FINANCE_REDIRECT_URI` | Deep link de retorno do **app nativo**, ex.: `financa://open-finance` (o esquema `financa` já está no app) |
+| `OPEN_FINANCE_WEB_REDIRECT_URI` | Endereço de retorno do **app web**, ex.: `https://financa-web.onrender.com/open-finance` (local: `http://localhost:8081/open-finance`). O app informa a plataforma (`platform` em `POST /connect-token`) e a API escolhe qual usar |
+| `PLUGGY_ALLOW_MEUPLUGGY` | `true` aceita também o conector gratuito **MeuPluggy** (id 200) para testar com a sua conta (seção 10). **Proibido em produção**: a API recusa subir |
 | `OPEN_FINANCE_PROVIDER` | `pluggy` (padrão) ou `demo` (banco fictício; **só desenvolvimento**, a API recusa em produção) |
 
 Em produção, com a flag ligada, a API **recusa subir** sem `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET` e `PLUGGY_WEBHOOK_SECRET`.
@@ -120,7 +124,7 @@ Em produção, com a flag ligada, a API **recusa subir** sem `PLUGGY_CLIENT_ID`,
    ```
    (O Pluggy exige HTTPS e domínio público; ele passará a enviar `x-webhook-secret` em toda chamada.)
 6. Em `fly.toml` mude `OPEN_FINANCE_ENABLED = "true"` e faça `fly deploy`.
-7. Gere um novo build do app (o widget só existe no app nativo; na web aparece um aviso).
+7. App web: já tem o widget (`react-pluggy-connect`); publicar no Render: [deploy-render.md](deploy-render.md). App nativo: gere um novo build.
 
 ## 6. Roteiro de validação com o Pluggy real (pendente)
 
@@ -168,3 +172,37 @@ os investimentos rendem e o pagamento da fatura (dia 17) tem o valor da fatura q
 "automático" funcionando. Para recomeçar: `pnpm dev:seed -- --reset` e conecte de novo.
 
 O modo demonstração não vale como validação do Pluggy: o que ele não prova está na seção 6.
+
+## 10. Testar com a sua conta real, de graça (local)
+
+Caminho sem contratar o Pluggy, só para você ver os **seus** dados no app. Dados de preços/limites do Pluggy consultados em 2026-10-04
+em [pluggy.ai/pricing](https://www.pluggy.ai/pricing), [meu.pluggy.ai/api-guide](https://meu.pluggy.ai/api-guide) e
+[pluggy.ai/meu-pluggy](https://www.pluggy.ai/meu-pluggy) — confirme antes de depender deles.
+
+**O que é o MeuPluggy:** um portal gratuito onde **você** conecta os seus bancos pelo Open Finance (autorização no app do banco) e recebe
+Client ID/Secret para consumir os seus dados pela API. Limites: **5 conexões ativas** e só contas do próprio titular; sem SLA.
+
+1. Em [meu.pluggy.ai](https://meu.pluggy.ai) crie a conta e conecte o seu banco.
+2. Em [dashboard.pluggy.ai](https://dashboard.pluggy.ai) crie a conta (mesmo e-mail), uma **aplicação**, e copie Client ID e Client Secret
+   (aba *Application*). **Ative o conector "MeuPluggy"** na aplicação (passo que muita gente esquece).
+3. No `.env` da raiz (ele não vai para o Git), no ambiente **local** (`NODE_ENV=development`):
+
+   ```
+   OPEN_FINANCE_ENABLED=true
+   OPEN_FINANCE_PROVIDER=pluggy
+   PLUGGY_ALLOW_MEUPLUGGY=true
+   PLUGGY_CLIENT_ID=...
+   PLUGGY_CLIENT_SECRET=...
+   PLUGGY_WEBHOOK_SECRET=<qualquer texto aleatório com 24+ caracteres>
+   OPEN_FINANCE_WEB_REDIRECT_URI=http://localhost:8081/open-finance
+   ```
+4. Suba tudo (`pnpm dev:db`, `pnpm dev:api` e o app web), entre no app e em **Mais → Open Finance → Conectar um banco**: o widget abre no
+   navegador com o conector **MeuPluggy**; entre com a sua conta do MeuPluggy e autorize.
+5. Webhook não chega em `localhost`: use **Atualizar** / **Pedir ao banco** (a atualização automática diária depende de o servidor estar de pé).
+
+**Limites desta opção:** a API só aceita o conector 200 além dos regulados (qualquer outro por senha é recusado e removido); em produção
+(Render com `NODE_ENV=production`) a variável é recusada, então o MeuPluggy fica restrito ao uso local.
+
+> **Não validado com o Pluggy real:** o retorno do OAuth do MeuPluggy no widget web (popup × redirecionamento), os campos de cartão e
+> investimentos que o MeuPluggy repassa e o `clientUserId` dos itens por esse conector. Confira o roteiro da seção 6 e me envie o que aparecer
+> (sem segredos) para ajustarmos.

@@ -99,6 +99,7 @@ function buildOpenFinanceProvider(config: Config, clock: () => Date): OpenFinanc
     clientSecret: config.PLUGGY_CLIENT_SECRET,
     baseUrl: config.PLUGGY_BASE_URL,
     webhookSecret: config.PLUGGY_WEBHOOK_SECRET,
+    allowMeuPluggy: config.PLUGGY_ALLOW_MEUPLUGGY,
   });
 }
 
@@ -213,6 +214,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
           billingEnforced: config.BILLING_ENFORCED,
           pepper: config.IP_HASH_PEPPER,
           redirectUri: config.OPEN_FINANCE_REDIRECT_URI,
+          webRedirectUri: config.OPEN_FINANCE_WEB_REDIRECT_URI,
           log: app.log,
         })
       : null,

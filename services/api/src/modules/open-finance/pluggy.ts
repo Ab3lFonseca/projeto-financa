@@ -41,12 +41,17 @@ export type PluggyOptions = {
   baseUrl?: string;
   /** Segredo esperado no cabeçalho do webhook. */
   webhookSecret?: string;
+  /** Desenvolvimento/uso pessoal: aceita o conector MeuPluggy (id 200) além dos regulados. */
+  allowMeuPluggy?: boolean;
   fetch?: FetchLike;
   now?: () => Date;
   timeoutMs?: number;
 };
 
 export const WEBHOOK_SECRET_HEADER = "x-webhook-secret";
+
+/** Conector gratuito do Pluggy que repassa os dados que o próprio usuário conectou no meu.pluggy.ai (OAuth, sem senha). */
+export const MEUPLUGGY_CONNECTOR_ID = 200;
 
 const API_KEY_TTL_MS = 100 * 60_000; // a chave vale 2 h; renovamos antes
 const CONNECT_TOKEN_TTL_MS = 30 * 60_000;
@@ -58,7 +63,7 @@ type PluggyItemJson = {
   executionStatus?: string;
   lastUpdatedAt?: string | null;
   consentExpiresAt?: string | null;
-  connector?: { name?: string; isOpenFinance?: boolean };
+  connector?: { id?: number; name?: string; isOpenFinance?: boolean };
   error?: { code?: string } | null;
 };
 
@@ -298,6 +303,9 @@ export class PluggyProvider implements OpenFinanceProvider {
         out.push({ id: c.id, name: (c.name ?? "Banco").slice(0, 80) });
       }
     }
+    if (this.opts.allowMeuPluggy && !out.some((c) => c.id === MEUPLUGGY_CONNECTOR_ID)) {
+      out.push({ id: MEUPLUGGY_CONNECTOR_ID, name: "MeuPluggy (teste pessoal)" });
+    }
     return out;
   }
 
@@ -308,7 +316,9 @@ export class PluggyProvider implements OpenFinanceProvider {
       id: item.id,
       clientUserId: item.clientUserId ?? null,
       institutionName: item.connector?.name ?? "Banco",
-      isOpenFinance: item.connector?.isOpenFinance === true,
+      // MeuPluggy só entra quando liberado em desenvolvimento (PLUGGY_ALLOW_MEUPLUGGY); qualquer outro conector
+      // não regulado continua recusado (e removido) pelo serviço.
+      isOpenFinance: item.connector?.isOpenFinance === true || (this.opts.allowMeuPluggy === true && item.connector?.id === MEUPLUGGY_CONNECTOR_ID),
       status: mapItemStatus(item.status, item.executionStatus),
       lastUpdatedAt: item.lastUpdatedAt ? new Date(item.lastUpdatedAt) : null,
       consentExpiresAt: item.consentExpiresAt ? new Date(item.consentExpiresAt) : null,

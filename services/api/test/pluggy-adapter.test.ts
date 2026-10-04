@@ -147,6 +147,31 @@ describe("itens e contas", () => {
     expect((await provider.getItem("x"))!.isOpenFinance).toBe(false);
   });
 
+  describe("MeuPluggy (conector gratuito 200, só quando liberado)", () => {
+    const itemOf = (connector: Record<string, unknown>) => (c: { url: string }) => (c.url.endsWith("/auth") ? { json: { apiKey: "k" } } : { json: { id: "x", clientUserId: "u", connector } });
+
+    it("sem a liberação, o MeuPluggy continua recusado como não regulado", async () => {
+      const { provider } = make(itemOf({ id: 200, name: "MeuPluggy" }));
+      expect((await provider.getItem("x"))!.isOpenFinance).toBe(false);
+    });
+
+    it("liberado, só o conector 200 passa; qualquer outro não regulado segue recusado", async () => {
+      const on = { allowMeuPluggy: true };
+      expect((await make(itemOf({ id: 200, name: "MeuPluggy" }), on).provider.getItem("x"))!.isOpenFinance).toBe(true);
+      expect((await make(itemOf({ id: 201, name: "Outro banco por senha" }), on).provider.getItem("x"))!.isOpenFinance).toBe(false);
+      expect((await make(itemOf({ id: 200, name: "MeuPluggy", isOpenFinance: false }), on).provider.getItem("x"))!.isOpenFinance).toBe(true); // a liberação vale pelo id
+      expect((await make(itemOf({ name: "Sem id" }), on).provider.getItem("x"))!.isOpenFinance).toBe(false);
+    });
+
+    it("entra na lista de conectores do widget só quando liberado (sem duplicar)", async () => {
+      const list = (id: number | null) => (c: { url: string }) =>
+        c.url.endsWith("/auth") ? { json: { apiKey: "k" } } : { json: { totalPages: 1, results: [{ id: 1, name: "Banco 1", isOpenFinance: true }, ...(id ? [{ id, name: "MeuPluggy", isOpenFinance: true }] : [])] } };
+      expect((await make(list(null)).provider.listRegulatedConnectors()).map((c) => c.id)).toEqual([1]);
+      expect((await make(list(null), { allowMeuPluggy: true }).provider.listRegulatedConnectors()).map((c) => c.id)).toEqual([1, 200]);
+      expect((await make(list(200), { allowMeuPluggy: true }).provider.listRegulatedConnectors()).map((c) => c.id)).toEqual([1, 200]);
+    });
+  });
+
   it("item inexistente → null", async () => {
     const { provider } = make((c) => (c.url.endsWith("/auth") ? { json: { apiKey: "k" } } : { status: 404 }));
     expect(await provider.getItem("nope")).toBeNull();

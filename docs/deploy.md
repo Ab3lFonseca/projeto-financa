@@ -50,6 +50,10 @@ Alternativa: `release_command` do Fly (exigiria o CLI do Prisma na imagem). Cust
 Motivo: gera APK/AAB e IPA na nuvem (não exige Mac para iOS) e abstrai FCM/APNs.
 Alternativas: build local com Android Studio/Xcode (grátis, exige máquina e Mac). Custo: plano Free basta no início.
 
+> **Sem cartão de crédito?** O Fly.io exige cartão. A alternativa gratuita é o **Render**, com limitações (a API "dorme" após 15 min
+> sem tráfego): veja [deploy-render.md](deploy-render.md) e o [`render.yaml`](../render.yaml). O resto deste guia (Supabase, migrations,
+> variáveis) vale para os dois.
+
 ## 3. Contas que você precisa criar
 
 1. **GitHub** (repositório + CI). 2. **Supabase**. 3. **Fly.io** (exige cartão). 4. **Expo** (expo.dev).

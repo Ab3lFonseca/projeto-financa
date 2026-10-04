@@ -128,12 +128,21 @@ describe("bancos regulados (widget só lista estes)", () => {
       await paid.close();
     }
     const own = new FakeOpenFinanceProvider();
-    const withUri = await createTestEnv({ OPEN_FINANCE_ENABLED: "true", OPEN_FINANCE_REDIRECT_URI: "financa://open-finance" }, { openFinanceProvider: own });
+    const withUri = await createTestEnv(
+      { OPEN_FINANCE_ENABLED: "true", OPEN_FINANCE_REDIRECT_URI: "financa://open-finance", OPEN_FINANCE_WEB_REDIRECT_URI: "https://app.exemplo.dev/open-finance" },
+      { openFinanceProvider: own },
+    );
     try {
       const w = await createWorld(withUri);
       await w.user.post("/v1/privacy/consents", CONSENT);
       await w.user.post("/v1/open-finance/connect-token", {});
       expect(own.tokens.at(-1)).toMatchObject({ clientUserId: w.user.id, redirectUri: "financa://open-finance" });
+      // o app nativo pede explicitamente; o navegador recebe o endereço da página (deep link não abre na web)
+      await w.user.post("/v1/open-finance/connect-token", { platform: "native" });
+      expect(own.tokens.at(-1)).toMatchObject({ redirectUri: "financa://open-finance" });
+      await w.user.post("/v1/open-finance/connect-token", { platform: "web" });
+      expect(own.tokens.at(-1)).toMatchObject({ redirectUri: "https://app.exemplo.dev/open-finance" });
+      expect((await w.user.post("/v1/open-finance/connect-token", { platform: "tv" })).status).toBe(422);
     } finally {
       await withUri.close();
     }

@@ -30,6 +30,8 @@ export type OfDeps = {
   pepper: string;
   /** Deep link do app para onde o banco devolve o usuário após autorizar. */
   redirectUri?: string;
+  /** Idem, para o app web (o deep link do app não abre no navegador). */
+  webRedirectUri?: string;
   log?: FastifyBaseLogger;
 };
 

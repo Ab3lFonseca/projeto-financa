@@ -26,6 +26,14 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 - **Banco de demonstração** (`OPEN_FINANCE_PROVIDER=demo`, só em desenvolvimento; a API recusa subir assim em
   produção): conta corrente, cartão e 5 investimentos que rendem com o passar dos dias, para testar o fluxo inteiro
   sem contratar o Pluggy. `pnpm dev:seed -- --reset` recria a conta de demonstração.
+- **Widget do Open Finance no navegador** (`react-pluggy-connect`): dá para conectar o banco pelo app web, sem build
+  nativo. A API escolhe o endereço de retorno certo (`OPEN_FINANCE_WEB_REDIRECT_URI` para a web, `OPEN_FINANCE_REDIRECT_URI`
+  para o celular) conforme o `platform` enviado em `POST /v1/open-finance/connect-token`.
+- **MeuPluggy (teste gratuito com a sua conta):** `PLUGGY_ALLOW_MEUPLUGGY=true` aceita também o conector gratuito do Pluggy
+  (id 200), e só ele; qualquer outro conector não regulado segue recusado. Proibido em produção. Veja
+  [docs/open-finance.md](docs/open-finance.md), seção 10.
+- **Publicação gratuita no Render:** `render.yaml` (API em Docker + app web estático) e [docs/deploy-render.md](docs/deploy-render.md),
+  com as limitações do plano gratuito (a API dorme após 15 min sem tráfego). Ainda não executado no Render.
 - **Log geral do servidor:** a API grava `api-AAAA-MM-DD.log` (tudo) e `errors-AAAA-MM-DD.log` (só avisos e erros)
   em `.data/logs` (desenvolvimento) ou em `LOG_DIR`, com troca diária e retenção configurável (`LOG_RETENTION_DAYS`,
   padrão 30 dias). Cada linha de requisição autenticada carrega o id do usuário (`uid`) e o id da requisição.

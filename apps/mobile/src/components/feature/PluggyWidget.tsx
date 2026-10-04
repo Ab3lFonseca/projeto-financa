@@ -4,8 +4,8 @@ import { toast } from "@/lib/ui-store";
 import type { PluggyWidgetProps } from "./PluggyWidget.types";
 
 /**
- * Versão para web: o widget oficial usa WebView nativa, então a conexão com o banco só é feita
- * no aplicativo (Android/iOS). Na web mostramos um aviso e fechamos.
+ * Reserva para plataformas sem widget: Android/iOS usam `PluggyWidget.native.tsx` e o navegador usa
+ * `PluggyWidget.web.tsx`. Aqui mostramos um aviso e fechamos.
  */
 export function PluggyWidget({ visible, onClose }: PluggyWidgetProps) {
   useEffect(() => {

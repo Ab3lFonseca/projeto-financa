@@ -20,6 +20,7 @@ scripts/dev/        Scripts PowerShell para subir banco, API e app na web
 - [Deploy completo (banco, API, domínio, lojas) e custos](docs/deploy.md)
 - [Open Finance](docs/open-finance.md) · [LGPD](docs/lgpd.md) · [Planos e administração](docs/produto-e-admin.md)
 - [Logs e diagnóstico — como investigar um erro](docs/logs.md) · [Changelog](CHANGELOG.md)
+- [Publicar de graça no Render](docs/deploy-render.md) (alternativa ao Fly.io)
 - [Banco de dados — modelo e decisões](docs/database.md)
 - [ADR 0001 — Arquitetura e stack](docs/adr/0001-arquitetura-e-stack.md)
 
