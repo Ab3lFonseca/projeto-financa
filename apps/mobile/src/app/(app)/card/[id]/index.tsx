@@ -10,7 +10,7 @@ import { Money } from "@/components/ui/Money";
 import { Text } from "@/components/ui/Text";
 import { api, type Invoice } from "@/lib/api/endpoints";
 import { capitalize, formatDateShort, formatMonth } from "@/lib/format";
-import { useApiMutation, useCard, useInstallments, useInvoices } from "@/lib/hooks";
+import { useApiMutation, useBankOverview, useCard, useInstallments, useInvoices } from "@/lib/hooks";
 import { confirmDialog } from "@/lib/ui-store";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -34,6 +34,7 @@ export default function CardDetailScreen() {
   const upcoming = useInvoices(id, "upcoming");
   const history = useInvoices(id, "history");
   const installments = useInstallments(id);
+  const overview = useBankOverview();
   const archive = useApiMutation((archived: boolean) => api.cards.update(id!, { archived }), { success: "Cartão atualizado" });
   const remove = useApiMutation(() => api.cards.remove(id!), { success: "Cartão excluído", onSuccess: goBack });
 
@@ -41,6 +42,11 @@ export default function CardDetailScreen() {
     return <Screen header={<ScreenHeader title="Cartão" />}>{card.isLoading ? <SkeletonCard /> : <ErrorState error={card.error} onRetry={() => void card.refetch()} />}</Screen>;
   }
   const c = card.data;
+  // Cartão ligado ao Open Finance: limite, disponível e fatura vêm do banco (a verdade); o resto é o cálculo do app.
+  const bank = overview.data?.cards.find((x) => x.cardId === id);
+  const limitCents = bank?.limitCents ?? c.limitCents;
+  const availableCents = bank?.availableCents ?? c.availableCents;
+  const usedCents = bank ? limitCents - availableCents : c.usedCents;
   const invoiceRows = tab === "upcoming" ? upcoming.data?.data : history.data?.data;
 
   return (
@@ -49,25 +55,25 @@ export default function CardDetailScreen() {
       onRefresh={() => void Promise.all([card.refetch(), upcoming.refetch(), history.refetch(), installments.refetch()])}
       header={<ScreenHeader title={c.name} subtitle={`Fecha dia ${c.closingDay} · vence dia ${c.dueDay}`} right={<IconButton icon="pencil" label="Editar" onPress={() => router.push(`/card/${id}/edit` as never)} />} />}
     >
-      <CreditCardView card={c} onPress={c.currentInvoice ? () => router.push(`/card/${id}/invoice/${c.currentInvoice!.id}` as never) : undefined} />
+      <CreditCardView card={c} bank={bank} onPress={c.currentInvoice ? () => router.push(`/card/${id}/invoice/${c.currentInvoice!.id}` as never) : undefined} />
       <Card style={{ flexDirection: "row", gap: 12 }}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="caption" tone="muted">
             Limite total
           </Text>
-          <Money cents={c.limitCents} weight="700" hideZeroCents />
+          <Money cents={limitCents} weight="700" hideZeroCents />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="caption" tone="muted">
             Comprometido
           </Text>
-          <Money cents={c.usedCents} weight="700" hideZeroCents />
+          <Money cents={usedCents} weight="700" hideZeroCents />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="caption" tone="muted">
             Disponível
           </Text>
-          <Money cents={c.availableCents} weight="700" tone={c.availableCents < 0 ? "negative" : "positive"} hideZeroCents />
+          <Money cents={availableCents} weight="700" tone={availableCents < 0 ? "negative" : "positive"} hideZeroCents />
         </View>
       </Card>
 

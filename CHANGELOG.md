@@ -11,6 +11,21 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Open Finance puxa tudo sozinho.** Ao conectar um banco (opção "Importar tudo automaticamente", ligada por padrão),
+  o app cria a conta e o cartão, importa as transações dos últimos 90 dias, ajusta o saldo inicial para bater com o
+  do banco e passa a se atualizar uma vez ao dia, sem você revisar nada. Desligando a opção, volta o modo manual
+  (você escolhe a conta e revisa cada transação). Veja [docs/open-finance.md](docs/open-finance.md).
+- **Cartões com os números do banco:** limite, limite disponível, fatura atual, fechamento e vencimento vêm do
+  Open Finance (Carteira e detalhe do cartão, com "Dados do banco · atualizado há…"). Quando a conta que paga a
+  fatura debita o pagamento, o app quita a fatura correspondente em vez de lançar uma despesa nova.
+- **Aba "Investir":** CDB, caixinhas, cofrinhos, porquinhos, LCI/LCA e fundos, com saldo, valor aplicado, rendimento
+  (R$ e %), taxa ("110% do CDI"), vencimento, quanto pode resgatar agora e a evolução diária (o app guarda uma foto
+  por dia). Somente leitura: o app nunca aplica nem resgata.
+- **"Pedir ao banco" (atualizar agora):** força uma nova leitura, com limite de 3 pedidos por dia e 30 min entre eles,
+  porque o Open Finance limita as consultas por mês e instituição.
+- **Banco de demonstração** (`OPEN_FINANCE_PROVIDER=demo`, só em desenvolvimento; a API recusa subir assim em
+  produção): conta corrente, cartão e 5 investimentos que rendem com o passar dos dias, para testar o fluxo inteiro
+  sem contratar o Pluggy. `pnpm dev:seed -- --reset` recria a conta de demonstração.
 - **Log geral do servidor:** a API grava `api-AAAA-MM-DD.log` (tudo) e `errors-AAAA-MM-DD.log` (só avisos e erros)
   em `.data/logs` (desenvolvimento) ou em `LOG_DIR`, com troca diária e retenção configurável (`LOG_RETENTION_DAYS`,
   padrão 30 dias). Cada linha de requisição autenticada carrega o id do usuário (`uid`) e o id da requisição.
@@ -26,14 +41,26 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 - **Tela de erro amigável** (`ErrorBoundary`): se uma tela quebrar, o app mostra "Algo deu errado / Tentar de novo"
   em vez de ficar em branco, e o erro é registrado.
 - Este `CHANGELOG.md`.
+- **Testes:** 432 automatizados (compartilhado 76, banco 28, app 36, API 292).
 
 ### Alterado
 - `pnpm dev:db` e `pnpm dev:api` agora explicam, em português, quando a porta já está em uso (o banco ou a API já
   estão rodando em outro terminal) e como achar o processo, em vez de falhar com `undefined`/`EADDRINUSE`.
 
+- Revogar o Open Finance agora também apaga os investimentos, as fotos diárias e as transações do banco ainda não
+  revisadas (as já importadas continuam suas). A exportação de dados (LGPD) inclui os investimentos.
+- O widget do Pluggy pede explicitamente `ACCOUNTS`, `CREDIT_CARDS`, `TRANSACTIONS` e `INVESTMENTS`, para o
+  consentimento no app do banco cobrir tudo o que o app mostra.
+
 ### Corrigido
 - Gráfico de barras do Início: aviso de chaves duplicadas do React quando os valores do eixo eram pequenos
   (a escala repetia rótulos ao arredondar centavos).
+- Cartão ligado ao banco mostrava uma fatura em aberto maior que a real, porque o pagamento feito pela conta não era
+  reconhecido; a tela de detalhe do cartão também ignorava os números do banco.
+- Ordem das contas na conexão (conta antes do cartão) não era garantida quando nasciam no mesmo instante
+  (causava falha intermitente nos testes).
+- Autenticação de desenvolvimento: o servidor em execução não via a conta recriada por `pnpm dev:seed -- --reset`
+  ("Esta conta foi excluída" no login); agora relê o arquivo de usuários quando ele muda.
 
 ## [0.1.0] — 2026-10-04 (beta, ainda não publicado nas lojas)
 

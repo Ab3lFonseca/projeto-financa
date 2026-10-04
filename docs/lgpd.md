@@ -12,7 +12,7 @@
 | Contas, cartões, lançamentos, categorias, orçamentos, metas, recorrências | Função principal do app (informados pelo usuário) | tabelas com `user_id` |
 | Consentimentos | Prova de aceite (versão + data + hash do IP) | `consents` |
 | Token de push, nome do aparelho | Avisos | `push_tokens` |
-| Conexões e transações do banco (Open Finance, se ligado) | Importar transações com consentimento específico | `bank_connections`, `bank_transactions` |
+| Conexões, contas, cartões, transações e **investimentos** do banco (Open Finance, se ligado) | Importar e mostrar os dados do banco com consentimento específico (somente leitura) | `bank_connections`, `bank_connection_accounts`, `bank_transactions`, `bank_investments`, `bank_investment_snapshots` |
 | Auditoria (ações sensíveis) | Segurança e prova | `audit_logs` (sem valores financeiros) |
 | Logs técnicos da API e relatórios de erro do app | Segurança, estabilidade e correção de falhas | Arquivos de log do servidor (id do usuário como pseudônimo; sem e-mail, valores, tokens nem corpo de requisição). O envio de erros do app pode ser desligado em *Configurações → Diagnóstico* ([logs.md](logs.md)) |
 
@@ -46,6 +46,7 @@ manutenção (a cada 6 h):
 | Notificações lidas | 90 dias |
 | Tokens de push sem uso | 180 dias |
 | Transações brutas do banco não aproveitadas | apagadas ao revogar a conexão |
+| Investimentos do banco e a foto diária de cada um | enquanto a conexão existir; apagados ao revogar a conexão (as transações já importadas continuam sendo do usuário) |
 | Arquivos de log da API | 30 dias (`LOG_RETENTION_DAYS`); **não** são reescritos ao excluir uma conta, expiram pela retenção |
 | Registro de erros no aparelho | últimos 300 eventos; o usuário pode apagar; some ao desinstalar o app |
 

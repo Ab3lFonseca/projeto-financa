@@ -1,4 +1,4 @@
-﻿# Guia de deploy — do zero até as lojas
+# Guia de deploy — do zero até as lojas
 
 Este guia leva o projeto do seu computador até produção: banco, autenticação, API, domínio com
 HTTPS, app Android/iOS e publicação nas lojas. Siga na ordem. Onde algo **não foi testado aqui**
@@ -222,7 +222,9 @@ Veja o README → "Como testar". Para um build instalável de teste use o perfil
 ## 12. Open Finance (opcional)
 
 Está **desligado** (`OPEN_FINANCE_ENABLED=false`) porque o provedor é pago (seção 1). Quando decidir ligar:
-[open-finance.md](open-finance.md).
+[open-finance.md](open-finance.md). Nunca defina `OPEN_FINANCE_PROVIDER=demo` em produção (a API recusa subir;
+o modo demonstração é só para testar localmente). A migração `open_finance_investments_cards` (investimentos, dados
+de cartão e `auto_import`) é aplicada junto com as demais (passo 3 da seção 4 e no workflow de deploy da seção 6).
 
 ## 13. Operação
 

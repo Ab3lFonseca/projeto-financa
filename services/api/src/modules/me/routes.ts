@@ -1,4 +1,4 @@
-﻿import {
+import {
   changePasswordBody,
   deleteAccountBody,
   errorResponse,

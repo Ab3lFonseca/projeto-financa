@@ -1,4 +1,4 @@
-﻿// Importa cada ícone individualmente (lucide-react-native/icons/<nome>) para não embutir os ~1.500 ícones.
+// Importa cada ícone individualmente (lucide-react-native/icons/<nome>) para não embutir os ~1.500 ícones.
 import type { ComponentType } from "react";
 import Apple from "lucide-react-native/icons/apple";
 import ArrowDownLeft from "lucide-react-native/icons/arrow-down-left";

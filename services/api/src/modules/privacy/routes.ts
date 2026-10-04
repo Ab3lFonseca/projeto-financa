@@ -1,4 +1,4 @@
-﻿import { consentsResponse, privacyRequestDTO, setConsentBody } from "@app/shared";
+import { consentsResponse, privacyRequestDTO, setConsentBody } from "@app/shared";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { audit } from "../../lib/audit";

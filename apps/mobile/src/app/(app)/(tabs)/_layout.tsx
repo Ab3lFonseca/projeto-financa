@@ -9,6 +9,7 @@ const TABS = [
   { name: "transactions", title: "Transações", icon: "arrow-left-right" },
   { name: "charts", title: "Gráficos", icon: "chart-pie" },
   { name: "wallet", title: "Carteira", icon: "wallet" },
+  { name: "investments", title: "Investir", icon: "piggy-bank" },
   { name: "more", title: "Mais", icon: "layout-grid" },
 ] as const;
 
@@ -21,7 +22,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textFaint,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600", marginTop: 2 },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: "600", marginTop: 2 },
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,

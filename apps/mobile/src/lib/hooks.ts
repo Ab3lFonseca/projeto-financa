@@ -1,5 +1,6 @@
 import { todayIn, type ISODate } from "@app/shared";
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { randomUUID } from "expo-crypto";
 import { errorText } from "@/components/ui/ApiErrorMessage";
 import { ApiError } from "./api/client";
@@ -71,6 +72,45 @@ export const useConsents = () => useQuery({ queryKey: ["consents"], queryFn: api
 
 export const useOpenFinanceStatus = () => useQuery({ queryKey: ["of-status"], queryFn: api.openFinance.status });
 export const useBankConnections = () => useQuery({ queryKey: ["of-connections"], queryFn: api.openFinance.connections });
+
+/**
+ * Investimentos vindos do banco. Relê do servidor a cada minuto enquanto a tela está aberta: o servidor já
+ * atualiza sozinho (webhook do provedor + rotina periódica), então isto só traz o que ele já guardou.
+ */
+export const useInvestments = () =>
+  useQuery({ queryKey: ["of-investments"], queryFn: () => api.openFinance.investments(), refetchInterval: 60_000 });
+export const useInvestment = (id: string | undefined) =>
+  useQuery({ queryKey: ["of-investment", id], queryFn: () => api.openFinance.investment(id!), enabled: !!id, refetchInterval: 60_000 });
+/** Saldo, limite e fatura informados pelo banco para as contas/cartões já vinculados. */
+export const useBankOverview = () => useQuery({ queryKey: ["of-overview"], queryFn: api.openFinance.overview, refetchInterval: 60_000 });
+
+/**
+ * Ao abrir a tela, pede ao servidor uma releitura das conexões cujos dados estão velhos (mais de `maxAgeMinutes`).
+ * É só leitura do que o provedor já guardou (não consome a cota mensal do Open Finance) e roda uma vez por abertura.
+ */
+export function useSyncStaleConnections(maxAgeMinutes = 30) {
+  const qc = useQueryClient();
+  const connections = useBankConnections();
+  const done = useRef(false);
+  useEffect(() => {
+    const list = connections.data?.data;
+    if (done.current || !list) return;
+    done.current = true;
+    const limit = Date.now() - maxAgeMinutes * 60_000;
+    const stale = list.filter((c) => c.status !== "REVOKED" && (!c.lastSyncAt || new Date(c.lastSyncAt).getTime() < limit));
+    if (stale.length === 0) return;
+    void (async () => {
+      for (const c of stale) {
+        try {
+          await api.openFinance.sync(c.id);
+        } catch {
+          /* sem rede/limite: segue com o que já há */
+        }
+      }
+      void qc.invalidateQueries();
+    })();
+  }, [connections.data, maxAgeMinutes, qc]);
+}
 export const useBankTransactions = (status: "NEW" | "IGNORED") =>
   useInfiniteQuery({
     queryKey: ["of-bank-transactions", status],

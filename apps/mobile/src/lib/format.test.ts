@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   capitalize,
+  formatAgo,
   formatCompactBRL,
   formatDateLong,
   formatDateRelative,
@@ -45,6 +46,26 @@ describe("datas", () => {
   it("virada de mês e de ano no relativo", () => {
     expect(formatDateRelative("2026-11-01", "2026-10-31")).toBe("Amanhã");
     expect(formatDateRelative("2026-12-31", "2027-01-01")).toBe("Ontem");
+  });
+});
+
+describe("atualizado há...", () => {
+  const NOW = new Date("2026-10-04T12:00:00Z").getTime();
+  const ago = (ms: number) => new Date(NOW - ms).toISOString();
+
+  it("agora, minutos, horas, dias ou a data", () => {
+    expect(formatAgo(ago(20_000), NOW)).toBe("agora");
+    expect(formatAgo(ago(5 * 60_000), NOW)).toBe("há 5 min");
+    expect(formatAgo(ago(59 * 60_000), NOW)).toBe("há 59 min");
+    expect(formatAgo(ago(2 * 3_600_000 + 1), NOW)).toBe("há 2 h");
+    expect(formatAgo(ago(3 * 86_400_000), NOW)).toBe("há 3 d");
+    expect(formatAgo("2026-07-01T10:00:00Z", NOW)).toBe("1 jul 2026");
+  });
+
+  it("sem data e relógios adiantados não quebram", () => {
+    expect(formatAgo(null, NOW)).toBe("nunca");
+    expect(formatAgo(undefined, NOW)).toBe("nunca");
+    expect(formatAgo(new Date(NOW + 60_000).toISOString(), NOW)).toBe("agora");
   });
 });
 

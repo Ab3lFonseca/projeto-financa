@@ -1,4 +1,4 @@
-﻿# O contexto do build é a raiz do monorepo. Fora da imagem: segredos, dependências locais e o app mobile.
+# O contexto do build é a raiz do monorepo. Fora da imagem: segredos, dependências locais e o app mobile.
 **/node_modules
 **/dist
 **/.expo

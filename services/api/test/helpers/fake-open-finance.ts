@@ -1,28 +1,33 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   ProviderError,
   type ConnectToken,
   type OpenFinanceProvider,
   type ProviderAccount,
   type ProviderConnector,
+  type ProviderInvestment,
   type ProviderItem,
   type ProviderTransaction,
 } from "../../src/modules/open-finance/provider";
 
 export const WEBHOOK_SECRET = "whsec-test-secret";
 
-/** Provedor em memória: permite montar bancos, contas e transações e inspecionar chamadas. */
+/** Provedor em memória: permite montar bancos, contas, cartões, investimentos e transações e inspecionar chamadas. */
 export class FakeOpenFinanceProvider implements OpenFinanceProvider {
   readonly name = "PLUGGY" as const;
 
   items = new Map<string, ProviderItem>();
   accounts = new Map<string, ProviderAccount[]>();
   transactions = new Map<string, ProviderTransaction[]>();
+  investments = new Map<string, ProviderInvestment[]>();
   deleted: string[] = [];
+  refreshed: string[] = [];
   tokens: Array<{ clientUserId: string; itemId?: string; redirectUri?: string }> = [];
   connectors: ProviderConnector[] = [{ id: 601, name: "Banco A" }, { id: 602, name: "Banco B" }];
   connectorCalls = 0;
   failDelete = false;
+  failInvestments = false;
+  failRefresh = false;
 
   /** Cria uma conexão (item) já "autorizada" pelo usuário no banco. */
   addItem(
@@ -31,7 +36,9 @@ export class FakeOpenFinanceProvider implements OpenFinanceProvider {
       institution?: string;
       isOpenFinance?: boolean;
       status?: ProviderItem["status"];
+      partial?: boolean;
       accounts?: Array<Partial<ProviderAccount> & { txs?: Array<Partial<ProviderTransaction>> }>;
+      investments?: Array<Partial<ProviderInvestment>>;
     } = {},
   ): { itemId: string; accountIds: string[] } {
     const itemId = randomUUID();
@@ -44,6 +51,7 @@ export class FakeOpenFinanceProvider implements OpenFinanceProvider {
       lastUpdatedAt: new Date("2026-10-04T12:00:00Z"),
       consentExpiresAt: null,
       errorCode: null,
+      partial: opts.partial ?? false,
     });
     const accountIds: string[] = [];
     const defs = opts.accounts ?? [{ kind: "BANK", name: "Conta corrente" }];
@@ -65,10 +73,46 @@ export class FakeOpenFinanceProvider implements OpenFinanceProvider {
             ...t,
           })),
         );
-        return { id, kind: d.kind ?? "BANK", name: d.name ?? "Conta", balanceCents: d.balanceCents ?? null };
+        const kind = d.kind ?? "BANK";
+        return {
+          id,
+          kind,
+          name: d.name ?? "Conta",
+          balanceCents: d.balanceCents ?? null,
+          credit: kind === "CREDIT" ? (d.credit ?? null) : null,
+        };
       }),
     );
+    this.investments.set(itemId, (opts.investments ?? []).map((i) => this.makeInvestment(i)));
     return { itemId, accountIds };
+  }
+
+  makeInvestment(over: Partial<ProviderInvestment> = {}): ProviderInvestment {
+    return {
+      id: randomUUID(),
+      name: "CDB Teste",
+      type: "FIXED_INCOME",
+      subtype: "CDB",
+      issuer: "Banco Teste S.A.",
+      status: "ACTIVE",
+      balanceCents: 105_000,
+      investedCents: 100_000,
+      profitCents: 5_000,
+      withdrawableCents: 105_000,
+      rateType: "CDI",
+      rate: 110,
+      fixedAnnualRate: null,
+      annualRate: null,
+      issueDate: "2026-07-01",
+      dueDate: "2028-07-01",
+      ...over,
+    };
+  }
+
+  setInvestments(itemId: string, list: Array<Partial<ProviderInvestment> & { id?: string }>): ProviderInvestment[] {
+    const made = list.map((i) => this.makeInvestment(i));
+    this.investments.set(itemId, made);
+    return made;
   }
 
   addTransactions(accountId: string, txs: Array<Partial<ProviderTransaction>>): ProviderTransaction[] {
@@ -106,8 +150,18 @@ export class FakeOpenFinanceProvider implements OpenFinanceProvider {
     return this.accounts.get(itemId) ?? [];
   }
 
+  async listInvestments(itemId: string): Promise<ProviderInvestment[]> {
+    if (this.failInvestments) throw new ProviderError("falha simulada", "PROVIDER_ERROR", 500, true);
+    return this.investments.get(itemId) ?? [];
+  }
+
   async listTransactions(accountId: string, _kind: "BANK" | "CREDIT", fromDate: string): Promise<ProviderTransaction[]> {
     return (this.transactions.get(accountId) ?? []).filter((t) => t.postedOn >= fromDate);
+  }
+
+  async refreshItem(itemId: string): Promise<void> {
+    if (this.failRefresh) throw new ProviderError("falha simulada", "PROVIDER_ERROR", 500, true);
+    this.refreshed.push(itemId);
   }
 
   async deleteItem(itemId: string): Promise<void> {

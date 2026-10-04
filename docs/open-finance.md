@@ -1,13 +1,13 @@
 # Open Finance (módulo trocável)
 
-Conecta o banco do usuário pelo **Open Finance Brasil** (sistema regulado pelo Banco Central) para trazer
-contas e transações. O provedor é um módulo: hoje há um adaptador para o **Pluggy**; trocar de provedor
-é escrever outro adaptador, sem mexer em rotas, banco ou telas.
+Conecta o banco do usuário pelo **Open Finance Brasil** (sistema regulado pelo Banco Central) para trazer,
+sozinho, **contas, cartões, transações e investimentos**. O provedor é um módulo: hoje há um adaptador para o
+**Pluggy**; trocar de provedor é escrever outro adaptador, sem mexer em rotas, banco ou telas.
 
-> **Estado:** implementado e testado com um provedor simulado (29 testes de integração + 29 do
-> adaptador com `fetch` simulado). **Nunca foi executado contra o Pluggy real** — não há credenciais.
-> Antes de ligar em produção, faça o roteiro da seção 6 com a conta de teste do Pluggy.
-> Está **desligado por padrão** (`OPEN_FINANCE_ENABLED=false`).
+> **Estado:** implementado e testado com provedores simulados (testes de integração, 41 testes do adaptador do
+> Pluggy com `fetch` simulado e um **banco de demonstração** para ver o fluxo completo na tela, seção 9).
+> **Nunca foi executado contra o Pluggy real** — não há credenciais. Antes de ligar em produção, faça o roteiro
+> da seção 6 com a conta de teste do Pluggy. Está **desligado por padrão** (`OPEN_FINANCE_ENABLED=false`).
 
 ## 1. Custo e contrato (leia antes de ligar)
 
@@ -31,15 +31,53 @@ CSV/OFX** (não implementado; seria um novo "provedor" que alimenta a mesma tabe
    usuário é levado ao app/site **do próprio banco**, autoriza e volta. **Nós nunca vemos senha.**
 5. O widget devolve o `itemId`; o app chama `POST /v1/open-finance/connections`. A API confere no Pluggy que
    (a) o item pertence àquele usuário e (b) o conector é regulado; senão recusa (e remove o item no provedor).
-6. O usuário **vincula** cada conta/cartão do banco a uma conta/cartão do app (`PUT .../accounts/:id`).
-   Só contas vinculadas são sincronizadas.
-7. A sincronização busca os **últimos 90 dias** na primeira vez e, depois, desde a última (com 7 dias de folga).
-   Entram só transações **efetivadas**; ficam em `bank_transactions` com status `NEW`.
-8. O usuário **revisa**: importa (vira lançamento), concilia com um lançamento manual parecido (mesmo valor/tipo,
-   ±3 dias) ou ignora. Nada vira lançamento sozinho.
+6. O que acontece depois depende de `autoImport` (por conexão; **ligado por padrão**, o usuário escolhe na tela):
+
+   **Importar tudo automaticamente (`autoImport = true`)**
+   - Cada conta do banco vira uma **conta** do app e cada cartão vira um **cartão** (`source = OPEN_FINANCE`),
+     respeitando os limites do plano. Cartão só é criado quando o banco informa fechamento e vencimento.
+   - As transações **efetivadas** dos últimos 90 dias entram como lançamentos, sem revisão. Se o usuário já tinha
+     lançado a mesma coisa à mão (mesmo valor/tipo, ±3 dias), o app **concilia** em vez de duplicar.
+   - O saldo inicial da conta é ajustado para o saldo de hoje bater com o do banco.
+   - Débito da conta corrente que paga a fatura ("PAGAMENTO FATURA", "PAG CARTAO"…) **quita a fatura** do cartão
+     (como o "Pagar fatura" do app), da mais antiga para a mais nova, e não vira despesa. Sem fatura para quitar,
+     vira despesa normal.
+   - Limite, disponível, fatura atual, fechamento e vencimento do cartão, e o saldo da conta, são **os números do
+     banco** (telas mostram "Dados do banco · atualizado há…"); o resto é calculado pelo app.
+   - Investimentos entram na aba **Investir** (seção 2.1).
+
+   **Modo manual (`autoImport = false`)**
+   - O usuário **vincula** cada conta/cartão do banco a uma do app (`PUT .../accounts/:id`); só vinculadas
+     sincronizam, e as transações ficam em `bank_transactions` com status `NEW`.
+   - O usuário **revisa**: importa (vira lançamento), concilia ou ignora. Nada vira lançamento sozinho.
 
 Atualizações chegam por **webhook** (`POST /v1/webhooks/pluggy`) e por um **job a cada 6 h** (conexões paradas
-há mais de 24 h). Pagamentos de fatura/estornos de **cartão** entram como `IGNORED` (a fatura já é paga pela conta).
+há mais de 24 h). No modo manual, pagamentos de fatura/estornos de **cartão** entram como `IGNORED`; estornos
+(crédito) na conta do cartão são ignorados também no modo automático.
+
+### 2.1 Investimentos (aba "Investir")
+
+- O app lê `GET /investments` do provedor e guarda em `bank_investments`: nome, tipo/subtipo (CDB, LCI, LCA, fundo…),
+  emissor, saldo, valor aplicado, rendimento (R$ e %), taxa ("110% do CDI", "CDI + 2% a.a.", "rentabilidade anual
+  10,4%"), vencimento e quanto pode ser **resgatado agora**. Caixinhas, cofrinhos e porquinhos aparecem **como CDB**
+  quando o banco os expõe assim (Nubank e PicPay, segundo o Pluggy); se o banco não os expõe, o app não inventa.
+- **Evolução:** uma foto por dia por investimento (`bank_investment_snapshots`) alimenta o gráfico do detalhe, que
+  começa no dia da conexão (o app não consegue reconstruir o passado).
+- Um investimento só é marcado como encerrado quando a leitura vem **completa** (item não parcial) e **não vazia**;
+  uma leitura parcial ou vazia por falha do banco não apaga nada.
+- Somente leitura, também no banco de dados (RLS só permite `SELECT` para o app).
+
+### 2.2 "Automático" significa diário, não em tempo real
+
+Segundo a documentação do Pluggy (docs.pluggy.ai, consultada em 2026-10-04 — **confirme os números atuais**), o
+Pluggy atualiza cada conexão **uma vez por dia** sozinho, e a rede do Open Finance limita as consultas por mês,
+por produto, instituição e CPF (ex.: lista de investimentos 30/mês, saldo 120/mês, faturas e transações de cartão
+30/mês, limites 240/mês). Por isso:
+
+- o app se atualiza sozinho (webhook + job) e mostra "atualizado há…";
+- **"Pedir ao banco"** força uma leitura nova, mas é limitado a **3 pedidos por dia**, com 30 min entre eles
+  (contados em `audit_logs`), para não gastar a cota mensal do usuário;
+- leituras simultâneas da mesma conexão (webhook + usuário) são **coalescidas** em uma só.
 
 ## 3. Segurança e privacidade
 
@@ -51,7 +89,8 @@ há mais de 24 h). Pagamentos de fatura/estornos de **cartão** entram como `IGN
 | Webhook não injeta dados | O payload é só gatilho; os dados vêm sempre da API do provedor (autenticada) |
 | Reentrega de webhook | `webhook_events` com `UNIQUE(provider, event_id)`; repetido responde `duplicate: true` |
 | Revogação | Retirar o consentimento, remover a conexão ou excluir a conta chama `DELETE /items/{id}` no Pluggy. Se falhar, a conexão fica `REVOKE_PENDING` e o job repete; **na exclusão de conta, nada é apagado até o provedor confirmar** |
-| Minimização | 90 dias, só contas vinculadas, só efetivadas; ao revogar, apaga o que o usuário não aproveitou (`NEW`/`IGNORED`) |
+| Minimização | 90 dias, só contas vinculadas, só efetivadas; ao revogar, apaga os investimentos, as fotos diárias e o que o usuário não aproveitou (`NEW`/`IGNORED`) |
+| Permissões | O widget pede só `ACCOUNTS`, `CREDIT_CARDS`, `TRANSACTIONS` e `INVESTMENTS`, sempre leitura; o usuário vê a lista na tela de consentimento e pode ajustar/encerrar no app do banco |
 | Logs | Sem corpo de requisição; erros do provedor viram códigos (`PROVIDER_*`), nunca texto com dados |
 | Plano | Recurso Premium (`limits.openFinance`); com `BILLING_ENFORCED=false` (beta) todos têm |
 
@@ -64,6 +103,7 @@ há mais de 24 h). Pagamentos de fatura/estornos de **cartão** entram como `IGN
 | `PLUGGY_WEBHOOK_SECRET` | Segredo (>= 24 caracteres) que o Pluggy enviará no cabeçalho do webhook |
 | `PLUGGY_BASE_URL` | Padrão `https://api.pluggy.ai` |
 | `OPEN_FINANCE_REDIRECT_URI` | Deep link de retorno, ex.: `financa://open-finance` (o esquema `financa` já está no app) |
+| `OPEN_FINANCE_PROVIDER` | `pluggy` (padrão) ou `demo` (banco fictício; **só desenvolvimento**, a API recusa em produção) |
 
 Em produção, com a flag ligada, a API **recusa subir** sem `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET` e `PLUGGY_WEBHOOK_SECRET`.
 
@@ -93,11 +133,21 @@ Confira, com credenciais de teste, os pontos que a documentação não deixou 10
 - [ ] Retorno do banco por deep link (`oauthRedirectUri`) em Android e iOS reais.
 - [ ] `DELETE /items/{id}` realmente encerra o consentimento no banco (a documentação não afirma).
 - [ ] Prazo/renovação do consentimento (`consentExpiresAt`).
+- [ ] `GET /accounts` com `creditData` (limite, disponível, fechamento/vencimento da fatura, pagamento mínimo) e o
+      sinal de `balance` em cartão.
+- [ ] `GET /investments` (paginação, `type`/`subtype`, `rateType`, `fixedAnnualRate`/`annualRate`) e se **caixinhas,
+      cofrinhos e porquinhos** do banco de teste aparecem (e como CDB). Cobertura do "Porquinho" do Inter: **não
+      confirmada** na documentação.
+- [ ] `PATCH /items/{id}` (atualização sob demanda) e o campo que indica leitura parcial do item.
+- [ ] Débito de pagamento de fatura na conta corrente: descrição real que cada banco usa (a detecção é por
+      "fatura"/"cartão" na descrição).
 
 ## 7. Endpoints (`/v1/open-finance`)
 
 `GET /status` · `GET /connectors` · `POST /connect-token` · `POST /connections` · `GET /connections` ·
-`DELETE /connections/:id` · `POST /connections/:id/sync` · `PUT /connections/:id/accounts/:providerAccountId` ·
+`PATCH /connections/:id` (`autoImport`) · `DELETE /connections/:id` · `POST /connections/:id/sync` ·
+`POST /connections/:id/refresh` ("pedir ao banco") · `PUT /connections/:id/accounts/:providerAccountId` ·
+`GET /overview` (números do banco por conta e cartão) · `GET /investments` · `GET /investments/:id` ·
 `GET /bank-transactions` · `POST /bank-transactions/:id/{import|match|ignore|restore}` ·
 `POST /v1/webhooks/pluggy` (sem login; segredo no cabeçalho).
 
@@ -107,3 +157,14 @@ Implemente `OpenFinanceProvider` ([`provider.ts`](../services/api/src/modules/op
 normalizar valores para centavos positivos + `direction`, expor conectores regulados, itens/contas/transações,
 `deleteItem` e `verifyWebhook`. Registre-o em `buildOpenFinanceProvider` (`app.ts`) e acrescente o valor ao enum
 `OpenFinanceProvider` do Prisma. O banco, as rotas e o app não mudam.
+
+## 9. Banco de demonstração (testar sem contratar o Pluggy)
+
+Com `OPEN_FINANCE_ENABLED=true` e `OPEN_FINANCE_PROVIDER=demo` no `.env`, o botão **Conectar um banco** abre um aviso
+("modo de desenvolvimento") em vez do widget e conecta o **Banco Demo**: conta corrente, cartão Gold (limite
+R$ 8.000, fecha dia 10, vence dia 17) e 5 investimentos (CDB 110% do CDI, Caixinha Viagem, Meu Porquinho, LCI 94%
+do CDI e Fundo DI). Tudo é calculado a partir do relógio, sem guardar estado: a cada dia entram transações novas,
+os investimentos rendem e o pagamento da fatura (dia 17) tem o valor da fatura que fechou — o que dá para ver o
+"automático" funcionando. Para recomeçar: `pnpm dev:seed -- --reset` e conecte de novo.
+
+O modo demonstração não vale como validação do Pluggy: o que ele não prova está na seção 6.

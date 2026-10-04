@@ -5,8 +5,8 @@ import { Badge, ProgressBar } from "@/components/ui/Controls";
 import { Card, IconBadge, Row } from "@/components/ui/Layout";
 import { Money } from "@/components/ui/Money";
 import { Text } from "@/components/ui/Text";
-import type { Account, Budget, Card as CardModel, Goal, Transaction } from "@/lib/api/endpoints";
-import { formatDateShort, formatPct } from "@/lib/format";
+import type { Account, BankOverview, Budget, Card as CardModel, Goal, Transaction } from "@/lib/api/endpoints";
+import { formatAgo, formatBRL, formatDateShort, formatPct } from "@/lib/format";
 import { useTheme } from "@/theme/ThemeProvider";
 
 /** Linha de lançamento: ícone da categoria, descrição, origem e valor (verde/vermelho). */
@@ -48,7 +48,8 @@ export function TransactionRow({ tx, onPress, showDate }: { tx: Transaction; onP
 }
 
 /** Resumo de conta (lista horizontal na Início e na Carteira). */
-export function AccountTile({ account, onPress, width }: { account: Account; onPress?: () => void; width?: number }) {
+/** `bank` = o que o banco informou pelo Open Finance para esta conta (saldo e hora da leitura). */
+export function AccountTile({ account, onPress, width, bank }: { account: Account; onPress?: () => void; width?: number; bank?: BankOverview["accounts"][number] }) {
   const { colors } = useTheme();
   const tint = account.color ?? colors.primary;
   return (
@@ -65,6 +66,14 @@ export function AccountTile({ account, onPress, width }: { account: Account; onP
         </View>
       </Row>
       <Money cents={account.balanceCents} variant="heading" weight="700" tone={account.balanceCents < 0 ? "negative" : undefined} />
+      {bank && bank.balanceCents !== null ? (
+        <Row gap={6}>
+          <Icon name="link" size={12} color={colors.textFaint} />
+          <Text variant="caption" tone="faint" numberOfLines={1} style={{ flexShrink: 1 }}>
+            Saldo no banco {formatBRL(bank.balanceCents)} · {formatAgo(bank.updatedAt)}
+          </Text>
+        </Row>
+      ) : null}
     </Card>
   );
 }
@@ -78,11 +87,17 @@ const ACCOUNT_LABEL: Record<Account["type"], string> = {
 };
 
 /** Cartão de crédito "visual": cor do cartão, final, limite usado e fatura atual. */
-export function CreditCardView({ card, onPress }: { card: CardModel; onPress?: () => void }) {
+/** `bank` = limite, fatura e vencimento como o banco informou pelo Open Finance (atualizam sozinhos). */
+export function CreditCardView({ card, onPress, bank }: { card: CardModel; onPress?: () => void; bank?: BankOverview["cards"][number] }) {
   const { colors, radius } = useTheme();
   const tint = card.color ?? colors.primary;
-  const usedPct = card.limitCents > 0 ? (card.usedCents / card.limitCents) * 100 : 0;
+  // Com Open Finance, os números do banco são a verdade (limite, disponível, fatura e vencimento).
+  const limit = bank?.limitCents ?? card.limitCents;
+  const available = bank?.availableCents ?? card.availableCents;
+  const usedPct = limit > 0 ? ((limit - available) / limit) * 100 : 0;
   const inv = card.currentInvoice;
+  const invoiceTotal = bank?.billCents ?? inv?.totalCents ?? 0;
+  const invoiceDue = bank?.dueDate ?? inv?.dueDate ?? null;
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
       <View style={{ borderRadius: radius.lg, backgroundColor: tint, padding: 18, gap: 18 }}>
@@ -102,16 +117,24 @@ export function CreditCardView({ card, onPress }: { card: CardModel; onPress?: (
             <Text variant="caption" style={{ color: "rgba(255,255,255,0.8)" }}>
               Limite disponível
             </Text>
-            <Money cents={card.availableCents} variant="bodySm" weight="700" style={{ color: "#fff" }} />
+            <Money cents={available} variant="bodySm" weight="700" style={{ color: "#fff" }} />
           </Row>
           <ProgressBar value={usedPct} color="#FFFFFF" track="rgba(255,255,255,0.3)" height={6} />
           <Row style={{ justifyContent: "space-between" }}>
             <Text variant="caption" style={{ color: "rgba(255,255,255,0.8)" }}>
-              {inv ? `Fatura atual · vence ${formatDateShort(inv.dueDate)}` : "Sem fatura em aberto"}
+              {invoiceDue ? `Fatura atual · vence ${formatDateShort(invoiceDue)}` : "Sem fatura em aberto"}
             </Text>
-            <Money cents={inv?.totalCents ?? 0} variant="bodySm" weight="700" style={{ color: "#fff" }} />
+            <Money cents={invoiceTotal} variant="bodySm" weight="700" style={{ color: "#fff" }} />
           </Row>
         </View>
+        {bank ? (
+          <Row gap={6}>
+            <Icon name="link" size={12} color="rgba(255,255,255,0.85)" />
+            <Text variant="caption" style={{ color: "rgba(255,255,255,0.85)" }}>
+              Dados do banco · atualizado {formatAgo(bank.updatedAt)}
+            </Text>
+          </Row>
+        ) : null}
       </View>
     </Pressable>
   );

@@ -34,6 +34,8 @@ export async function exportUserData(tx: Tx, user: { id: string; email: string }
     select: { id: true, provider: true, institutionName: true, status: true, consentGrantedAt: true, lastSyncAt: true, createdAt: true, revokedAt: true },
   });
   const bankTransactions = await tx.bankTransaction.findMany({ where, orderBy: { postedOn: "asc" } });
+  const bankInvestments = await tx.bankInvestment.findMany({ where, orderBy: { createdAt: "asc" } });
+  const bankInvestmentSnapshots = await tx.bankInvestmentSnapshot.findMany({ where, orderBy: { snapshotDate: "asc" } });
   const notifications = await tx.notification.findMany({ where, orderBy: { createdAt: "asc" } });
 
   // Removemos só campos internos (userId repetido em cada linha).
@@ -60,6 +62,8 @@ export async function exportUserData(tx: Tx, user: { id: string; email: string }
       goalContributions: strip(goalContributions),
       bankConnections,
       bankTransactions: strip(bankTransactions),
+      bankInvestments: strip(bankInvestments),
+      bankInvestmentSnapshots: strip(bankInvestmentSnapshots),
       notifications: strip(notifications),
     },
   };

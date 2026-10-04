@@ -1,4 +1,4 @@
-﻿import { PAYMENT_METHOD_LABEL_PT, type ISODate } from "@app/shared";
+import { PAYMENT_METHOD_LABEL_PT, type ISODate } from "@app/shared";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { SectionList, View } from "react-native";

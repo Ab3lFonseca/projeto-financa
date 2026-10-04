@@ -1,17 +1,19 @@
-﻿import type { Prisma, PrismaClient } from "@app/database";
+import type { Prisma, PrismaClient } from "@app/database";
 import { addDays, fromISODate, toISODate, type BankTransactionDTO, type ConnectionDTO, type ImportBankTransactionBody, type ISODate } from "@app/shared";
 import type { FastifyBaseLogger } from "fastify";
 import { z } from "zod";
 import { audit } from "../../lib/audit";
 import type { OpCtx, Tx } from "../../lib/db";
 import { dateOut, num, tsOut } from "../../lib/dto";
-import { Errors } from "../../lib/errors";
+import { AppError, Errors } from "../../lib/errors";
 import { decodeCursor, encodeCursor, slicePage } from "../../lib/pagination";
 import { limitsFor, resolvePlan } from "../../lib/plan";
 import type { AuthUser } from "../../types";
 import { createNotifications, type NewNotification } from "../notifications/service";
 import type { PushNotifier } from "../notifications/notifier";
 import { createTransactions } from "../transactions/service";
+import { anchorOpeningBalance, autoImportNew, autoLinkAccounts, cleanDescription, guessPaymentMethod, suggestMatch } from "./auto-import";
+import { cardBankData, syncInvestments } from "./investments";
 import { ProviderError, type OpenFinanceProvider, type ProviderConnector, type ProviderItem } from "./provider";
 
 /** Primeira sincronização busca os últimos 90 dias; as seguintes, desde a última (com folga). */
@@ -67,13 +69,16 @@ export class OpenFinanceRuntime {
 
 const refSelect = { select: { id: true, name: true, deletedAt: true } } as const;
 const connectionInclude = {
-  accounts: { include: { account: refSelect, card: refSelect }, orderBy: { createdAt: "asc" } },
+  // Conta e cartão nascem no mesmo instante: o desempate fixa a ordem (contas primeiro, depois cartões).
+  accounts: { include: { account: refSelect, card: refSelect }, orderBy: [{ createdAt: "asc" }, { kind: "asc" }, { providerAccountId: "asc" }] },
 } satisfies Prisma.BankConnectionInclude;
 
 type ConnectionRow = Prisma.BankConnectionGetPayload<{ include: typeof connectionInclude }>;
 const ref = (x: { id: string; name: string; deletedAt: Date | null }) => ({ id: x.id, name: x.name, deleted: x.deletedAt !== null });
 
-function toConnectionDTO(c: ConnectionRow, pendingCount: number): ConnectionDTO {
+type ConnectionStats = { pending: number; investments: number; refreshes: number };
+
+function toConnectionDTO(c: ConnectionRow, stats: ConnectionStats): ConnectionDTO {
   return {
     id: c.id,
     provider: c.provider,
@@ -88,38 +93,45 @@ function toConnectionDTO(c: ConnectionRow, pendingCount: number): ConnectionDTO 
       name: a.displayName ?? "Conta",
       kind: a.kind === "CREDIT" ? "CREDIT" : "BANK",
       balanceCents: a.balanceCents === null ? null : num(a.balanceCents),
+      credit: a.kind === "CREDIT" ? cardBankData(a) : null,
+      dataUpdatedAt: a.providerDataAt ? tsOut(a.providerDataAt) : null,
       account: a.account ? ref(a.account) : null,
       card: a.card ? ref(a.card) : null,
     })),
-    pendingCount,
+    autoImport: c.autoImport,
+    pendingCount: stats.pending,
+    investmentCount: stats.investments,
+    refreshesLeftToday: Math.max(0, MAX_REFRESHES_PER_DAY - stats.refreshes),
   };
 }
 
-async function pendingCounts(tx: Tx | PrismaClient, userId: string, ids: string[]): Promise<Map<string, number>> {
-  if (ids.length === 0) return new Map();
-  const groups = await (tx as Tx).bankTransaction.groupBy({
-    by: ["connectionId"],
-    where: { userId, connectionId: { in: ids }, status: "NEW" },
-    _count: { _all: true },
-  });
-  return new Map(groups.map((g) => [g.connectionId, g._count._all]));
+async function connectionStats(tx: Tx | PrismaClient, userId: string, ids: string[], refreshes: Map<string, number>): Promise<Map<string, ConnectionStats>> {
+  const out = new Map<string, ConnectionStats>(ids.map((id) => [id, { pending: 0, investments: 0, refreshes: refreshes.get(id) ?? 0 }]));
+  if (ids.length === 0) return out;
+  const db = tx as Tx;
+  const pending = await db.bankTransaction.groupBy({ by: ["connectionId"], where: { userId, connectionId: { in: ids }, status: "NEW" }, _count: { _all: true } });
+  for (const g of pending) out.get(g.connectionId)!.pending = g._count._all;
+  const investments = await db.bankInvestment.groupBy({ by: ["connectionId"], where: { userId, connectionId: { in: ids }, closedAt: null }, _count: { _all: true } });
+  for (const g of investments) out.get(g.connectionId)!.investments = g._count._all;
+  return out;
 }
 
-export async function listConnections(tx: Tx, userId: string): Promise<ConnectionDTO[]> {
+/** `refreshes` = pedidos de atualização nas últimas 24 h por conexão (vem do log de auditoria: ver `refreshCounts`). */
+export async function listConnections(tx: Tx, userId: string, refreshes: Map<string, number> = new Map()): Promise<ConnectionDTO[]> {
   const rows = await tx.bankConnection.findMany({
     where: { userId, revokedAt: null },
     include: connectionInclude,
     orderBy: { createdAt: "asc" },
   });
-  const counts = await pendingCounts(tx, userId, rows.map((r) => r.id));
-  return rows.map((r) => toConnectionDTO(r, counts.get(r.id) ?? 0));
+  const stats = await connectionStats(tx, userId, rows.map((r) => r.id), refreshes);
+  return rows.map((r) => toConnectionDTO(r, stats.get(r.id)!));
 }
 
-export async function getConnectionDTO(prisma: PrismaClient, userId: string, id: string): Promise<ConnectionDTO> {
+export async function getConnectionDTO(prisma: PrismaClient, userId: string, id: string, now: Date = new Date()): Promise<ConnectionDTO> {
   const row = await prisma.bankConnection.findFirst({ where: { id, userId, revokedAt: null }, include: connectionInclude });
   if (!row) throw Errors.notFound("Conexão");
-  const counts = await pendingCounts(prisma, userId, [row.id]);
-  return toConnectionDTO(row, counts.get(row.id) ?? 0);
+  const stats = await connectionStats(prisma, userId, [row.id], await refreshCounts(prisma, userId, now));
+  return toConnectionDTO(row, stats.get(row.id)!);
 }
 
 // ---------------------------------------------------------------------------- plano e consentimento
@@ -157,7 +169,7 @@ async function notifyUser(deps: OfDeps, userId: string, item: NewNotification): 
  * Segurança: só aceitamos conexões (1) que NÓS iniciamos para este usuário (clientUserId) e
  * (2) de conectores regulados do Open Finance — nunca coleta por usuário/senha do banco.
  */
-export async function registerConnection(deps: OfDeps, userId: string, itemId: string, ip?: string): Promise<ConnectionDTO> {
+export async function registerConnection(deps: OfDeps, userId: string, itemId: string, ip?: string, autoImport?: boolean): Promise<ConnectionDTO> {
   const { prisma, provider } = deps;
   const item = await provider.getItem(itemId);
   if (!item) throw Errors.notFound("Conexão");
@@ -188,10 +200,10 @@ export async function registerConnection(deps: OfDeps, userId: string, itemId: s
   const connection = existing
     ? await prisma.bankConnection.update({
         where: { id: existing.id },
-        data: { ...common, revokedAt: null, consentGrantedAt: existing.revokedAt ? now : existing.consentGrantedAt },
+        data: { ...common, ...(autoImport !== undefined ? { autoImport } : {}), revokedAt: null, consentGrantedAt: existing.revokedAt ? now : existing.consentGrantedAt },
       })
     : await prisma.bankConnection.create({
-        data: { userId, provider: provider.name, providerItemId: itemId, consentGrantedAt: now, ...common },
+        data: { userId, provider: provider.name, providerItemId: itemId, consentGrantedAt: now, autoImport: autoImport ?? true, ...common },
       });
 
   await audit(prisma, deps.pepper, { actorId: userId, action: "open_finance.connected", entity: "bank_connection", entityId: connection.id, ip }, deps.log);
@@ -202,7 +214,7 @@ export async function registerConnection(deps: OfDeps, userId: string, itemId: s
   } catch (err) {
     deps.log?.warn({ err }, "primeira sincronização do Open Finance falhou");
   }
-  return getConnectionDTO(prisma, userId, connection.id);
+  return getConnectionDTO(prisma, userId, connection.id, deps.now());
 }
 
 /** Vincula (ou desvincula) uma conta do banco a uma conta/cartão do app. Só vinculadas são sincronizadas. */
@@ -238,7 +250,7 @@ export async function linkProviderAccount(
 
 // ---------------------------------------------------------------------------- sincronização
 
-export type SyncResult = { newTransactions: number; accounts: number; status: ConnectionRow["status"] };
+export type SyncResult = { newTransactions: number; accounts: number; investments: number; status: ConnectionRow["status"] };
 
 async function markFailed(deps: OfDeps, connectionId: string, userId: string, item: ProviderItem): Promise<void> {
   const day = toISODate(deps.now());
@@ -251,12 +263,24 @@ async function markFailed(deps: OfDeps, connectionId: string, userId: string, it
   });
 }
 
+/** Sincronizações em andamento por conexão: webhook + pedido manual ao mesmo tempo viram uma só. */
+const inflight = new Map<string, Promise<SyncResult>>();
+
 /**
- * Atualiza uma conexão: status, contas e transações novas das contas vinculadas.
+ * Atualiza uma conexão: status, contas, cartões (limite/fatura), transações novas e investimentos.
+ * Com `autoImport` (padrão), também cria as contas/cartões que faltam e importa as transações sozinha.
  * Idempotente (reprocessar não duplica) e tolerante a corridas entre webhook e sincronização manual.
  * Roda com acesso direto ao banco (sem RLS), então TODA consulta filtra por userId da conexão.
  */
-export async function syncConnection(deps: OfDeps, connectionId: string): Promise<SyncResult> {
+export function syncConnection(deps: OfDeps, connectionId: string): Promise<SyncResult> {
+  const running = inflight.get(connectionId);
+  if (running) return running;
+  const p = syncConnectionOnce(deps, connectionId).finally(() => inflight.delete(connectionId));
+  inflight.set(connectionId, p);
+  return p;
+}
+
+async function syncConnectionOnce(deps: OfDeps, connectionId: string): Promise<SyncResult> {
   const { prisma, provider } = deps;
   const conn = await prisma.bankConnection.findUnique({ where: { id: connectionId } });
   if (!conn || conn.revokedAt || conn.status === "REVOKED") throw Errors.notFound("Conexão");
@@ -267,7 +291,7 @@ export async function syncConnection(deps: OfDeps, connectionId: string): Promis
   if (!item) {
     // Removida no provedor (ex.: usuário revogou no app do banco).
     await prisma.bankConnection.update({ where: { id: conn.id }, data: { status: "REVOKED", revokedAt: now } });
-    return { newTransactions: 0, accounts: 0, status: "REVOKED" };
+    return { newTransactions: 0, accounts: 0, investments: 0, status: "REVOKED" };
   }
 
   await prisma.bankConnection.update({
@@ -276,28 +300,60 @@ export async function syncConnection(deps: OfDeps, connectionId: string): Promis
   });
   if (item.status === "ERROR") {
     await markFailed(deps, conn.id, userId, item);
-    return { newTransactions: 0, accounts: 0, status: "ERROR" };
+    return { newTransactions: 0, accounts: 0, investments: 0, status: "ERROR" };
   }
-  if (item.status === "CONNECTING") return { newTransactions: 0, accounts: 0, status: "CONNECTING" };
+  if (item.status === "CONNECTING") return { newTransactions: 0, accounts: 0, investments: 0, status: "CONNECTING" };
 
   const accounts = await provider.listAccounts(conn.providerItemId);
   for (const a of accounts) {
+    const credit = a.credit;
+    const fields = {
+      displayName: a.name,
+      kind: a.kind,
+      balanceCents: a.balanceCents,
+      providerDataAt: now,
+      // Dados do cartão exatamente como o banco informou (em conta, ficam vazios).
+      creditLimitCents: credit?.limitCents ?? null,
+      availableCreditCents: credit?.availableCents ?? null,
+      minimumPaymentCents: credit?.minimumPaymentCents ?? null,
+      billCloseDate: credit?.closeDate ? fromISODate(credit.closeDate) : null,
+      billDueDate: credit?.dueDate ? fromISODate(credit.dueDate) : null,
+      cardBrand: credit?.brand ?? null,
+    };
     await prisma.bankConnectionAccount.upsert({
       where: { connectionId_providerAccountId: { connectionId: conn.id, providerAccountId: a.id } },
-      create: { userId, connectionId: conn.id, providerAccountId: a.id, displayName: a.name, kind: a.kind, balanceCents: a.balanceCents },
-      update: { displayName: a.name, kind: a.kind, balanceCents: a.balanceCents },
+      create: { userId, connectionId: conn.id, providerAccountId: a.id, ...fields },
+      update: fields,
     });
   }
 
-  const today = toISODate(now);
-  const fromDate: ISODate = conn.lastSyncAt ? addDays(toISODate(conn.lastSyncAt), -OVERLAP_DAYS) : addDays(today, -FIRST_SYNC_DAYS);
+  const info = { id: conn.id, userId, institutionName: item.institutionName.slice(0, 120) };
+  const autoDeps = { prisma, notifier: deps.notifier, now: deps.now, billingEnforced: deps.billingEnforced, log: deps.log };
 
-  const linked = await prisma.bankConnectionAccount.findMany({
-    where: { connectionId: conn.id, userId, OR: [{ accountId: { not: null } }, { cardId: { not: null } }] },
-  });
+  let links = await prisma.bankConnectionAccount.findMany({ where: { connectionId: conn.id, userId } });
+  const createdAccounts = new Map<string, { accountId: string; balanceCents: number | null }>();
+  let accountsCreated = 0;
+  let cardsCreated = 0;
+  if (conn.autoImport) {
+    const linked = await autoLinkAccounts(autoDeps, info, links);
+    accountsCreated = linked.accounts;
+    cardsCreated = linked.cards;
+    for (const c of linked.createdAccounts) createdAccounts.set(c.linkId, { accountId: c.accountId, balanceCents: c.balanceCents });
+    if (linked.accounts + linked.cards > 0) links = await prisma.bankConnectionAccount.findMany({ where: { connectionId: conn.id, userId } });
+  }
+
+  const today = toISODate(now);
+  const defaultFrom: ISODate = conn.lastSyncAt ? addDays(toISODate(conn.lastSyncAt), -OVERLAP_DAYS) : addDays(today, -FIRST_SYNC_DAYS);
 
   let fresh = 0;
-  for (const acct of linked) {
+  let imported = 0;
+  let matched = 0;
+  // Cartões primeiro: o débito que paga a fatura (na conta corrente) só consegue quitá-la se as compras já estiverem importadas.
+  const ordered = links.filter((l) => l.accountId || l.cardId).sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "CREDIT" ? -1 : 1));
+  for (const acct of ordered) {
+    // Conta vinculada depois da primeira sincronização ainda não tem histórico: busca a janela inicial completa.
+    const hasHistory = (await prisma.bankTransaction.count({ where: { userId, connectionId: conn.id, providerAccountId: acct.providerAccountId } })) > 0;
+    const fromDate = hasHistory ? defaultFrom : addDays(today, -FIRST_SYNC_DAYS);
     const txs = await provider.listTransactions(acct.providerAccountId, acct.kind === "CREDIT" ? "CREDIT" : "BANK", fromDate);
     // Só lançamentos efetivados: os pendentes costumam mudar de id ao efetivar (geraria duplicatas).
     const posted = txs.filter((t) => t.status === "POSTED");
@@ -321,11 +377,29 @@ export async function syncConnection(deps: OfDeps, connectionId: string): Promis
       });
       fresh += created.filter((c) => c.status === "NEW").length;
     }
+    if (conn.autoImport) {
+      const r = await autoImportNew(autoDeps, info, acct);
+      imported += r.imported;
+      matched += r.matched;
+      // Conta criada agora: o saldo inicial é ancorado no saldo do banco, depois de importar o histórico.
+      const created = createdAccounts.get(acct.id);
+      if (created) await anchorOpeningBalance(autoDeps, userId, created.accountId, created.balanceCents);
+    }
   }
+
+  const investments = await syncInvestments(prisma, provider, { id: conn.id, userId, providerItemId: conn.providerItemId }, { partial: item.partial, now, log: deps.log });
 
   await prisma.bankConnection.update({ where: { id: conn.id }, data: { lastSyncAt: now, status: item.status === "OUTDATED" ? "OUTDATED" : "ACTIVE" } });
 
-  if (fresh > 0) {
+  if (conn.autoImport && imported + matched > 0) {
+    await notifyUser(deps, userId, {
+      type: "TRANSACTION_SYNCED",
+      title: "Transações importadas do seu banco",
+      body: `${imported} ${imported === 1 ? "transação foi importada" : "transações foram importadas"} automaticamente${matched > 0 ? ` e ${matched} já estavam lançadas` : ""}.`,
+      data: { connectionId: conn.id },
+      dedupeKey: `of-new:${conn.id}:${today}`,
+    });
+  } else if (!conn.autoImport && fresh > 0) {
     await notifyUser(deps, userId, {
       type: "TRANSACTION_SYNCED",
       title: "Novas transações do seu banco",
@@ -334,7 +408,61 @@ export async function syncConnection(deps: OfDeps, connectionId: string): Promis
       dedupeKey: `of-new:${conn.id}:${today}`,
     });
   }
-  return { newTransactions: fresh, accounts: accounts.length, status: item.status === "OUTDATED" ? "OUTDATED" : "ACTIVE" };
+  if (accountsCreated + cardsCreated > 0) deps.log?.info({ connectionId: conn.id, accountsCreated, cardsCreated }, "contas/cartões criados automaticamente a partir do banco");
+  return { newTransactions: fresh, accounts: accounts.length, investments, status: item.status === "OUTDATED" ? "OUTDATED" : "ACTIVE" };
+}
+
+// ---------------------------------------------------------------------------- pedido de atualização ao banco
+
+/** Quantos pedidos de atualização ao banco por dia (a rede do Open Finance limita as consultas por mês). */
+export const MAX_REFRESHES_PER_DAY = 3;
+const MIN_REFRESH_GAP_MS = 30 * 60_000;
+const DAY_MS = 86_400_000;
+
+/** Pedidos de atualização das últimas 24 h por conexão (a contagem vem do log de auditoria). */
+export async function refreshCounts(prisma: PrismaClient, userId: string, now: Date): Promise<Map<string, number>> {
+  const groups = await prisma.auditLog.groupBy({
+    by: ["entityId"],
+    where: { actorId: userId, action: "open_finance.refresh", createdAt: { gte: new Date(now.getTime() - DAY_MS) } },
+    _count: { _all: true },
+  });
+  return new Map(groups.flatMap((g) => (g.entityId ? [[g.entityId, g._count._all] as const] : [])));
+}
+
+/**
+ * Pede ao provedor uma NOVA coleta no banco. O provedor já atualiza sozinho uma vez ao dia e avisa por webhook; este
+ * pedido existe para o usuário forçar uma leitura (ex.: acabou de receber o pagamento). Como cada coleta consome a cota
+ * mensal do Open Finance por produto, há limite diário e um intervalo mínimo entre pedidos.
+ */
+export async function refreshConnection(deps: OfDeps, userId: string, connectionId: string, ip?: string): Promise<{ requested: true; refreshesLeftToday: number }> {
+  const { prisma, provider } = deps;
+  const conn = await prisma.bankConnection.findFirst({ where: { id: connectionId, userId, revokedAt: null } });
+  if (!conn) throw Errors.notFound("Conexão");
+  const now = deps.now();
+  const recent = await prisma.auditLog.findMany({
+    where: { actorId: userId, action: "open_finance.refresh", entityId: conn.id, createdAt: { gte: new Date(now.getTime() - DAY_MS) } },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+    take: MAX_REFRESHES_PER_DAY,
+  });
+  if (recent.length >= MAX_REFRESHES_PER_DAY) {
+    const nextAt = new Date(recent[recent.length - 1]!.createdAt.getTime() + DAY_MS);
+    throw new AppError(429, "REFRESH_LIMIT", `Você já pediu ${MAX_REFRESHES_PER_DAY} atualizações hoje. O banco limita as consultas por mês; os dados também se atualizam sozinhos uma vez ao dia.`, { nextAt: nextAt.toISOString() });
+  }
+  const last = recent[0]?.createdAt;
+  if (last && now.getTime() - last.getTime() < MIN_REFRESH_GAP_MS) {
+    const retryAfterSeconds = Math.ceil((MIN_REFRESH_GAP_MS - (now.getTime() - last.getTime())) / 1000);
+    throw new AppError(429, "REFRESH_TOO_SOON", "Aguarde alguns minutos para pedir outra atualização.", { retryAfterSeconds });
+  }
+  await provider.refreshItem(conn.providerItemId);
+  await audit(prisma, deps.pepper, { actorId: userId, action: "open_finance.refresh", entity: "bank_connection", entityId: conn.id, ip, at: now }, deps.log);
+  return { requested: true, refreshesLeftToday: MAX_REFRESHES_PER_DAY - recent.length - 1 };
+}
+
+/** Liga/desliga a importação automática da conexão. */
+export async function setAutoImport(prisma: PrismaClient, userId: string, connectionId: string, autoImport: boolean): Promise<void> {
+  const r = await prisma.bankConnection.updateMany({ where: { id: connectionId, userId, revokedAt: null }, data: { autoImport } });
+  if (r.count === 0) throw Errors.notFound("Conexão");
 }
 
 // ---------------------------------------------------------------------------- revogação
@@ -367,6 +495,9 @@ async function finalizeRevocation(prisma: PrismaClient, connectionId: string, us
     await tx.bankConnection.update({ where: { id: connectionId }, data: { status: "REVOKED", revokedAt: now, lastErrorCode: null } });
     // Dados brutos que o usuário nunca aproveitou não têm por que ficar guardados.
     await tx.bankTransaction.deleteMany({ where: { userId, connectionId, status: { in: ["NEW", "IGNORED"] } } });
+    // Investimentos e histórico vieram só desse consentimento: saem junto com ele.
+    await tx.bankInvestmentSnapshot.deleteMany({ where: { userId, investment: { connectionId } } });
+    await tx.bankInvestment.deleteMany({ where: { userId, connectionId } });
   });
 }
 
@@ -443,13 +574,15 @@ async function processWebhook(deps: OfDeps, eventId: string, payload: PluggyWebh
 // ---------------------------------------------------------------------------- job periódico
 
 /** Reenvia revogações pendentes e atualiza conexões que ficaram mais de 24 h sem sincronizar. */
-export async function runOpenFinanceJob(deps: OfDeps): Promise<{ revoked: number; synced: number; failed: number }> {
+/** `userIds` restringe a rotina a esses usuários (operação pontual e testes); sem ele, vale para todos. */
+export async function runOpenFinanceJob(deps: OfDeps, opts: { userIds?: string[] } = {}): Promise<{ revoked: number; synced: number; failed: number }> {
   const { prisma } = deps;
+  const only = opts.userIds ? { userId: { in: opts.userIds } } : {};
   let revoked = 0;
   let synced = 0;
   let failed = 0;
 
-  const pending = await prisma.bankConnection.findMany({ where: { revokedAt: null, lastErrorCode: REVOKE_PENDING }, take: 50 });
+  const pending = await prisma.bankConnection.findMany({ where: { ...only, revokedAt: null, lastErrorCode: REVOKE_PENDING }, take: 50 });
   for (const c of pending) {
     try {
       await revokeConnection(deps, c.id, c.userId, { strict: true });
@@ -462,6 +595,7 @@ export async function runOpenFinanceJob(deps: OfDeps): Promise<{ revoked: number
   const cutoff = new Date(deps.now().getTime() - 24 * 3600_000);
   const stale = await prisma.bankConnection.findMany({
     where: {
+      ...only,
       revokedAt: null,
       status: { in: ["ACTIVE", "OUTDATED"] },
       OR: [{ lastSyncAt: null }, { lastSyncAt: { lt: cutoff } }],
@@ -537,32 +671,6 @@ export async function listBankTransactions(
 
 const cursorShape = z.object({ d: z.string(), id: z.uuid() });
 
-/** Lançamento manual com mesmo valor, mesmo tipo e data próxima (±3 dias) na mesma conta/cartão. */
-async function suggestMatch(
-  tx: Tx,
-  userId: string,
-  bt: BtRow,
-  link: { accountId: string | null; cardId: string | null } | undefined,
-): Promise<{ transactionId: string; description: string; occurredOn: string } | null> {
-  if (!link || (!link.accountId && !link.cardId)) return null;
-  const posted = dateOut(bt.postedOn);
-  const found = await tx.transaction.findFirst({
-    where: {
-      userId,
-      deletedAt: null,
-      bankTransactionId: null,
-      transferId: null,
-      type: bt.direction === "CREDIT" ? "INCOME" : "EXPENSE",
-      amountCents: bt.amountCents,
-      occurredOn: { gte: fromISODate(addDays(posted, -3)), lte: fromISODate(addDays(posted, 3)) },
-      ...(link.accountId ? { accountId: link.accountId } : { cardId: link.cardId }),
-    },
-    orderBy: { occurredOn: "asc" },
-    select: { id: true, description: true, occurredOn: true },
-  });
-  return found ? { transactionId: found.id, description: found.description, occurredOn: dateOut(found.occurredOn) } : null;
-}
-
 async function requireBankTransaction(tx: Tx, userId: string, id: string, allowed: BtRow["status"][]): Promise<BtRow> {
   const bt = await tx.bankTransaction.findFirst({ where: { id, userId, connection: { revokedAt: null } } });
   if (!bt) throw Errors.notFound("Transação do banco");
@@ -603,7 +711,7 @@ export async function importBankTransaction(
       accountId: link.accountId,
       cardId: link.cardId,
       categoryId: body.categoryId ?? null,
-      paymentMethod: link.cardId ? "CREDIT" : (body.paymentMethod ?? "OTHER"),
+      paymentMethod: link.cardId ? "CREDIT" : (body.paymentMethod ?? guessPaymentMethod(bt.descriptionRaw)),
       status: "POSTED",
     },
     deps,
@@ -633,10 +741,4 @@ export async function matchBankTransaction(tx: Tx, userId: string, id: string, t
 export async function setBankTransactionIgnored(tx: Tx, userId: string, id: string, ignored: boolean): Promise<void> {
   const bt = await requireBankTransaction(tx, userId, id, ignored ? ["NEW"] : ["IGNORED"]);
   await tx.bankTransaction.update({ where: { id: bt.id }, data: { status: ignored ? "IGNORED" : "NEW" } });
-}
-
-/** Descrições de banco costumam vir em caixa alta e com espaços extras. */
-function cleanDescription(raw: string): string {
-  const s = raw.replace(/\s+/g, " ").trim().slice(0, 200) || "Transação bancária";
-  return s === s.toUpperCase() ? s.charAt(0) + s.slice(1).toLowerCase() : s;
 }

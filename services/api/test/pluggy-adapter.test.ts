@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { mapItemStatus, normalizeTransaction, PluggyProvider } from "../src/modules/open-finance/pluggy";
 import { ProviderError } from "../src/modules/open-finance/provider";
 
@@ -161,9 +161,9 @@ describe("itens e contas", () => {
     const accounts = await provider.listAccounts("item 1");
     expect(calls.at(-1)!.url).toContain("/accounts?itemId=item%201");
     expect(accounts).toEqual([
-      { id: "a1", kind: "BANK", name: "Conta", balanceCents: 123_456 },
-      { id: "a2", kind: "CREDIT", name: "Cartão", balanceCents: -30_010 },
-      { id: "a3", kind: "BANK", name: "Conta", balanceCents: null },
+      { id: "a1", kind: "BANK", name: "Conta", balanceCents: 123_456, credit: null },
+      { id: "a2", kind: "CREDIT", name: "Cartão", balanceCents: -30_010, credit: null },
+      { id: "a3", kind: "BANK", name: "Conta", balanceCents: null, credit: null },
     ]);
   });
 });
@@ -228,6 +228,185 @@ describe("transações (GET /v2/transactions por cursor)", () => {
     expect(normalizeTransaction({ ...base, descriptionRaw: "RAW" }, "BANK", "a")!.description).toBe("RAW");
     expect(normalizeTransaction(base, "BANK", "a")!.description).toBe("Transação bancária");
     expect(normalizeTransaction({ ...base, description: "x".repeat(900) }, "BANK", "a")!.description).toHaveLength(500);
+  });
+});
+
+describe("cartões (creditData)", () => {
+  it("limite, disponível, datas e pagamento mínimo em centavos; só em conta de crédito", async () => {
+    const { provider } = make((c) =>
+      c.url.endsWith("/auth")
+        ? { json: { apiKey: "k" } }
+        : {
+            json: {
+              results: [
+                {
+                  id: "card",
+                  type: "CREDIT",
+                  name: "Gold",
+                  balance: 2879.45,
+                  creditData: {
+                    brand: "MASTERCARD",
+                    creditLimit: 8000,
+                    availableCreditLimit: 5120.55,
+                    balanceCloseDate: "2026-10-10T00:00:00.000Z",
+                    balanceDueDate: "2026-10-17T00:00:00.000Z",
+                    minimumPayment: 287.94,
+                  },
+                },
+                { id: "semdados", type: "CREDIT", name: "Sem dados", creditData: null },
+                { id: "conta", type: "BANK", name: "Corrente", balance: 10, creditData: { creditLimit: 1 } },
+              ],
+            },
+          },
+    );
+    const [card, empty, bank] = await provider.listAccounts("it");
+    expect(card).toMatchObject({ kind: "CREDIT", balanceCents: 287_945 });
+    expect(card!.credit).toEqual({ brand: "MASTERCARD", limitCents: 800_000, availableCents: 512_055, closeDate: "2026-10-10", dueDate: "2026-10-17", minimumPaymentCents: 28_794 });
+    expect(empty!.credit).toBeNull();
+    expect(bank!.credit).toBeNull();
+  });
+
+  it("campos ausentes ou inválidos viram null (nunca NaN ou datas quebradas)", async () => {
+    const { provider } = make((c) =>
+      c.url.endsWith("/auth")
+        ? { json: { apiKey: "k" } }
+        : { json: { results: [{ id: "c", type: "CREDIT", creditData: { creditLimit: "muito", balanceCloseDate: "ontem", availableCreditLimit: null } }] } },
+    );
+    const [card] = await provider.listAccounts("it");
+    expect(card!.credit).toEqual({ brand: null, limitCents: null, availableCents: null, closeDate: null, dueDate: null, minimumPaymentCents: null });
+  });
+});
+
+describe("investimentos (GET /investments)", () => {
+  const cdb = {
+    id: "inv-1",
+    name: "CDB Banco Teste 110% CDI",
+    type: "FIXED_INCOME",
+    subtype: "cdb",
+    issuer: "Banco Teste S.A.",
+    status: "ACTIVE",
+    balance: 1050.37,
+    amountOriginal: 1000,
+    amountProfit: 50.37,
+    amountWithdrawal: 1050.37,
+    rate: 110,
+    rateType: "cdi",
+    fixedAnnualRate: null,
+    annualRate: null,
+    issueDate: "2026-07-01T00:00:00.000Z",
+    dueDate: "2028-07-01T00:00:00.000Z",
+  };
+
+  it("normaliza valores em centavos, caixa alta e datas", async () => {
+    const { provider, calls } = make((c) => (c.url.endsWith("/auth") ? { json: { apiKey: "k" } } : { json: { page: 1, totalPages: 1, results: [cdb] } }));
+    const list = await provider.listInvestments("item 1");
+    expect(calls.at(-1)!.url).toContain("/investments?itemId=item+1&page=1");
+    expect(list).toEqual([
+      {
+        id: "inv-1",
+        name: "CDB Banco Teste 110% CDI",
+        type: "FIXED_INCOME",
+        subtype: "CDB",
+        issuer: "Banco Teste S.A.",
+        status: "ACTIVE",
+        balanceCents: 105_037,
+        investedCents: 100_000,
+        profitCents: 5_037,
+        withdrawableCents: 105_037,
+        rateType: "CDI",
+        rate: 110,
+        fixedAnnualRate: null,
+        annualRate: null,
+        issueDate: "2026-07-01",
+        dueDate: "2028-07-01",
+      },
+    ]);
+  });
+
+  it("calcula o rendimento quando o banco não informa, aceita prejuízo e usa `amount` se faltar `balance`", async () => {
+    const { provider } = make((c) =>
+      c.url.endsWith("/auth")
+        ? { json: { apiKey: "k" } }
+        : {
+            json: {
+              results: [
+                { id: "a", name: "Sem lucro informado", balance: 1100, amountOriginal: 1000 },
+                { id: "b", name: "No prejuízo", balance: 900, amountOriginal: 1000, amountProfit: -100 },
+                { id: "c", name: "Só amount", amount: 500 },
+                { id: "d", name: "Sem base", balance: 300 },
+              ],
+            },
+          },
+    );
+    const [a, b, c, d] = await provider.listInvestments("it");
+    expect(a).toMatchObject({ balanceCents: 110_000, investedCents: 100_000, profitCents: 10_000 });
+    expect(b).toMatchObject({ balanceCents: 90_000, profitCents: -10_000 });
+    expect(c).toMatchObject({ balanceCents: 50_000, investedCents: null, profitCents: null });
+    expect(d).toMatchObject({ investedCents: null, profitCents: null, status: "ACTIVE", type: "OTHER", subtype: null });
+  });
+
+  it("descarta o que não tem id ou valor; status desconhecido vira ACTIVE; resgate total é mantido", async () => {
+    const { provider } = make((c) =>
+      c.url.endsWith("/auth")
+        ? { json: { apiKey: "k" } }
+        : {
+            json: {
+              results: [
+                { name: "Sem id", balance: 10 },
+                { id: "sem-valor", name: "Sem valor" },
+                { id: "x", name: "Status novo", balance: 10, status: "ALGO_NOVO" },
+                { id: "y", name: "Resgatado", balance: 0, status: "TOTAL_WITHDRAWAL" },
+              ],
+            },
+          },
+    );
+    const list = await provider.listInvestments("it");
+    expect(list.map((i) => [i.id, i.status])).toEqual([["x", "ACTIVE"], ["y", "TOTAL_WITHDRAWAL"]]);
+  });
+
+  it("percorre as páginas (totalPages) e para no teto", async () => {
+    const { provider, calls } = make((c) => {
+      if (c.url.endsWith("/auth")) return { json: { apiKey: "k" } };
+      const page = new URL(c.url).searchParams.get("page");
+      return { json: { page: Number(page), totalPages: 2, results: [{ id: `p${page}`, name: `Inv ${page}`, balance: 1 }] } };
+    });
+    const list = await provider.listInvestments("it");
+    expect(list.map((i) => i.id)).toEqual(["p1", "p2"]);
+    expect(calls.filter((c) => c.url.includes("/investments"))).toHaveLength(2);
+
+    const endless = make((c) => (c.url.endsWith("/auth") ? { json: { apiKey: "k" } } : { json: { totalPages: 999, results: [] } }));
+    await endless.provider.listInvestments("it");
+    expect(endless.calls.filter((c) => c.url.includes("/investments"))).toHaveLength(10);
+  });
+
+  it("conector sem investimentos (404) devolve lista vazia", async () => {
+    const { provider } = make((c) => (c.url.endsWith("/auth") ? { json: { apiKey: "k" } } : { status: 404 }));
+    expect(await provider.listInvestments("it")).toEqual([]);
+  });
+});
+
+describe("pedido de atualização e coleta parcial", () => {
+  it("PATCH /items/{id} com corpo vazio", async () => {
+    const { provider, calls } = make((c) => (c.url.endsWith("/auth") ? { json: { apiKey: "k" } } : { json: { id: "x" } }));
+    await provider.refreshItem("abc-1");
+    const call = calls.at(-1)!;
+    expect(call.method).toBe("PATCH");
+    expect(call.url).toBe("https://api.pluggy.ai/items/abc-1");
+    expect(call.body).toEqual({});
+  });
+
+  it("404, limite e erro do servidor viram erros claros", async () => {
+    const run = (status: number) => make((c) => (c.url.endsWith("/auth") ? { json: { apiKey: "k" } } : { status })).provider.refreshItem("it");
+    await expect(run(404)).rejects.toMatchObject({ code: "PROVIDER_ITEM_NOT_FOUND", retryable: false });
+    await expect(run(429)).rejects.toMatchObject({ code: "PROVIDER_RATE_LIMITED", retryable: true });
+    await expect(run(500)).rejects.toMatchObject({ code: "PROVIDER_ERROR", retryable: true });
+    await expect(run(400)).rejects.toMatchObject({ code: "PROVIDER_ERROR", retryable: false });
+  });
+
+  it("PARTIAL_SUCCESS marca a coleta como parcial (lista vazia não prova nada)", async () => {
+    const make1 = (status: string) => make((c) => (c.url.endsWith("/auth") ? { json: { apiKey: "k" } } : { json: { id: "i", status, connector: { name: "B", isOpenFinance: true } } } ));
+    expect((await make1("PARTIAL_SUCCESS").provider.getItem("i"))).toMatchObject({ status: "ACTIVE", partial: true });
+    expect((await make1("UPDATED").provider.getItem("i"))).toMatchObject({ status: "ACTIVE", partial: false });
   });
 });
 

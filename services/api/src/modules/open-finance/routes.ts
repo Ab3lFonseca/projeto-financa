@@ -1,4 +1,5 @@
-﻿import {
+import {
+  bankOverviewDTO,
   bankTransactionDTO,
   connectionDTO,
   connectorsDTO,
@@ -6,15 +7,20 @@
   connectTokenDTO,
   idParam,
   importBankTransactionBody,
+  investmentDetailDTO,
+  investmentsResponse,
   linkAccountBody,
   listBankTransactionsQuery,
+  listInvestmentsQuery,
   listOf,
   matchBankTransactionBody,
   okResponse,
   openFinanceStatusDTO,
   providerAccountParams,
+  refreshResultDTO,
   registerConnectionBody,
   syncResultDTO,
+  updateConnectionBody,
 } from "@app/shared";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { createHash } from "node:crypto";
@@ -23,6 +29,7 @@ import { runAs, runMutation } from "../../lib/db";
 import { Errors } from "../../lib/errors";
 import { limitsFor } from "../../lib/plan";
 import type { AuthUser } from "../../types";
+import { bankOverview, getInvestmentDetail, listInvestments } from "./investments";
 import { ProviderError } from "./provider";
 import {
   acceptWebhook,
@@ -33,8 +40,11 @@ import {
   listBankTransactions,
   listConnections,
   matchBankTransaction,
+  refreshConnection,
+  refreshCounts,
   registerConnection,
   revokeConnection,
+  setAutoImport,
   setBankTransactionIgnored,
   syncConnection,
   type OpenFinanceRuntime,
@@ -125,7 +135,7 @@ export const openFinanceRoutes: FastifyPluginAsyncZod = async (app) => {
       await runAs(req, async (tx, u) => {
         if (!(await hasOpenFinanceConsent(tx, u.id))) throw Errors.forbidden(CONSENT_MESSAGE, "OPEN_FINANCE_CONSENT_REQUIRED");
       });
-      const dto = await viaProvider(() => registerConnection(runtime.deps, user.id, req.body.itemId, req.ip));
+      const dto = await viaProvider(() => registerConnection(runtime.deps, user.id, req.body.itemId, req.ip, req.body.autoImport));
       return reply.code(201).send(dto);
     },
   );
@@ -133,7 +143,39 @@ export const openFinanceRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     "/connections",
     { schema: { tags: ["open-finance"], response: { 200: z.object({ data: z.array(connectionDTO) }) } } },
-    async (req) => runAs(req, async (tx, user) => ({ data: await listConnections(tx, user.id) })),
+    async (req) => {
+      const refreshes = await refreshCounts(app.prisma, req.user!.id, app.clock());
+      return runAs(req, async (tx, user) => ({ data: await listConnections(tx, user.id, refreshes) }));
+    },
+  );
+
+  // Liga/desliga a importação automática (contas, cartões e transações entram sozinhos).
+  app.patch(
+    "/connections/:id",
+    { schema: { tags: ["open-finance"], params: idParam, body: updateConnectionBody, response: { 200: connectionDTO } } },
+    async (req) => {
+      await setAutoImport(app.prisma, req.user!.id, req.params.id, req.body.autoImport);
+      return getConnectionDTO(app.prisma, req.user!.id, req.params.id, app.clock());
+    },
+  );
+
+  // Pede ao banco uma nova leitura (o provedor já atualiza sozinho 1x ao dia; cada pedido consome a cota mensal do Open Finance).
+  app.post(
+    "/connections/:id/refresh",
+    {
+      config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
+      schema: { tags: ["open-finance"], params: idParam, response: { 200: refreshResultDTO } },
+    },
+    async (req) => {
+      const user = req.user!;
+      const runtime = gate(user);
+      await runAs(req, async (tx, u) => {
+        const c = await tx.bankConnection.findFirst({ where: { id: req.params.id, userId: u.id, revokedAt: null }, select: { id: true } });
+        if (!c) throw Errors.notFound("Conexão");
+        if (!(await hasOpenFinanceConsent(tx, u.id))) throw Errors.forbidden(CONSENT_MESSAGE, "OPEN_FINANCE_CONSENT_REQUIRED");
+      });
+      return viaProvider(() => refreshConnection(runtime.deps, user.id, req.params.id, req.ip));
+    },
   );
 
   app.delete(
@@ -172,8 +214,29 @@ export const openFinanceRoutes: FastifyPluginAsyncZod = async (app) => {
       await runMutation(req, async (tx, user) =>
         linkProviderAccount(tx, user.id, req.params.id, req.params.providerAccountId, req.body),
       );
-      return getConnectionDTO(app.prisma, req.user!.id, req.params.id);
+      return getConnectionDTO(app.prisma, req.user!.id, req.params.id, app.clock());
     },
+  );
+
+  // ---- Investimentos e visão geral (somente leitura; os dados já foram guardados pela sincronização)
+
+  app.get(
+    "/investments",
+    { schema: { tags: ["open-finance"], querystring: listInvestmentsQuery, response: { 200: investmentsResponse } } },
+    async (req) => runAs(req, async (tx, user) => listInvestments(tx, user.id, req.query)),
+  );
+
+  app.get(
+    "/investments/:id",
+    { schema: { tags: ["open-finance"], params: idParam, response: { 200: investmentDetailDTO } } },
+    async (req) => runAs(req, async (tx, user) => getInvestmentDetail(tx, user.id, req.params.id, app.clock())),
+  );
+
+  // Saldo, limite e fatura informados pelo banco para as contas e cartões já vinculados.
+  app.get(
+    "/overview",
+    { schema: { tags: ["open-finance"], response: { 200: bankOverviewDTO } } },
+    async (req) => runAs(req, async (tx, user) => bankOverview(tx, user.id)),
   );
 
   // ---- Transações do banco (revisão antes de virar lançamento)

@@ -1,4 +1,4 @@
-﻿import { File, Paths } from "expo-file-system";
+import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 

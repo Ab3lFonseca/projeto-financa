@@ -1,4 +1,4 @@
-﻿import { createPrismaClient, type PrismaClient } from "@app/database";
+import { createPrismaClient, type PrismaClient } from "@app/database";
 import Fastify, { type FastifyInstance } from "fastify";
 import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
 import { randomUUID } from "node:crypto";
@@ -19,6 +19,7 @@ import { SupabaseAuthProvider } from "./modules/auth/supabase-provider";
 import { JoseTokenVerifier, type TokenVerifier } from "./modules/auth/token-verifier";
 import { UserDirectory } from "./modules/users/directory";
 import { ExpoPushNotifier, NoopNotifier, type PushNotifier } from "./modules/notifications/notifier";
+import { DemoOpenFinanceProvider } from "./modules/open-finance/demo";
 import { PluggyProvider } from "./modules/open-finance/pluggy";
 import type { OpenFinanceProvider } from "./modules/open-finance/provider";
 import { openFinanceWebhookRoutes } from "./modules/open-finance/routes";
@@ -90,7 +91,8 @@ function buildTokenVerifier(config: Config): TokenVerifier {
   });
 }
 
-function buildOpenFinanceProvider(config: Config): OpenFinanceProvider | null {
+function buildOpenFinanceProvider(config: Config, clock: () => Date): OpenFinanceProvider | null {
+  if (config.OPEN_FINANCE_PROVIDER === "demo") return new DemoOpenFinanceProvider(clock);
   if (!config.PLUGGY_CLIENT_ID || !config.PLUGGY_CLIENT_SECRET) return null;
   return new PluggyProvider({
     clientId: config.PLUGGY_CLIENT_ID,
@@ -199,7 +201,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     deps.notifier ?? (config.NODE_ENV === "test" ? new NoopNotifier() : new ExpoPushNotifier(prisma, app.log)),
   );
 
-  const ofProvider = deps.openFinanceProvider ?? buildOpenFinanceProvider(config);
+  const ofProvider = deps.openFinanceProvider ?? buildOpenFinanceProvider(config, clock);
   app.decorate(
     "openFinance",
     config.OPEN_FINANCE_ENABLED && ofProvider

@@ -9,7 +9,7 @@ import { EmptyState, ErrorState, SkeletonCard } from "@/components/ui/Feedback";
 import { Card, Reveal, Row, Screen, Section } from "@/components/ui/Layout";
 import { Money } from "@/components/ui/Money";
 import { Text } from "@/components/ui/Text";
-import { useAccounts, useCards } from "@/lib/hooks";
+import { useAccounts, useBankOverview, useCards, useSyncStaleConnections } from "@/lib/hooks";
 import { useTheme } from "@/theme/ThemeProvider";
 
 type Tab = "accounts" | "cards";
@@ -21,12 +21,18 @@ export default function WalletScreen() {
   const [tab, setTab] = useState<Tab>(params.tab === "cards" ? "cards" : "accounts");
   const accounts = useAccounts();
   const cards = useCards();
+  // Dados do banco (Open Finance): releitura automática ao abrir e a cada minuto, só do que o servidor já guardou.
+  const overview = useBankOverview();
+  useSyncStaleConnections(30);
+  const bankAccounts = new Map((overview.data?.accounts ?? []).map((a) => [a.accountId, a]));
+  const bankCards = new Map((overview.data?.cards ?? []).map((c) => [c.cardId, c]));
 
   const list = accounts.data?.data ?? [];
   const total = list.filter((a) => a.includeInTotal).reduce((s, a) => s + a.balanceCents, 0);
   const cardList = cards.data?.data ?? [];
-  const totalLimit = cardList.reduce((s, c) => s + c.limitCents, 0);
-  const totalUsed = cardList.reduce((s, c) => s + c.usedCents, 0);
+  // Cartões ligados ao banco entram nos totais com os números do banco.
+  const totalLimit = cardList.reduce((s, c) => s + (bankCards.get(c.id)?.limitCents ?? c.limitCents), 0);
+  const totalUsed = cardList.reduce((s, c) => s + (bankCards.get(c.id)?.usedCents ?? c.usedCents), 0);
   const active = tab === "accounts" ? accounts : cards;
 
   const header = (
@@ -65,7 +71,7 @@ export default function WalletScreen() {
                 <View style={{ gap: 12 }}>
                   {list.map((a, i) => (
                     <Reveal key={a.id} index={i + 1}>
-                      <AccountTile account={a} onPress={() => go(`/account/${a.id}`)} />
+                      <AccountTile account={a} bank={bankAccounts.get(a.id)} onPress={() => go(`/account/${a.id}`)} />
                     </Reveal>
                   ))}
                 </View>
@@ -113,7 +119,7 @@ export default function WalletScreen() {
             <View style={{ gap: 12 }}>
               {cardList.map((c, i) => (
                 <Reveal key={c.id} index={i + 1}>
-                  <CreditCardView card={c} onPress={() => go(`/card/${c.id}`)} />
+                  <CreditCardView card={c} bank={bankCards.get(c.id)} onPress={() => go(`/card/${c.id}`)} />
                 </Reveal>
               ))}
             </View>

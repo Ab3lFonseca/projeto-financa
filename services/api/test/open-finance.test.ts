@@ -1,4 +1,4 @@
-﻿import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runOpenFinanceJob } from "../src/modules/open-finance/service";
 import { createTestEnv, type TestEnv } from "./helpers/env";
 import { createWorld, type World } from "./helpers/factories";
@@ -26,7 +26,7 @@ async function world(withConsent = true): Promise<World> {
 async function connected(txs: Array<Record<string, unknown>> = []) {
   const w = await world();
   const { itemId, accountIds } = provider.addItem(w.user.id, { accounts: [{ kind: "BANK", name: "Conta Corrente", txs }] });
-  const reg = await w.user.post("/v1/open-finance/connections", { itemId });
+  const reg = await w.user.post("/v1/open-finance/connections", { itemId, autoImport: false });
   expect(reg.status).toBe(201);
   const link = await w.user.put(`/v1/open-finance/connections/${reg.body.id}/accounts/${accountIds[0]}`, { accountId: w.account.id });
   expect(link.status).toBe(200);
@@ -71,7 +71,7 @@ describe("disponibilidade e acesso", () => {
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("OPEN_FINANCE_CONSENT_REQUIRED");
     const { itemId } = provider.addItem(w.user.id);
-    expect((await w.user.post("/v1/open-finance/connections", { itemId })).body.error.code).toBe("OPEN_FINANCE_CONSENT_REQUIRED");
+    expect((await w.user.post("/v1/open-finance/connections", { itemId, autoImport: false })).body.error.code).toBe("OPEN_FINANCE_CONSENT_REQUIRED");
 
     await w.user.post("/v1/privacy/consents", CONSENT);
     expect((await w.user.get("/v1/open-finance/status")).body.consentGranted).toBe(true);
@@ -150,14 +150,14 @@ describe("registro da conexão", () => {
         { kind: "CREDIT", name: "Cartão Gold" },
       ],
     });
-    const res = await w.user.post("/v1/open-finance/connections", { itemId });
+    const res = await w.user.post("/v1/open-finance/connections", { itemId, autoImport: false });
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ institutionName: "Banco do Teste", status: "ACTIVE", pendingCount: 0 });
     expect(res.body.accounts).toHaveLength(2);
     expect(res.body.accounts[0]).toMatchObject({ name: "Conta Corrente", kind: "BANK", balanceCents: 250_000, account: null, card: null });
     expect((await w.user.get("/v1/open-finance/connections")).body.data).toHaveLength(1);
     // registrar de novo é idempotente
-    const again = await w.user.post("/v1/open-finance/connections", { itemId });
+    const again = await w.user.post("/v1/open-finance/connections", { itemId, autoImport: false });
     expect(again.body.id).toBe(res.body.id);
     expect((await w.user.get("/v1/open-finance/connections")).body.data).toHaveLength(1);
   });
@@ -166,7 +166,7 @@ describe("registro da conexão", () => {
     const w = await world();
     const stranger = await world();
     const { itemId } = provider.addItem(stranger.user.id);
-    const res = await w.user.post("/v1/open-finance/connections", { itemId });
+    const res = await w.user.post("/v1/open-finance/connections", { itemId, autoImport: false });
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("ITEM_NOT_OWNED");
     expect(provider.deleted).not.toContain(itemId);
@@ -177,7 +177,7 @@ describe("registro da conexão", () => {
   it("recusa conectores NÃO regulados (login e senha) e remove a conexão no provedor", async () => {
     const w = await world();
     const { itemId } = provider.addItem(w.user.id, { isOpenFinance: false });
-    const res = await w.user.post("/v1/open-finance/connections", { itemId });
+    const res = await w.user.post("/v1/open-finance/connections", { itemId, autoImport: false });
     expect(res.status).toBe(422);
     expect(res.body.error.code).toBe("NOT_OPEN_FINANCE");
     expect(provider.deleted).toContain(itemId);
@@ -204,7 +204,7 @@ describe("vínculo de contas", () => {
   it("conta do banco só vincula a conta do app; cartão do banco, a cartão; sem duplicar o destino", async () => {
     const w = await world();
     const { itemId, accountIds } = provider.addItem(w.user.id, { accounts: [{ kind: "BANK", name: "CC" }, { kind: "CREDIT", name: "Cartão" }] });
-    const reg = (await w.user.post("/v1/open-finance/connections", { itemId })).body;
+    const reg = (await w.user.post("/v1/open-finance/connections", { itemId, autoImport: false })).body;
     const base = `/v1/open-finance/connections/${reg.id}/accounts`;
     const card = (await w.user.post("/v1/cards", { name: "Cartão", brand: "VISA", last4: "4321", limitCents: 100_000, closingDay: 5, dueDay: 12, payAccountId: w.account.id })).body;
 
@@ -218,7 +218,7 @@ describe("vínculo de contas", () => {
 
     // outra conta do banco não pode apontar para a mesma conta do app
     const second = provider.addItem(w.user.id, { accounts: [{ kind: "BANK", name: "Outra" }] });
-    const reg2 = (await w.user.post("/v1/open-finance/connections", { itemId: second.itemId })).body;
+    const reg2 = (await w.user.post("/v1/open-finance/connections", { itemId: second.itemId, autoImport: false })).body;
     const dup = await w.user.put(`/v1/open-finance/connections/${reg2.id}/accounts/${second.accountIds[0]}`, { accountId: w.account.id });
     expect(dup.status).toBe(409);
     expect(dup.body.error.code).toBe("ALREADY_LINKED");
@@ -240,7 +240,7 @@ describe("sincronização e revisão", () => {
         { kind: "BANK", name: "Not linked", txs: [{ description: "NAO DEVE VIR" }] },
       ],
     });
-    const reg = (await w.user.post("/v1/open-finance/connections", { itemId })).body;
+    const reg = (await w.user.post("/v1/open-finance/connections", { itemId, autoImport: false })).body;
     await w.user.put(`/v1/open-finance/connections/${reg.id}/accounts/${accountIds[0]}`, { accountId: w.account.id });
 
     const first = await w.user.post(`/v1/open-finance/connections/${reg.id}/sync`);
@@ -323,7 +323,7 @@ describe("sincronização e revisão", () => {
   it("não importa sem vínculo e não deixa outro usuário mexer na transação", async () => {
     const w = await world();
     const { itemId, accountIds } = provider.addItem(w.user.id, { accounts: [{ kind: "BANK", name: "CC", txs: [{ description: "X" }] }] });
-    const reg = (await w.user.post("/v1/open-finance/connections", { itemId })).body;
+    const reg = (await w.user.post("/v1/open-finance/connections", { itemId, autoImport: false })).body;
     // vincula, sincroniza e desvincula
     const url = `/v1/open-finance/connections/${reg.id}/accounts/${accountIds[0]}`;
     await w.user.put(url, { accountId: w.account.id });
@@ -342,7 +342,7 @@ describe("sincronização e revisão", () => {
     const { itemId, accountIds } = provider.addItem(w.user.id, {
       accounts: [{ kind: "CREDIT", name: "Cartão", txs: [{ description: "LOJA", amountCents: 20_000 }, { description: "PAGAMENTO FATURA", direction: "CREDIT", amountCents: 20_000 }] }],
     });
-    const reg = (await w.user.post("/v1/open-finance/connections", { itemId })).body;
+    const reg = (await w.user.post("/v1/open-finance/connections", { itemId, autoImport: false })).body;
     const card = (await w.user.post("/v1/cards", { name: "Cartão", brand: "VISA", last4: "4321", limitCents: 100_000, closingDay: 5, dueDay: 12, payAccountId: w.account.id })).body;
     await w.user.put(`/v1/open-finance/connections/${reg.id}/accounts/${accountIds[0]}`, { cardId: card.id });
     const sync = await w.user.post(`/v1/open-finance/connections/${reg.id}/sync`);
@@ -411,7 +411,7 @@ describe("revogação", () => {
     expect(res.body.error.code).toBe("REVOKE_PENDING");
     expect(await env.prisma.bankConnection.findUnique({ where: { id: connectionId } })).toMatchObject({ revokedAt: null, lastErrorCode: "REVOKE_PENDING" });
 
-    const out = await runOpenFinanceJob(env.app.openFinance!.deps);
+    const out = await runOpenFinanceJob(env.app.openFinance!.deps, { userIds: [w.user.id] });
     expect(out.revoked).toBeGreaterThanOrEqual(1);
     expect(provider.deleted).toContain(itemId);
     expect((await env.prisma.bankConnection.findUnique({ where: { id: connectionId } }))?.revokedAt).not.toBeNull();
@@ -513,7 +513,7 @@ describe("webhook do provedor", () => {
       const w = await createWorld(paid);
       await w.user.post("/v1/privacy/consents", CONSENT);
       const { itemId, accountIds } = paidProvider.addItem(w.user.id, { accounts: [{ kind: "BANK", name: "CC", txs: [{ description: "X" }] }] });
-      const reg = (await w.user.post("/v1/open-finance/connections", { itemId })).body;
+      const reg = (await w.user.post("/v1/open-finance/connections", { itemId, autoImport: false })).body;
       await w.user.put(`/v1/open-finance/connections/${reg.id}/accounts/${accountIds[0]}`, { accountId: w.account.id });
       // simula plano gratuito: liga a cobrança no runtime e deixa o usuário sem assinatura
       (paid.app.openFinance!.deps as { billingEnforced: boolean }).billingEnforced = true;
@@ -531,7 +531,7 @@ describe("job periódico", () => {
     const { w, accountId, connectionId } = await connected();
     provider.addTransactions(accountId, [{ description: "DO JOB" }]);
     await env.prisma.bankConnection.update({ where: { id: connectionId }, data: { lastSyncAt: new Date("2026-10-01T00:00:00Z") } });
-    const out = await runOpenFinanceJob(env.app.openFinance!.deps);
+    const out = await runOpenFinanceJob(env.app.openFinance!.deps, { userIds: [w.user.id] });
     expect(out.synced).toBeGreaterThanOrEqual(1);
     expect((await w.user.get("/v1/open-finance/bank-transactions")).body.data.map((t: any) => t.description)).toEqual(["DO JOB"]);
   });

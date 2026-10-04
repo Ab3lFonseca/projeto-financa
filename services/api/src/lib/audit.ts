@@ -8,6 +8,8 @@ export type AuditEntry = {
   entity?: string;
   entityId?: string;
   ip?: string;
+  /** Instante do evento (padrão: agora, pelo relógio do banco). Quem usa o relógio da aplicação passa o seu. */
+  at?: Date;
   /** NUNCA incluir senha, token, valores financeiros ou dados bancários. */
   metadata?: Record<string, string | number | boolean | null>;
 };
@@ -27,6 +29,7 @@ export async function audit(
         entity: entry.entity ?? null,
         entityId: entry.entityId ?? null,
         ipHash: hashIp(entry.ip, pepper),
+        ...(entry.at ? { createdAt: entry.at } : {}),
         metadata: entry.metadata ?? undefined,
       },
     });

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Escala "bonita" para eixos: passos 1/2/5 × 10^n. Os valores são centavos inteiros, então o passo
  * nunca é menor que 1 (passos fracionários, arredondados, repetiam rótulos e chaves do React).
  */

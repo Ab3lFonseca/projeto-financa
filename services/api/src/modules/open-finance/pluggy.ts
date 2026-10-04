@@ -1,4 +1,4 @@
-﻿import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import {
   ProviderError,
   type ConnectToken,
@@ -6,6 +6,8 @@ import {
   type ProviderAccount,
   type ProviderConnectionStatus,
   type ProviderConnector,
+  type ProviderCredit,
+  type ProviderInvestment,
   type ProviderItem,
   type ProviderTransaction,
 } from "./provider";
@@ -20,7 +22,9 @@ import {
                                   → { results[{ id, name, ... }], page, totalPages }
  *   GET    /items/{id}
  *   DELETE /items/{id}
- *   GET    /accounts?itemId=
+ *   PATCH  /items/{id}            (pede nova coleta no banco; o aviso chega por webhook item/updated)
+ *   GET    /accounts?itemId=               (inclui creditData dos cartões)
+ *   GET    /investments?itemId=&page=      (CDB, caixinhas/cofrinhos, LCI/LCA, fundos...)
  *   GET    /v2/transactions?accountId=&dateFrom=&after=   (paginação por cursor; o GET /transactions
  *                                                          antigo sai do ar após 31/12/2026)
  * Webhooks: o Pluggy envia os cabeçalhos que cadastrarmos em POST /webhooks; conferimos um segredo.
@@ -58,7 +62,36 @@ type PluggyItemJson = {
   error?: { code?: string } | null;
 };
 
-type PluggyAccountJson = { id: string; type?: string; name?: string; balance?: number | null };
+type PluggyCreditDataJson = {
+  brand?: string | null;
+  creditLimit?: number | null;
+  availableCreditLimit?: number | null;
+  balanceCloseDate?: string | null;
+  balanceDueDate?: string | null;
+  minimumPayment?: number | null;
+};
+
+type PluggyAccountJson = { id: string; type?: string; name?: string; balance?: number | null; creditData?: PluggyCreditDataJson | null };
+
+type PluggyInvestmentJson = {
+  id: string;
+  name?: string;
+  type?: string;
+  subtype?: string | null;
+  issuer?: string | null;
+  status?: string | null;
+  balance?: number | null;
+  amount?: number | null;
+  amountProfit?: number | null;
+  amountOriginal?: number | null;
+  amountWithdrawal?: number | null;
+  rate?: number | null;
+  rateType?: string | null;
+  fixedAnnualRate?: number | null;
+  annualRate?: number | null;
+  issueDate?: string | null;
+  dueDate?: string | null;
+};
 
 type PluggyTransactionJson = {
   id: string;
@@ -73,6 +106,55 @@ type PluggyTransactionJson = {
 /** Reais (decimal do JSON) → centavos inteiros. O EPSILON evita o erro clássico 1.005 * 100 = 100.49999. */
 const toCents = (value: number) => Math.round((Math.abs(value) + Number.EPSILON) * 100);
 const dateOnly = (iso: string) => iso.slice(0, 10);
+
+const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+/** Reais (podem ser negativos) → centavos inteiros com o sinal preservado; null se ausente. */
+const signedCents = (v: unknown): number | null => (isNum(v) ? Math.sign(v) * Math.round((Math.abs(v) + Number.EPSILON) * 100) : null);
+const optDate = (v: unknown): string | null => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? dateOnly(v) : null);
+const optNum = (v: unknown): number | null => (isNum(v) ? v : null);
+const optText = (v: unknown, max: number): string | null => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
+
+function mapCredit(c: PluggyCreditDataJson | null | undefined): ProviderCredit | null {
+  if (!c) return null;
+  return {
+    brand: optText(c.brand, 30),
+    limitCents: signedCents(c.creditLimit),
+    availableCents: signedCents(c.availableCreditLimit),
+    closeDate: optDate(c.balanceCloseDate),
+    dueDate: optDate(c.balanceDueDate),
+    minimumPaymentCents: signedCents(c.minimumPayment),
+  };
+}
+
+/** Investimento do Pluggy → formato interno. Descarta o que não tem id ou valor utilizável. */
+export function mapInvestment(i: PluggyInvestmentJson): ProviderInvestment | null {
+  const balance = signedCents(i.balance ?? i.amount);
+  if (!i.id || balance === null) return null;
+  const invested = signedCents(i.amountOriginal);
+  const profit = signedCents(i.amountProfit) ?? (invested !== null ? balance - invested : null);
+  const status = i.status === "PENDING" || i.status === "TOTAL_WITHDRAWAL" ? i.status : "ACTIVE";
+  return {
+    id: i.id,
+    name: optText(i.name, 200) ?? "Investimento",
+    type: optText(i.type, 30)?.toUpperCase() ?? "OTHER",
+    subtype: optText(i.subtype, 40)?.toUpperCase() ?? null,
+    issuer: optText(i.issuer, 200),
+    status,
+    balanceCents: Math.max(0, balance),
+    investedCents: invested !== null ? Math.max(0, invested) : null,
+    profitCents: profit,
+    withdrawableCents: (() => {
+      const w = signedCents(i.amountWithdrawal);
+      return w !== null ? Math.max(0, w) : null;
+    })(),
+    rateType: optText(i.rateType, 20)?.toUpperCase() ?? null,
+    rate: optNum(i.rate),
+    fixedAnnualRate: optNum(i.fixedAnnualRate),
+    annualRate: optNum(i.annualRate),
+    issueDate: optDate(i.issueDate),
+    dueDate: optDate(i.dueDate),
+  };
+}
 
 /** Status do Pluggy → status interno. Desconhecido vira OUTDATED (pede nova sincronização, sem alarmar). */
 export function mapItemStatus(status: string | undefined, executionStatus: string | undefined): ProviderConnectionStatus {
@@ -231,6 +313,7 @@ export class PluggyProvider implements OpenFinanceProvider {
       lastUpdatedAt: item.lastUpdatedAt ? new Date(item.lastUpdatedAt) : null,
       consentExpiresAt: item.consentExpiresAt ? new Date(item.consentExpiresAt) : null,
       errorCode: item.error?.code ? String(item.error.code).slice(0, 64) : null,
+      partial: item.status === "PARTIAL_SUCCESS",
     };
   }
 
@@ -240,8 +323,33 @@ export class PluggyProvider implements OpenFinanceProvider {
       id: a.id,
       kind: a.type === "CREDIT" ? "CREDIT" : "BANK",
       name: (a.name || "Conta").slice(0, 120),
-      balanceCents: typeof a.balance === "number" ? Math.round(a.balance * 100) : null,
+      balanceCents: signedCents(a.balance),
+      credit: a.type === "CREDIT" ? mapCredit(a.creditData) : null,
     }));
+  }
+
+  async listInvestments(itemId: string): Promise<ProviderInvestment[]> {
+    const out: ProviderInvestment[] = [];
+    let totalPages = 1;
+    // Teto de segurança: 10 páginas (500 por página) por conexão.
+    for (let page = 1; page <= Math.min(totalPages, 10); page++) {
+      const qs = new URLSearchParams({ itemId, page: String(page) });
+      const json = await this.json<{ results?: PluggyInvestmentJson[]; totalPages?: number }>(`/investments?${qs.toString()}`);
+      totalPages = json?.totalPages ?? 1;
+      for (const raw of json?.results ?? []) {
+        const mapped = mapInvestment(raw);
+        if (mapped) out.push(mapped);
+      }
+    }
+    return out;
+  }
+
+  async refreshItem(itemId: string): Promise<void> {
+    const res = await this.call(`/items/${encodeURIComponent(itemId)}`, { method: "PATCH", body: {} });
+    if (res.ok) return;
+    if (res.status === 404) throw new ProviderError("Conexão não encontrada no provedor", "PROVIDER_ITEM_NOT_FOUND", 404);
+    if (res.status === 429) throw new ProviderError("Limite de requisições do provedor atingido", "PROVIDER_RATE_LIMITED", 429, true);
+    throw new ProviderError("O provedor recusou o pedido de atualização", "PROVIDER_ERROR", res.status, res.status >= 500);
   }
 
   async listTransactions(accountId: string, kind: "BANK" | "CREDIT", fromDate: string): Promise<ProviderTransaction[]> {

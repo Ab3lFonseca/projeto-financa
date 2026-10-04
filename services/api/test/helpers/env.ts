@@ -1,4 +1,4 @@
-﻿import { createPrismaClient, type PrismaClient } from "@app/database";
+import { createPrismaClient, type PrismaClient } from "@app/database";
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { inject } from "vitest";

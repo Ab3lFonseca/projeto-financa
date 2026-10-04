@@ -1,4 +1,4 @@
-﻿name: Deploy da API
+name: Deploy da API
 
 # Manual de propósito: deploy em produção nunca acontece por acidente.
 # Segredos necessários (Settings → Secrets and variables → Actions):

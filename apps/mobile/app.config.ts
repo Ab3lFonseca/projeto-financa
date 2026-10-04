@@ -1,4 +1,4 @@
-﻿import type { ExpoConfig } from "expo/config";
+import type { ExpoConfig } from "expo/config";
 
 // URL da API: em desenvolvimento aponta para a máquina local; em produção vem do EAS (eas.json).
 //   emulador Android → http://10.0.2.2:3000 · aparelho físico → http://<IP-do-PC>:3000

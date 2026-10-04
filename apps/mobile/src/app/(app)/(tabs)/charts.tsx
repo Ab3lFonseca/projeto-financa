@@ -1,4 +1,4 @@
-﻿import type { ISODate } from "@app/shared";
+import type { ISODate } from "@app/shared";
 import { useState } from "react";
 import { View } from "react-native";
 import { BarChart, DonutChart, Legend, LineChart } from "@/components/charts/Charts";

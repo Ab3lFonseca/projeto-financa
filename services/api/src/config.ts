@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 
 const bool = (def: boolean) =>
   z
@@ -66,6 +66,8 @@ const schema = z
 
     // --- Open Finance (Etapa 10) ---
     OPEN_FINANCE_ENABLED: bool(false),
+    /** "pluggy" (real) ou "demo" (banco fictício para testar sem contratar; PROIBIDO em produção). */
+    OPEN_FINANCE_PROVIDER: z.enum(["pluggy", "demo"]).default("pluggy"),
     PLUGGY_CLIENT_ID: z.string().optional(),
     PLUGGY_CLIENT_SECRET: z.string().optional(),
     PLUGGY_WEBHOOK_URL: z.string().optional(),
@@ -88,7 +90,10 @@ const schema = z
     if (env.IP_HASH_PEPPER === "dev-only-pepper-change-me") {
       ctx.addIssue({ code: "custom", path: ["IP_HASH_PEPPER"], message: "Defina um IP_HASH_PEPPER próprio em produção" });
     }
-    if (env.OPEN_FINANCE_ENABLED) {
+    if (env.OPEN_FINANCE_PROVIDER === "demo") {
+      ctx.addIssue({ code: "custom", path: ["OPEN_FINANCE_PROVIDER"], message: "OPEN_FINANCE_PROVIDER=demo é proibido em produção" });
+    }
+    if (env.OPEN_FINANCE_ENABLED && env.OPEN_FINANCE_PROVIDER === "pluggy") {
       need("PLUGGY_CLIENT_ID");
       need("PLUGGY_CLIENT_SECRET");
       need("PLUGGY_WEBHOOK_SECRET");

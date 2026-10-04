@@ -1,6 +1,6 @@
 import { jwtVerify, SignJWT } from "jose";
 import { randomBytes, randomUUID, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { promisify } from "node:util";
 import { Errors } from "../../lib/errors";
@@ -21,6 +21,7 @@ type Store = { users: DevUser[] };
  */
 export class DevAuthProvider implements AuthProvider {
   private store: Store = { users: [] };
+  private mtimeMs = 0;
   private readonly refreshTokens = new Map<string, { userId: string; expiresAt: number }>();
 
   constructor(
@@ -28,18 +29,25 @@ export class DevAuthProvider implements AuthProvider {
     private readonly file: string,
     private readonly log: (msg: string) => void = () => {},
   ) {
-    if (existsSync(file)) {
-      try {
-        this.store = JSON.parse(readFileSync(file, "utf8")) as Store;
-      } catch {
-        this.store = { users: [] };
-      }
+    this.sync();
+  }
+
+  /** Outro processo (ex.: `pnpm dev:seed -- --reset`) pode ter alterado o arquivo: relê quando ele mudou. */
+  private sync() {
+    const mtime = existsSync(this.file) ? statSync(this.file).mtimeMs : 0;
+    if (mtime === this.mtimeMs) return;
+    this.mtimeMs = mtime;
+    try {
+      this.store = mtime ? (JSON.parse(readFileSync(this.file, "utf8")) as Store) : { users: [] };
+    } catch {
+      this.store = { users: [] };
     }
   }
 
   private save() {
     mkdirSync(dirname(this.file), { recursive: true });
     writeFileSync(this.file, JSON.stringify(this.store, null, 2));
+    this.mtimeMs = statSync(this.file).mtimeMs;
   }
 
   private async hash(password: string, salt: Buffer): Promise<string> {
@@ -47,6 +55,7 @@ export class DevAuthProvider implements AuthProvider {
   }
 
   private find(email: string) {
+    this.sync();
     return this.store.users.find((u) => u.email === email);
   }
 
@@ -91,6 +100,7 @@ export class DevAuthProvider implements AuthProvider {
   }
 
   async refresh(refreshToken: string): Promise<ProviderSession> {
+    this.sync();
     const entry = this.refreshTokens.get(refreshToken);
     const user = entry && entry.expiresAt > Date.now() ? this.store.users.find((u) => u.id === entry.userId) : undefined;
     if (!user) throw Errors.unauthorized("Sessão expirada. Entre novamente.", "INVALID_REFRESH_TOKEN");
@@ -116,6 +126,7 @@ export class DevAuthProvider implements AuthProvider {
     }).catch(() => {
       throw Errors.unauthorized("Sessão inválida", "INVALID_TOKEN");
     });
+    this.sync();
     const user = this.store.users.find((u) => u.id === payload.sub);
     if (!user) throw Errors.unauthorized("Sessão inválida", "INVALID_TOKEN");
     const salt = randomBytes(16);
@@ -125,6 +136,7 @@ export class DevAuthProvider implements AuthProvider {
   }
 
   async deleteUser(userId: string): Promise<void> {
+    this.sync();
     this.store.users = this.store.users.filter((u) => u.id !== userId);
     this.save();
   }

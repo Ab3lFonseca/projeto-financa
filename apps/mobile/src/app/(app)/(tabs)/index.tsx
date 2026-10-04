@@ -1,4 +1,4 @@
-﻿import { router } from "expo-router";
+import { router } from "expo-router";
 import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { BarChart, DonutChart, Legend, LineChart } from "@/components/charts/Charts";

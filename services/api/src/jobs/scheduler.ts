@@ -1,4 +1,4 @@
-﻿import type { PrismaClient } from "@app/database";
+import type { PrismaClient } from "@app/database";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { finalizeDeletions } from "../modules/privacy/service";
 import { revokeAllConnections, runOpenFinanceJob } from "../modules/open-finance/service";

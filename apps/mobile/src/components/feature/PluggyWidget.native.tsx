@@ -25,6 +25,7 @@ export function PluggyWidget({ visible, connectToken, connectorIds, updateItem, 
           connectToken={connectToken}
           connectorIds={connectorIds}
           updateItem={updateItem ?? undefined}
+          products={["ACCOUNTS", "CREDIT_CARDS", "TRANSACTIONS", "INVESTMENTS"]}
           language="pt"
           theme={scheme}
           onSuccess={({ item }) => onSuccess(item.id)}

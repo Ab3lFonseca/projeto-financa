@@ -1,4 +1,4 @@
-﻿# Normaliza finais de linha: o repositório guarda LF (Dockerfile e scripts de CI exigem), o Windows converte ao baixar.
+# Normaliza finais de linha: o repositório guarda LF (Dockerfile e scripts de CI exigem), o Windows converte ao baixar.
 * text=auto eol=lf
 *.png binary
 *.ps1 text eol=crlf

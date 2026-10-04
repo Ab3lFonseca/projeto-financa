@@ -1,4 +1,4 @@
-﻿import type { FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { accountRoutes } from "./modules/accounts/routes";
 import { adminRoutes } from "./modules/admin/routes";
 import { bankRoutes } from "./modules/banks/routes";

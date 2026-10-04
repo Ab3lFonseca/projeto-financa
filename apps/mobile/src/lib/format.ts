@@ -76,3 +76,17 @@ export function formatPct(value: number | null, opts: { signed?: boolean } = {})
   if (opts.signed) return `${value > 0 ? "+" : value < 0 ? "−" : ""}${text}`;
   return text;
 }
+
+/** "agora", "há 5 min", "há 2 h", "há 3 d" ou a data, para "atualizado ..." (instante ISO → texto). */
+export function formatAgo(iso: string | null | undefined, now: number = Date.now()): string {
+  if (!iso) return "nunca";
+  const diff = Math.max(0, now - new Date(iso).getTime());
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `há ${d} d`;
+  return formatDateShort(iso.slice(0, 10));
+}

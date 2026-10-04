@@ -1,4 +1,4 @@
-﻿import type { PrismaClient } from "@app/database";
+import type { PrismaClient } from "@app/database";
 import type { PlanName } from "@app/shared";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Config } from "./config";

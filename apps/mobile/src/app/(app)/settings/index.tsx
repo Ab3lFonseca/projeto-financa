@@ -1,4 +1,4 @@
-﻿import { router } from "expo-router";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { ShortcutRow } from "@/components/feature/Common";

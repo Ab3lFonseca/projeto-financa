@@ -1,4 +1,4 @@
-﻿import { useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Pressable, View, type LayoutChangeEvent } from "react-native";
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from "react-native-svg";
 import { formatBRL, formatCompactBRL } from "@/lib/format";
@@ -169,14 +169,31 @@ export function BarChart({
 export type LinePoint = { label: string; value: number };
 
 /** Linha suave com área em degradê. Toque num ponto para ver o valor. */
-export function LineChart({ points, height = 200, color, bars }: { points: LinePoint[]; height?: number; color?: string; /** pinta a área como barras finas (fluxo acumulado) */ bars?: boolean }) {
+export function LineChart({
+  points,
+  height = 200,
+  color,
+  bars,
+  fitRange,
+}: {
+  points: LinePoint[];
+  height?: number;
+  color?: string;
+  /** pinta a área como barras finas (fluxo acumulado) */
+  bars?: boolean;
+  /** eixo ajustado aos dados em vez de começar no zero (ex.: evolução de um investimento) */
+  fitRange?: boolean;
+}) {
   const { colors } = useTheme();
   const tint = color ?? colors.primary;
   const [width, setWidth] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
 
   const values = points.map((p) => p.value);
-  const scale = niceScale(Math.min(...values, 0), Math.max(...values, 1), 4);
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  const margin = Math.max(1, Math.round((hi - lo) * 0.25));
+  const scale = fitRange && values.length > 0 ? niceScale(lo - margin, hi + margin, 4) : niceScale(Math.min(...values, 0), Math.max(...values, 1), 4);
   const padL = 46;
   const padB = 24;
   const padT = 10;

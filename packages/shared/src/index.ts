@@ -4,6 +4,7 @@ export * from "./money";
 export * from "./dates";
 export * from "./cards";
 export * from "./recurrence";
+export * from "./investments";
 export * from "./plans";
 export * from "./ranges";
 export * from "./enums";

@@ -1,4 +1,4 @@
-﻿# Finança — app de finanças pessoais
+# Finança — app de finanças pessoais
 
 App Android/iOS (Expo + React Native) com API própria (Fastify + Prisma + Postgres), multiusuário com dados
 isolados, LGPD e Open Finance Brasil como módulo opcional.
@@ -75,13 +75,13 @@ pnpm typecheck      # todos os pacotes
 | 7. Orçamentos, metas, recorrências, categorias | ✅ |
 | 8. Notificações, offline com sincronização | ✅ |
 | 9. LGPD (consentimento, exportar, excluir) e configurações | ✅ |
-| 10. Open Finance (Pluggy) | 🟡 backend e telas prontos, testados com provedor **simulado**; falta validar com o Pluggy real ([roteiro](docs/open-finance.md#6-roteiro-de-validação-com-o-pluggy-real-pendente)) |
+| 10. Open Finance (Pluggy) | 🟡 contas, cartões (limite/fatura do banco), transações e **investimentos** puxados sozinhos, atualização diária, aba **Investir**; backend e telas prontos, testados com provedor **simulado** e um **banco de demonstração** (`OPEN_FINANCE_PROVIDER=demo`); falta validar com o Pluggy real ([roteiro](docs/open-finance.md#6-roteiro-de-validação-com-o-pluggy-real-pendente)) |
 | 11. Testes e endurecimento | ✅ API e shared cobertos; telas do app **não têm testes automatizados** |
 | 12. Deploy | 🟡 Dockerfile, `fly.toml`, CI/CD e `eas.json` escritos; bundle de produção validado localmente; **imagem Docker e builds EAS ainda não executados** |
 
 ## Desvios do plano original (decididos e justificados)
 
-- **Abas:** Início, Transações, Gráficos, Carteira (contas + cartões) e Mais — para caber em 5 abas.
+- **Abas:** Início, Transações, Gráficos, Carteira (contas + cartões), Investir (Open Finance) e Mais.
 - **Jobs em processo** (com *advisory locks* do Postgres) no lugar de `pg-boss`: sem dependência extra, seguro com várias instâncias.
 - **Login de desenvolvimento** (`AUTH_MODE=dev`) para trabalhar sem internet; é **proibido em produção** (a API recusa subir).
 - **Sem Docker no desenvolvimento:** Postgres embutido (`embedded-postgres`) para dev e testes.

@@ -1,4 +1,4 @@
-﻿# API (Fastify + Prisma). Contexto de build = RAIZ do monorepo:
+# API (Fastify + Prisma). Contexto de build = RAIZ do monorepo:
 #   docker build -f services/api/Dockerfile -t financa-api .
 #
 # Estágio 1 compila (tsup embute @app/* e o compilador do Prisma num único server.js).

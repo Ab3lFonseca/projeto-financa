@@ -43,6 +43,11 @@ export type OpenFinanceStatus = S.OpenFinanceStatusDTO;
 export type BankConnection = S.ConnectionDTO;
 export type BankTransaction = S.BankTransactionDTO;
 export type ConnectToken = Out<typeof S.connectTokenDTO>;
+export type Investment = S.InvestmentDTO;
+export type InvestmentsOverview = S.InvestmentsResponse;
+export type InvestmentDetail = S.InvestmentDetailDTO;
+export type BankOverview = S.BankOverviewDTO;
+export type CardBankData = S.CardBankDataDTO;
 
 export type ReportRange = "this_month" | "last_3_months" | "last_6_months" | "this_year" | "custom";
 export type ReportParams = { range: ReportRange; from?: string; to?: string };
@@ -192,10 +197,15 @@ export const api = {
     status: () => http.get<OpenFinanceStatus>(`${v1}/open-finance/status`),
     connectors: () => http.get<{ data: { id: number; name: string }[] }>(`${v1}/open-finance/connectors`),
     connectToken: (connectionId?: string) => http.post<ConnectToken>(`${v1}/open-finance/connect-token`, { connectionId }),
-    register: (itemId: string) => http.post<BankConnection>(`${v1}/open-finance/connections`, { itemId }),
+    register: (itemId: string, autoImport?: boolean) => http.post<BankConnection>(`${v1}/open-finance/connections`, { itemId, autoImport }),
+    setAutoImport: (id: string, autoImport: boolean) => http.patch<BankConnection>(`${v1}/open-finance/connections/${id}`, { autoImport }),
+    refresh: (id: string) => http.post<{ requested: true; refreshesLeftToday: number }>(`${v1}/open-finance/connections/${id}/refresh`),
+    investments: (includeClosed = false) => http.get<InvestmentsOverview>(`${v1}/open-finance/investments`, { query: { includeClosed } }),
+    investment: (id: string) => http.get<InvestmentDetail>(`${v1}/open-finance/investments/${id}`),
+    overview: () => http.get<BankOverview>(`${v1}/open-finance/overview`),
     connections: () => http.get<List<BankConnection>>(`${v1}/open-finance/connections`),
     remove: (id: string) => http.delete<{ ok: true }>(`${v1}/open-finance/connections/${id}`),
-    sync: (id: string) => http.post<{ newTransactions: number; accounts: number; status: string }>(`${v1}/open-finance/connections/${id}/sync`),
+    sync: (id: string) => http.post<{ newTransactions: number; accounts: number; investments: number; status: string }>(`${v1}/open-finance/connections/${id}/sync`),
     link: (id: string, providerAccountId: string, target: { accountId?: string | null; cardId?: string | null }) =>
       http.put<BankConnection>(`${v1}/open-finance/connections/${id}/accounts/${encodeURIComponent(providerAccountId)}`, target),
     bankTransactions: (params: { status?: "NEW" | "IGNORED" | "IMPORTED" | "MATCHED"; cursor?: string; limit?: number }) =>

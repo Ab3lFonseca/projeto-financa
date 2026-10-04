@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Platform, View } from "react-native";
 import { Button } from "@/components/ui/Button";
 import { Badge, SwitchRow } from "@/components/ui/Controls";

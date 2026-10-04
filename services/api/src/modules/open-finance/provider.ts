@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Porta do provedor de Open Finance. O resto da API só conhece esta interface:
  * trocar de provedor (Pluggy → outro) é escrever um novo adaptador, sem tocar nas rotas.
  *
@@ -25,13 +25,56 @@ export type ProviderItem = {
   consentExpiresAt: Date | null;
   /** Código curto do erro, nunca mensagem livre. */
   errorCode: string | null;
+  /**
+   * Coleta concluída, mas alguma parte falhou (ex.: limite mensal do Open Finance estourado num produto).
+   * Nesse caso uma lista vazia NÃO prova que o usuário não tem aquilo: não encerramos nada com base nela.
+   */
+  partial: boolean;
+};
+
+/** Dados do cartão de crédito como o banco informou. */
+export type ProviderCredit = {
+  brand: string | null;
+  limitCents: number | null;
+  availableCents: number | null;
+  /** AAAA-MM-DD */
+  closeDate: string | null;
+  dueDate: string | null;
+  minimumPaymentCents: number | null;
 };
 
 export type ProviderAccount = {
   id: string;
   kind: "BANK" | "CREDIT";
   name: string;
+  /** Conta: saldo. Cartão: fatura em aberto. */
   balanceCents: number | null;
+  /** Só em cartão (kind = CREDIT). */
+  credit: ProviderCredit | null;
+};
+
+export type ProviderInvestment = {
+  id: string;
+  name: string;
+  /** FIXED_INCOME, MUTUAL_FUND, EQUITY, ETF, SECURITY, COE, OTHER */
+  type: string;
+  /** CDB, LCI, LCA, TREASURE... */
+  subtype: string | null;
+  issuer: string | null;
+  status: "ACTIVE" | "PENDING" | "TOTAL_WITHDRAWAL";
+  /** Valor atual da posição (nunca negativo). */
+  balanceCents: number;
+  investedCents: number | null;
+  /** Pode ser negativo. */
+  profitCents: number | null;
+  withdrawableCents: number | null;
+  rateType: string | null;
+  rate: number | null;
+  fixedAnnualRate: number | null;
+  annualRate: number | null;
+  /** AAAA-MM-DD */
+  issueDate: string | null;
+  dueDate: string | null;
 };
 
 export type ProviderTransaction = {
@@ -65,6 +108,14 @@ export interface OpenFinanceProvider {
 
   getItem(itemId: string): Promise<ProviderItem | null>;
   listAccounts(itemId: string): Promise<ProviderAccount[]>;
+  /** Investimentos da conexão (CDB, caixinhas/cofrinhos, fundos...). Lista vazia = nada a mostrar. */
+  listInvestments(itemId: string): Promise<ProviderInvestment[]>;
+  /**
+   * Pede ao provedor uma NOVA coleta no banco (consome a cota mensal do Open Finance por produto/instituição).
+   * Quando terminar, o provedor avisa por webhook. Não confundir com `listAccounts`/`listInvestments`, que só leem
+   * o que o provedor já guardou.
+   */
+  refreshItem(itemId: string): Promise<void>;
   /** Transações lançadas (POSTED e PENDING) a partir de `fromDate` (AAAA-MM-DD), mais recentes ou não. */
   listTransactions(accountId: string, kind: "BANK" | "CREDIT", fromDate: string): Promise<ProviderTransaction[]>;
 

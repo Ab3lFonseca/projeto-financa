@@ -1,4 +1,4 @@
-﻿# Produto: planos, monetização e administração
+# Produto: planos, monetização e administração
 
 ## Planos (Free × Premium)
 

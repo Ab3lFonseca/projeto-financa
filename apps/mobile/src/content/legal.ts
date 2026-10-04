@@ -38,7 +38,7 @@ export const PRIVACY_POLICY: LegalDoc = {
         "Dados financeiros que VOCÊ informa: contas, saldos iniciais, lançamentos (receitas, despesas e transferências), categorias, cartões (apenas apelido, limite, dias de fechamento/vencimento e os 4 últimos dígitos — nunca o número completo, validade ou CVV), orçamentos, metas e recorrências.",
         "Dados técnicos: identificador de notificação push do aparelho, plataforma (iOS/Android), versão do aplicativo e registros de segurança (por exemplo, tentativas de acesso). Endereços IP são guardados apenas em forma de hash irreversível.",
         "Registros de consentimento: qual documento você aceitou, em qual versão e quando.",
-        "Open Finance (somente se você ativar este recurso opcional): com o seu consentimento, recebemos de um parceiro regulado os saldos e as transações das contas que você escolher. O login no banco acontece no ambiente oficial da sua instituição financeira; NÓS NUNCA SOLICITAMOS NEM ARMAZENAMOS SUAS SENHAS BANCÁRIAS.",
+        "Open Finance (somente se você ativar este recurso opcional): com o seu consentimento, recebemos de um parceiro regulado os saldos e as transações das suas contas, o limite, a fatura e o vencimento dos seus cartões de crédito e as suas aplicações financeiras (como CDB, caixinhas, cofrinhos, LCI/LCA e fundos, com valores e rendimento). O login no banco acontece no ambiente oficial da sua instituição financeira; NÓS NUNCA SOLICITAMOS NEM ARMAZENAMOS SUAS SENHAS BANCÁRIAS.",
       ],
     },
     {
@@ -128,7 +128,8 @@ export const TERMS_OF_USE: LegalDoc = {
       heading: "4. Open Finance",
       paragraphs: [
         "O recurso opcional de conexão com bancos usa o ecossistema regulado do Open Finance Brasil por meio de um parceiro autorizado. Você escolhe quais instituições e dados compartilhar e pode revogar o consentimento a qualquer momento, no aplicativo ou na sua instituição.",
-        "Nunca pediremos a sua senha bancária. O acesso é autorizado diretamente no ambiente oficial do seu banco.",
+        "Nunca pediremos a sua senha bancária. O acesso é autorizado diretamente no ambiente oficial do seu banco. O acesso é somente de leitura: o aplicativo não movimenta o seu dinheiro.",
+        "Ao encerrar a conexão (ou retirar o consentimento), solicitamos o encerramento do acesso ao parceiro e apagamos as aplicações financeiras e os dados brutos ainda não aproveitados que foram lidos do banco; os lançamentos que você já incorporou ao aplicativo permanecem sob o seu controle.",
       ],
     },
     {
