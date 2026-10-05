@@ -10,7 +10,7 @@ WORKDIR /repo
 RUN npm install -g pnpm@12.9.1
 
 # Camada de dependências (só manifests): reaproveita cache enquanto o lockfile não muda.
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
 COPY apps/mobile/package.json apps/mobile/
 COPY packages/database/package.json packages/database/
 COPY packages/shared/package.json packages/shared/
