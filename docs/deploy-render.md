@@ -88,7 +88,10 @@ seção 10 do [open-finance.md](open-finance.md).
   ```
   test -n "$EXPO_PUBLIC_API_URL" || { echo "ERRO: a variavel EXPO_PUBLIC_API_URL nao esta definida neste site (aba Environment)"; exit 1; } && echo "API usada pelo site: $EXPO_PUBLIC_API_URL" && npx --yes pnpm@12.9.1 install --frozen-lockfile --filter "@app/mobile..." && npx --yes pnpm@12.9.1 --filter @app/mobile exec expo export --platform web
   ```
-- **Erro de CORS no console do navegador**: `CORS_ORIGINS` precisa ser exatamente o endereço do site (com `https://`, sem barra no final).
+- **Erro de CORS no console do navegador** (`Access-Control-Allow-Origin missing`, status 404): `CORS_ORIGINS` precisa ser exatamente o
+  endereço do site (com `https://`, **sem barra no final**), na **API** (não no site). Vazia, o CORS fica desligado e o navegador é
+  bloqueado. Depois de salvar, é preciso um deploy da API. Confira no log da API ao iniciar: a linha `"API no ar"` mostra
+  `"corsOrigins":["https://..."]`; se vier `[]`, a variável não chegou.
 - **A API não sobe**: o log mostra qual variável falta (a API recusa produção sem `SUPABASE_*` e pepper próprio).
 - Logs: painel do serviço → *Logs*. Dentro do app: *Mais → Configurações → Diagnóstico*.
 

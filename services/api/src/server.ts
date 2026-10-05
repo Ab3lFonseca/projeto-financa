@@ -37,7 +37,8 @@ process.on("unhandledRejection", (reason) => fatal("unhandledRejection", reason)
 
 try {
   await app.listen({ port: config.PORT, host: config.HOST });
-  app.log.info({ port: config.PORT, env: config.NODE_ENV, auth: config.AUTH_MODE, jobs: config.JOBS_ENABLED, openFinance: config.OPEN_FINANCE_ENABLED }, "API no ar");
+  // corsOrigins vazio = CORS desligado: o app nativo funciona, mas o app web (navegador) é bloqueado.
+  app.log.info({ port: config.PORT, env: config.NODE_ENV, auth: config.AUTH_MODE, jobs: config.JOBS_ENABLED, openFinance: config.OPEN_FINANCE_ENABLED, corsOrigins: config.CORS_ORIGINS }, "API no ar");
   if (config.JOBS_ENABLED) stopJobs = startJobs(app);
 } catch (err) {
   if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
