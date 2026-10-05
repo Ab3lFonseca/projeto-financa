@@ -2,6 +2,8 @@ import { router } from "expo-router";
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { Icon } from "@/components/Icon";
+import { smooth, useHover } from "@/components/ui/hover";
+import { useTourTarget } from "@/lib/tour/registry";
 import { Card, IconBadge, Row } from "@/components/ui/Layout";
 import { Text } from "@/components/ui/Text";
 import type { Dashboard } from "@/lib/api/endpoints";
@@ -9,10 +11,12 @@ import { useOutbox } from "@/lib/offline/outbox";
 import { useTheme } from "@/theme/ThemeProvider";
 
 /** Botão flutuante "+" para lançar. */
-export function Fab({ onPress, label = "Novo lançamento" }: { onPress?: () => void; label?: string }) {
+export function Fab({ onPress, label = "Novo lançamento", tourId }: { onPress?: () => void; label?: string; tourId?: string }) {
   const { colors } = useTheme();
+  const tourRef = useTourTarget(tourId);
   return (
     <Pressable
+      ref={tourRef}
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress ?? (() => router.push("/transaction/new"))}
@@ -108,8 +112,9 @@ export function PendingSyncBanner() {
 /** Cartão de ação rápida (grade de atalhos da aba Mais). */
 export function ShortcutRow({ icon, title, subtitle, onPress, badge, color }: { icon: string; title: string; subtitle?: string; onPress: () => void; badge?: ReactNode; color?: string }) {
   const { colors } = useTheme();
+  const { hovered, hoverProps } = useHover();
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+    <Pressable accessibilityRole="button" onPress={onPress} {...hoverProps} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, backgroundColor: hovered ? colors.surfaceAlt : "transparent", borderRadius: 12, ...smooth })}>
       <Row style={{ paddingVertical: 12 }}>
         <IconBadge icon={icon} color={color ?? colors.primary} />
         <View style={{ flex: 1 }}>

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Icon } from "../Icon";
 import { IconButton } from "./Button";
+import { smooth, useHover } from "./hover";
 import { Text } from "./Text";
 
 /** Card de superfície com cantos arredondados e sombra discreta. */
@@ -23,6 +24,7 @@ export function Card({
   tone?: "surface" | "alt" | "primarySoft" | "warning" | "negative" | "positive";
 }) {
   const { colors, radius, scheme } = useTheme();
+  const { hovered, hoverProps } = useHover();
   const bg = { surface: colors.surface, alt: colors.surfaceAlt, primarySoft: colors.primarySoft, warning: colors.warningSoft, negative: colors.negativeSoft, positive: colors.positiveSoft }[tone];
   const base: ViewStyle = {
     backgroundColor: bg,
@@ -34,7 +36,7 @@ export function Card({
   };
   if (!onPress) return <View style={[base, style]}>{children}</View>;
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [base, pressed ? { opacity: 0.85 } : null, style]}>
+    <Pressable accessibilityRole="button" onPress={onPress} {...hoverProps} style={({ pressed }) => [base, smooth, hovered ? { borderColor: colors.accent } : null, pressed ? { opacity: 0.85 } : null, style]}>
       {children}
     </Pressable>
   );
@@ -47,7 +49,7 @@ export function Section({ title, action, onAction, children, style }: { title: s
         <Text variant="heading">{title}</Text>
         {action ? (
           <Pressable onPress={onAction} hitSlop={8} accessibilityRole="link">
-            <Text variant="bodySm" tone="primary" weight="600">
+            <Text variant="bodySm" tone="accent" weight="600">
               {action}
             </Text>
           </Pressable>
@@ -170,6 +172,7 @@ export function ListRow({
   style?: StyleProp<ViewStyle>;
 }) {
   const { colors } = useTheme();
+  const { hovered, hoverProps } = useHover();
   const content = (
     <View style={[{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 }, style]}>
       {left}
@@ -189,7 +192,7 @@ export function ListRow({
   );
   if (!onPress) return content;
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+    <Pressable accessibilityRole="button" onPress={onPress} {...hoverProps} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, backgroundColor: hovered ? colors.surfaceAlt : "transparent", borderRadius: 12, ...smooth })}>
       {content}
     </Pressable>
   );

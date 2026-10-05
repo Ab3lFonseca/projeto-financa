@@ -2,7 +2,7 @@ import { Text as RNText, type TextProps as RNTextProps } from "react-native";
 import { useTheme } from "@/theme/ThemeProvider";
 import type { TextVariant } from "@/theme/tokens";
 
-export type Tone = "default" | "muted" | "faint" | "primary" | "positive" | "negative" | "warning" | "onPrimary";
+export type Tone = "default" | "muted" | "faint" | "primary" | "accent" | "positive" | "negative" | "warning" | "onPrimary";
 
 export type TextProps = RNTextProps & {
   variant?: TextVariant;
@@ -20,6 +20,7 @@ export function Text({ variant = "body", tone = "default", weight, align, tabula
     muted: colors.textMuted,
     faint: colors.textFaint,
     primary: colors.primary,
+    accent: colors.accent,
     positive: colors.positive,
     negative: colors.negative,
     warning: colors.warning,

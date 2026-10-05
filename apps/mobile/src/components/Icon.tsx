@@ -2,6 +2,7 @@
 import type { ComponentType } from "react";
 import Apple from "lucide-react-native/icons/apple";
 import ArrowDownLeft from "lucide-react-native/icons/arrow-down-left";
+import ArrowLeft from "lucide-react-native/icons/arrow-left";
 import ArrowLeftRight from "lucide-react-native/icons/arrow-left-right";
 import ArrowRight from "lucide-react-native/icons/arrow-right";
 import ArrowUpRight from "lucide-react-native/icons/arrow-up-right";
@@ -77,6 +78,7 @@ import Mail from "lucide-react-native/icons/mail";
 import MapPin from "lucide-react-native/icons/map-pin";
 import Milk from "lucide-react-native/icons/milk";
 import Minus from "lucide-react-native/icons/minus";
+import Monitor from "lucide-react-native/icons/monitor";
 import Moon from "lucide-react-native/icons/moon";
 import Music from "lucide-react-native/icons/music";
 import Palette from "lucide-react-native/icons/palette";
@@ -86,6 +88,7 @@ import Pencil from "lucide-react-native/icons/pencil";
 import Percent from "lucide-react-native/icons/percent";
 import PiggyBank from "lucide-react-native/icons/piggy-bank";
 import Pill from "lucide-react-native/icons/pill";
+import Pipette from "lucide-react-native/icons/pipette";
 import Pizza from "lucide-react-native/icons/pizza";
 import Plane from "lucide-react-native/icons/plane";
 import Plus from "lucide-react-native/icons/plus";
@@ -93,6 +96,7 @@ import Receipt from "lucide-react-native/icons/receipt";
 import RefreshCw from "lucide-react-native/icons/refresh-cw";
 import Repeat from "lucide-react-native/icons/repeat";
 import Rocket from "lucide-react-native/icons/rocket";
+import RotateCcw from "lucide-react-native/icons/rotate-ccw";
 import Scissors from "lucide-react-native/icons/scissors";
 import Search from "lucide-react-native/icons/search";
 import Settings from "lucide-react-native/icons/settings";
@@ -131,7 +135,7 @@ import Zap from "lucide-react-native/icons/zap";
 type IconComponent = ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 
 const ICONS = {
-  "apple": Apple, "arrow-down-left": ArrowDownLeft, "arrow-left-right": ArrowLeftRight, "arrow-right": ArrowRight,
+  "apple": Apple, "arrow-down-left": ArrowDownLeft, "arrow-left": ArrowLeft, "arrow-left-right": ArrowLeftRight, "arrow-right": ArrowRight,
   "arrow-up-right": ArrowUpRight, "baby": Baby, "banknote": Banknote, "bell": Bell, "bell-ring": BellRing, "bike": Bike,
   "book-open": BookOpen, "briefcase": Briefcase, "building": Building, "bus": Bus, "calculator": Calculator,
   "calendar": Calendar, "calendar-clock": CalendarClock, "car": Car, "chart-column": ChartColumn, "chart-line": ChartLine, "chart-pie": ChartPie,
@@ -145,9 +149,9 @@ const ICONS = {
   "heart-pulse": HeartPulse, "hotel": Hotel, "house": House, "home": House, "info": Info, "key-round": KeyRound,
   "landmark": Landmark, "laptop": Laptop, "layers": Layers, "layout-grid": LayoutGrid, "lightbulb": Lightbulb,
   "link": Link, "list-checks": ListChecks, "list-filter": ListFilter, "lock": Lock, "log-out": LogOut, "mail": Mail, "map-pin": MapPin,
-  "milk": Milk, "minus": Minus, "moon": Moon, "music": Music, "palette": Palette, "party-popper": PartyPopper,
-  "paw-print": PawPrint, "pencil": Pencil, "percent": Percent, "piggy-bank": PiggyBank, "pill": Pill, "pizza": Pizza,
-  "plane": Plane, "plus": Plus, "receipt": Receipt, "refresh-cw": RefreshCw, "repeat": Repeat, "rocket": Rocket,
+  "milk": Milk, "minus": Minus, "monitor": Monitor, "moon": Moon, "music": Music, "palette": Palette, "party-popper": PartyPopper,
+  "paw-print": PawPrint, "pencil": Pencil, "percent": Percent, "piggy-bank": PiggyBank, "pill": Pill, "pipette": Pipette, "pizza": Pizza,
+  "plane": Plane, "plus": Plus, "receipt": Receipt, "refresh-cw": RefreshCw, "repeat": Repeat, "rocket": Rocket, "rotate-ccw": RotateCcw,
   "scissors": Scissors, "search": Search, "settings": Settings, "share-2": Share2, "shield": Shield,
   "shield-check": ShieldCheck, "shirt": Shirt, "shopping-bag": ShoppingBag, "shopping-cart": ShoppingCart,
   "smartphone": Smartphone, "sparkles": Sparkles, "sprout": Sprout, "star": Star, "stethoscope": Stethoscope,

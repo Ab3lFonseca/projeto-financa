@@ -1,3 +1,4 @@
+import { Prisma } from "@app/database";
 import {
   changePasswordBody,
   deleteAccountBody,
@@ -42,6 +43,7 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
             ...(body.displayName !== undefined ? { displayName: body.displayName } : {}),
             ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
             ...(body.theme !== undefined ? { theme: body.theme } : {}),
+            ...(body.appearance !== undefined ? { appearance: body.appearance === null ? Prisma.DbNull : body.appearance } : {}),
             ...(body.onboardingCompleted !== undefined
               ? { onboardingCompletedAt: body.onboardingCompleted ? (current.onboardingCompletedAt ?? app.clock()) : null }
               : {}),

@@ -1,5 +1,5 @@
 import type { ProfileDTO } from "@app/shared";
-import { notificationPrefs, type EntitlementsDTO, type MeDTO } from "@app/shared";
+import { appearanceSchema, notificationPrefs, type EntitlementsDTO, type MeDTO } from "@app/shared";
 import type { Config } from "../../config";
 import { Errors } from "../../lib/errors";
 import { countUsage, limitsFor } from "../../lib/plan";
@@ -12,6 +12,7 @@ type ProfileRow = {
   timezone: string;
   currency: string;
   theme: "SYSTEM" | "LIGHT" | "DARK";
+  appearance: unknown;
   notificationPrefs: unknown;
   onboardingCompletedAt: Date | null;
 };
@@ -23,6 +24,8 @@ export function toProfileDTO(p: ProfileRow): ProfileDTO {
     timezone: p.timezone,
     currency: p.currency,
     theme: p.theme,
+    // Valor que não passa na validação (editado à mão no banco, por exemplo) vira nulo: o app cai no `theme`.
+    appearance: appearanceSchema.safeParse(p.appearance).data ?? null,
     onboardingCompleted: p.onboardingCompletedAt !== null,
     notificationPrefs: notificationPrefs.parse(p.notificationPrefs ?? {}),
   };

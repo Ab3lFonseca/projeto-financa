@@ -3,6 +3,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { Icon } from "@/components/Icon";
 import { AccountTile, CreditCardView } from "@/components/feature/Rows";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { Button } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/Controls";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/ui/Feedback";
@@ -38,7 +39,9 @@ export default function WalletScreen() {
   const header = (
     <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 12 }}>
       <Text variant="title">Carteira</Text>
-      <Segmented<Tab> options={[{ value: "accounts", label: "Contas" }, { value: "cards", label: "Cartões" }]} value={tab} onChange={setTab} />
+      <TourTarget id="wallet-tabs">
+        <Segmented<Tab> options={[{ value: "accounts", label: "Contas" }, { value: "cards", label: "Cartões" }]} value={tab} onChange={setTab} />
+      </TourTarget>
     </View>
   );
 

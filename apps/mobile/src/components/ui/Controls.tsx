@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Switch, View, type StyleProp, type ViewStyle } f
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Icon } from "../Icon";
+import { smooth, useHover } from "./hover";
 import { Text } from "./Text";
 
 /** Pílula selecionável (filtros, formas de pagamento...). */
@@ -20,13 +21,19 @@ export function Chip({
   color?: string | null;
 }) {
   const { colors, radius } = useTheme();
+  const { hovered, hoverProps } = useHover();
   const tint = color ?? colors.primary;
+  // Texto sobre o chip selecionado: a cor própria da categoria usa branco; sem cor, o texto próprio da cor principal do tema.
+  const onTint = color ? "#FFFFFF" : colors.onPrimary;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}
+      aria-pressed={!!selected}
       onPress={onPress}
+      {...hoverProps}
       style={{
+        ...smooth,
         flexDirection: "row",
         alignItems: "center",
         gap: 6,
@@ -35,11 +42,11 @@ export function Chip({
         borderRadius: radius.pill,
         backgroundColor: selected ? tint : colors.surfaceAlt,
         borderWidth: 1,
-        borderColor: selected ? tint : colors.border,
+        borderColor: selected ? tint : hovered ? colors.accent : colors.border,
       }}
     >
-      {icon ? <Icon name={icon} size={16} color={selected ? "#FFFFFF" : (color ?? colors.textMuted)} /> : null}
-      <Text variant="bodySm" weight="600" style={{ color: selected ? "#FFFFFF" : colors.text }}>
+      {icon ? <Icon name={icon} size={16} color={selected ? onTint : (color ?? colors.textMuted)} /> : null}
+      <Text variant="bodySm" weight="600" style={{ color: selected ? onTint : colors.text }}>
         {label}
       </Text>
     </Pressable>
@@ -57,36 +64,43 @@ export function ChipRow({ children, style }: { children: React.ReactNode; style?
 
 export type SegmentOption<T extends string> = { value: T; label: string; tone?: "positive" | "negative" | "primary" };
 
-/** Controle segmentado (ex.: Despesa | Receita | Transferência). */
+/** Controle segmentado (ex.: Despesa | Receita | Transferência). A opção selecionada usa a cor de destaque do tema. */
 export function Segmented<T extends string>({ options, value, onChange }: { options: SegmentOption<T>[]; value: T; onChange: (v: T) => void }) {
   const { colors, radius } = useTheme();
   return (
     <View style={{ flexDirection: "row", backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 4, gap: 4 }}>
-      {options.map((o) => {
-        const active = o.value === value;
-        const tint = o.tone === "positive" ? colors.positive : o.tone === "negative" ? colors.negative : colors.primary;
-        return (
-          <Pressable
-            key={o.value}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            onPress={() => onChange(o.value)}
-            style={{
-              flex: 1,
-              height: 40,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: radius.md - 4,
-              backgroundColor: active ? colors.surface : "transparent",
-            }}
-          >
-            <Text variant="bodySm" weight="600" style={{ color: active ? tint : colors.textMuted }}>
-              {o.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+      {options.map((o) => (
+        <SegmentItem key={o.value} option={o} active={o.value === value} onPress={() => onChange(o.value)} />
+      ))}
     </View>
+  );
+}
+
+function SegmentItem<T extends string>({ option: o, active, onPress }: { option: SegmentOption<T>; active: boolean; onPress: () => void }) {
+  const { colors, radius } = useTheme();
+  const { hovered, hoverProps } = useHover();
+  const tint = o.tone === "positive" ? colors.positive : o.tone === "negative" ? colors.negative : colors.accent;
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      aria-selected={active}
+      onPress={onPress}
+      {...hoverProps}
+      style={{
+        flex: 1,
+        height: 40,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: radius.md - 4,
+        backgroundColor: active ? colors.surface : hovered ? colors.border : "transparent",
+        ...smooth,
+      }}
+    >
+      <Text variant="bodySm" weight="600" style={{ color: active ? tint : colors.textMuted }}>
+        {o.label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -104,7 +118,7 @@ export function ProgressBar({ value, color, height = 8, track }: { value: number
       accessibilityValue={{ min: 0, max: 100, now: Math.round(Math.min(100, value)) }}
       style={{ height, borderRadius: height / 2, backgroundColor: track ?? colors.surfaceAlt, overflow: "hidden" }}
     >
-      <Animated.View style={[{ height: "100%", borderRadius: height / 2, backgroundColor: color ?? colors.primary }, fill]} />
+      <Animated.View style={[{ height: "100%", borderRadius: height / 2, backgroundColor: color ?? colors.accent }, fill]} />
     </View>
   );
 }

@@ -16,6 +16,10 @@ export type Palette = {
   primaryPressed: string;
   onPrimary: string;
   primarySoft: string;
+  /** Cor de destaque (itens selecionados, links, progresso, foco). Nos temas Claro e Escuro é a própria cor principal. */
+  accent: string;
+  accentSoft: string;
+  onAccent: string;
   positive: string;
   positiveSoft: string;
   negative: string;
@@ -38,6 +42,9 @@ export const lightPalette: Palette = {
   primaryPressed: "#4338CA",
   onPrimary: "#FFFFFF",
   primarySoft: "#EEF0FF",
+  accent: "#4F46E5",
+  accentSoft: "#EEF0FF",
+  onAccent: "#FFFFFF",
   positive: "#16A34A",
   positiveSoft: "#E8F7EE",
   negative: "#E11D48",
@@ -60,6 +67,9 @@ export const darkPalette: Palette = {
   primaryPressed: "#818CF8",
   onPrimary: "#FFFFFF",
   primarySoft: "#1E2048",
+  accent: "#6366F1",
+  accentSoft: "#1E2048",
+  onAccent: "#FFFFFF",
   positive: "#34D399",
   positiveSoft: "#10281F",
   negative: "#FB7185",

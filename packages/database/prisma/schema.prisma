@@ -309,6 +309,8 @@ model Profile {
   timezone              String          @default("America/Sao_Paulo") @db.VarChar(64)
   currency              String          @default("BRL") @db.Char(3)
   theme                 ThemePreference @default(SYSTEM)
+  /// Tema escolhido no app (preset + cores personalizadas), validado por Zod na API. Nulo = vale `theme`.
+  appearance            Json?           @map("appearance")
   /// Preferências de notificação (validadas por Zod na API).
   notificationPrefs     Json            @default("{}") @map("notification_prefs")
   onboardingCompletedAt DateTime?       @map("onboarding_completed_at") @db.Timestamptz(6)

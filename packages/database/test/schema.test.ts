@@ -269,6 +269,46 @@ describe("updated_at", () => {
   });
 });
 
+describe("funções do banco", () => {
+  it("têm search_path fixo (aviso 'Function Search Path Mutable' do Supabase) e seguem funcionando", async () => {
+    const res = await db.query<{ proname: string; proconfig: string[] | null }>(`
+      SELECT p.proname, p.proconfig
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.proname IN ('app_current_user_id', 'set_updated_at')
+      ORDER BY p.proname
+    `);
+    expect(res.rows.map((r) => r.proname)).toEqual(["app_current_user_id", "set_updated_at"]);
+    for (const r of res.rows) expect(r.proconfig).toContain('search_path=""');
+
+    // A função do RLS continua lendo app.user_id mesmo com o search_path vazio...
+    const a = await mk.user();
+    const seen = await asUser(a.id, (q) => q<{ id: string | null }>("SELECT app_current_user_id() AS id"));
+    expect(seen.rows[0]?.id).toBe(a.id);
+    // ...e continua falhando fechado sem usuário definido.
+    const none = await asUser(null, (q) => q<{ id: string | null }>("SELECT app_current_user_id() AS id"));
+    expect(none.rows[0]?.id).toBeNull();
+  });
+});
+
+describe("perfil: aparência", () => {
+  const inserirPerfil = (userId: string, appearance: unknown) =>
+    mk.insert("profiles", { user_id: userId, appearance: appearance === null ? null : JSON.stringify(appearance) });
+
+  it("aceita nulo e um tema pequeno, com as cores personalizadas", async () => {
+    const a = await mk.user();
+    const p = await inserirPerfil(a.id, null);
+    expect(p.appearance).toBeNull();
+    const b = await mk.user();
+    const q = await inserirPerfil(b.id, { preset: "custom", custom: { primary: "#112233", accent: "#445566", background: "#778899", surface: "#AABBCC" } });
+    expect(q.appearance.preset).toBe("custom");
+  });
+
+  it("recusa um JSON grande demais (a coluna não é depósito de dados)", async () => {
+    const u = await mk.user();
+    await expect(inserirPerfil(u.id, { preset: "dark", lixo: "x".repeat(600) })).rejects.toThrow(/ck_profiles_appearance_size/);
+  });
+});
+
 describe("exclusão de conta (LGPD)", () => {
   it("DELETE do usuário remove TODOS os dados dele, em qualquer ordem de cascata", async () => {
     const u = await mk.user();

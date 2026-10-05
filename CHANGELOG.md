@@ -11,6 +11,22 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Tutorial de primeiro uso (10 etapas).** Abre sozinho na primeira vez (depois de aceitar os termos), escurece a tela e destaca o elemento real
+  de cada assunto: saldo, botão **+**, busca e filtros das transações, período dos gráficos, abas Contas/Cartões, aba Investir, Orçamentos/Metas/
+  Recorrências, Open Finance e Configurações. Cada etapa diz o que é e **para que serve**, com "Etapa N de 10", **Próximo**, **Voltar**,
+  **Pular tutorial** e **Concluir** (que mostra uma mensagem final). Navega sozinho entre as telas, vale para celular e computador, respeita
+  "reduzir movimento" e tem teclado (setas, Esc, Tab preso no cartão) e `role="dialog"`. Fica gravado na conta (`profile.onboardingCompleted`, vale
+  em qualquer aparelho) e no aparelho (funciona sem rede), então não volta a cada login. Para rever: **Mais → Tutorial do app** ou **Configurações →
+  Ajuda**. Contas existentes que nunca concluíram o tutorial o verão uma vez.
+- **Temas e personalização** (*Mais → Configurações → Aparência*): Automático, Claro, Escuro, Azul, Roxo, Verde, Vermelho e **Personalizado**
+  (cor principal, cor de destaque, fundo e cartões, com prévia ao vivo antes de aplicar e "Restaurar cores padrão"). O app inteiro segue o tema
+  (fundos, cartões, menus, botões, bordas, textos, ícones, abas, estados de passar o mouse e selecionado) por *tokens* de cor, sem cor fixa nas
+  telas. As cores de um tema personalizado são ajustadas automaticamente para manter o contraste mínimo de leitura (WCAG: texto 4,5, botões e
+  destaques 3) e a tela avisa quando uma escolha ficaria difícil de ler. Transição suave ao trocar (desligada com "reduzir movimento").
+- **O tema fica na conta:** `PATCH /v1/me` aceita `appearance` (preset + cores, validado pelo mesmo schema Zod do app e limitado a 512 bytes no
+  banco) e a escolha volta ao entrar em outro aparelho ou depois de limpar o navegador; no aparelho continua guardada para abrir já com o tema certo.
+  Nova coluna `profiles.appearance` (migration `20261005000100_profile_appearance`).
+- Estados de passar o mouse (botões, cartões, linhas de lista, chips, abas) e `aria-checked`/`aria-selected`/`aria-pressed` nos controles de seleção.
 - **Tela própria de confirmação de e-mail** (`/confirm-email`): o link do e-mail de cadastro agora leva a ela, em vez de cair no Site URL do
   Supabase (que, por padrão, é `localhost:3000`). Mostra "E-mail confirmado!", "Link expirado ou já usado" (com pedido de novo e-mail) ou uma
   orientação quando aberta direto. Tira a sessão (que vem no fragmento da URL) da barra de endereço e **nunca exibe texto vindo da URL**. A API
@@ -54,9 +70,14 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 - **Tela de erro amigável** (`ErrorBoundary`): se uma tela quebrar, o app mostra "Algo deu errado / Tentar de novo"
   em vez de ficar em branco, e o erro é registrado.
 - Este `CHANGELOG.md`.
-- **Testes:** 432 automatizados (compartilhado 76, banco 28, app 36, API 292).
+- **Testes:** 513 automatizados (compartilhado 76, banco 31, app 83, API 323).
 
 ### Alterado
+- *Configurações → Aparência* deixou de ser um seletor de três opções: virou a tela "Tema do app" (galeria de temas com miniatura, editor do tema
+  personalizado e prévia). O antigo claro/escuro/automático continua existindo como os presets Claro, Escuro e Automático, e a escolha antiga é
+  mantida na primeira abertura depois da atualização. `profile.theme` segue sendo gravado (Claro/Escuro/Automático), para versões antigas do app.
+- Cor de destaque separada da cor principal (`accent`, `accentSoft`, `onAccent`) nos *tokens* de tema; nos temas Claro e Escuro ela é igual à
+  principal, então o visual padrão não mudou.
 - `pnpm dev:db` e `pnpm dev:api` agora explicam, em português, quando a porta já está em uso (o banco ou a API já
   estão rodando em outro terminal) e como achar o processo, em vez de falhar com `undefined`/`EADDRINUSE`.
 
@@ -74,6 +95,12 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   A CSP completa fica para depois de testar com o widget do Pluggy.
 
 ### Corrigido
+- Rótulos da barra de abas (Início, Transações...) ficavam cortados pela metade: a barra tinha 58 px e o ícone, o rótulo e os espaços pedem 59 px
+  (na web havia ainda 6 px de respiro embaixo tirados do conteúdo). Agora têm altura suficiente.
+- Aviso do *Supabase Advisor* "Function Search Path Mutable" em `app_current_user_id()` e `set_updated_at()`: a migration
+  `20261005000200_function_search_path` fixa `search_path = ''` nas duas (elas só usam funções internas do Postgres, que não dependem do `search_path`). Teste novo confere que as políticas de
+  RLS continuam funcionando.
+- Ícones de erro, de seletor de data e outros cantos do app usavam cinza/branco fixos, que não acompanhariam um tema; passaram a usar os *tokens*.
 - Falhas do Supabase Auth eram todas "Serviço de autenticação indisponível", sem pista do motivo. Agora: falha ao enviar e-mail (SMTP) vira
   `502 EMAIL_SEND_FAILED`; o erro genérico passa a levar `details.upstreamStatus`/`upstreamCode` (sem texto livre do Supabase) para o log, e
   "sem resposta" (rede, tempo esgotado) é `upstreamCode: network_error`. O guia diz onde olhar (Supabase → Logs → Auth).

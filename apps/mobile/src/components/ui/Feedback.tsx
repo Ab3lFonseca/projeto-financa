@@ -57,9 +57,10 @@ export function EmptyState({ icon = "layers", title, message, action, onAction }
 }
 
 export function ErrorState({ error, onRetry }: { error?: unknown; onRetry?: () => void }) {
+  const { colors } = useTheme();
   return (
     <View style={{ alignItems: "center", gap: 12, paddingVertical: 32, paddingHorizontal: 24 }}>
-      <Icon name="cloud-off" size={32} color="#9AA1B2" />
+      <Icon name="cloud-off" size={32} color={colors.textFaint} />
       <ApiErrorMessage error={error} align="center" />
       {onRetry ? <Button label="Tentar novamente" variant="secondary" onPress={onRetry} fullWidth={false} /> : null}
     </View>

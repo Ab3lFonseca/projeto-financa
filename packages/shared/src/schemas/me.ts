@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ConsentType, Plan, PushPlatform, ThemePreference, UserRole } from "../enums";
+import { appearanceSchema } from "./appearance";
 import { singleLine, timestamp } from "./common";
 
 export const notificationPrefs = z.object({
@@ -17,6 +18,8 @@ export const profileDTO = z.object({
   timezone: z.string(),
   currency: z.string(),
   theme: ThemePreference,
+  /** Tema escolhido (inclui as cores personalizadas). Nulo = nunca personalizou: vale `theme`. */
+  appearance: appearanceSchema.nullable(),
   onboardingCompleted: z.boolean(),
   notificationPrefs,
 });
@@ -36,6 +39,7 @@ export const updateProfileBody = z.strictObject({
     }, "Fuso horário inválido")
     .optional(),
   theme: ThemePreference.optional(),
+  appearance: appearanceSchema.nullable().optional(),
   onboardingCompleted: z.boolean().optional(),
   notificationPrefs: notificationPrefs.partial().optional(),
 });

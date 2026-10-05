@@ -3,6 +3,7 @@ import { ActivityIndicator, Platform, Pressable, StyleSheet, View, type StylePro
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Icon } from "../Icon";
+import { smooth, useHover } from "./hover";
 import { Text } from "./Text";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -28,12 +29,14 @@ const HEIGHT: Record<Size, number> = { sm: 38, md: 48, lg: 56 };
 export function Button({ label, onPress, variant = "primary", size = "md", loading, disabled, icon, fullWidth = true, style, testID }: ButtonProps) {
   const { colors, radius } = useTheme();
   const scale = useSharedValue(1);
+  const { hovered, hoverProps } = useHover();
   const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
+  // Com o mouse por cima (web/desktop) cada variante ganha um tom um pouco mais forte; no celular nada muda.
   const palette = {
-    primary: { bg: colors.primary, fg: colors.onPrimary },
-    secondary: { bg: colors.surfaceAlt, fg: colors.text },
-    ghost: { bg: "transparent", fg: colors.primary },
+    primary: { bg: hovered ? colors.primaryPressed : colors.primary, fg: colors.onPrimary },
+    secondary: { bg: hovered ? colors.border : colors.surfaceAlt, fg: colors.text },
+    ghost: { bg: hovered ? colors.primarySoft : "transparent", fg: colors.primary },
     danger: { bg: colors.negativeSoft, fg: colors.negative },
     dangerSolid: { bg: colors.negative, fg: "#FFFFFF" },
   }[variant];
@@ -46,6 +49,7 @@ export function Button({ label, onPress, variant = "primary", size = "md", loadi
       accessibilityLabel={label}
       accessibilityState={{ disabled: !!inactive, busy: !!loading }}
       disabled={inactive}
+      {...hoverProps}
       onPressIn={() => (scale.value = withSpring(0.97, { damping: 18, stiffness: 300 }))}
       onPressOut={() => (scale.value = withSpring(1, { damping: 18, stiffness: 300 }))}
       onPress={() => {
@@ -54,6 +58,7 @@ export function Button({ label, onPress, variant = "primary", size = "md", loadi
       }}
       style={[
         styles.base,
+        smooth,
         {
           backgroundColor: palette.bg,
           height: HEIGHT[size],
@@ -101,6 +106,7 @@ export function IconButton({
   badge?: number;
 }) {
   const { colors, radius } = useTheme();
+  const { hovered, hoverProps } = useHover();
   const fg = tone === "primary" ? colors.primary : tone === "danger" ? colors.negative : colors.text;
   return (
     <Pressable
@@ -108,13 +114,15 @@ export function IconButton({
       accessibilityLabel={label}
       hitSlop={8}
       onPress={onPress}
+      {...hoverProps}
       style={({ pressed }) => ({
         width: size,
         height: size,
         borderRadius: radius.pill,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: pressed ? colors.surfaceAlt : "transparent",
+        backgroundColor: pressed || hovered ? colors.surfaceAlt : "transparent",
+        ...smooth,
       })}
     >
       <Icon name={icon} size={22} color={fg} />

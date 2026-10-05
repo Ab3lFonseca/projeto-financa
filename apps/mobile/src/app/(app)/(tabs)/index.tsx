@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { BarChart, DonutChart, Legend, LineChart } from "@/components/charts/Charts";
 import { Fab, InsightCard, PendingSyncBanner } from "@/components/feature/Common";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { AccountTile, BudgetRow, CreditCardView, GoalCard, SummaryTile, TransactionRow } from "@/components/feature/Rows";
 import { IconButton } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/Controls";
@@ -15,6 +16,7 @@ import { capitalize, formatDateLong, formatDateShort, formatMonth, formatPct } f
 import { useDashboard, useUnreadCount } from "@/lib/hooks";
 import { usePrivacyStore } from "@/lib/privacy-store";
 import { monthShortPt } from "@app/shared";
+import { withAlpha } from "@/theme/color";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const go = (path: string) => router.push(path as never);
@@ -71,18 +73,20 @@ export default function HomeScreen() {
 
         {/* Saldo total */}
         <Reveal index={0}>
+          <TourTarget id="home-balance">
           <View style={{ borderRadius: radius.xl, backgroundColor: colors.primary, padding: 22, gap: 14, overflow: "hidden" }}>
-            <View style={{ position: "absolute", right: -40, top: -40, width: 160, height: 160, borderRadius: 80, backgroundColor: "rgba(255,255,255,0.10)" }} />
-            <View style={{ position: "absolute", right: 30, bottom: -60, width: 140, height: 140, borderRadius: 70, backgroundColor: "rgba(255,255,255,0.07)" }} />
-            <Text variant="bodySm" style={{ color: "rgba(255,255,255,0.8)" }} weight="500">
+            <View style={{ position: "absolute", right: -40, top: -40, width: 160, height: 160, borderRadius: 80, backgroundColor: withAlpha(colors.onPrimary, 0.1) }} />
+            <View style={{ position: "absolute", right: 30, bottom: -60, width: 140, height: 140, borderRadius: 70, backgroundColor: withAlpha(colors.onPrimary, 0.07) }} />
+            <Text variant="bodySm" style={{ color: withAlpha(colors.onPrimary, 0.8) }} weight="500">
               Saldo total
             </Text>
-            <Money cents={data.totalBalanceCents} variant="display" weight="700" style={{ color: "#fff" }} />
-            <Text variant="caption" style={{ color: "rgba(255,255,255,0.8)" }}>
+            <Money cents={data.totalBalanceCents} variant="display" weight="700" style={{ color: colors.onPrimary }} />
+            <Text variant="caption" style={{ color: withAlpha(colors.onPrimary, 0.8) }}>
               {capitalize(monthName)}
               {m.savingsRatePct !== null ? ` · você guardou ${formatPct(m.savingsRatePct)} do que recebeu` : ""}
             </Text>
           </View>
+          </TourTarget>
         </Reveal>
 
         {noAccounts ? (
@@ -289,7 +293,7 @@ export default function HomeScreen() {
           </Section>
         </Reveal>
       </Screen>
-      <Fab />
+      <Fab tourId="home-fab" />
     </View>
   );
 }

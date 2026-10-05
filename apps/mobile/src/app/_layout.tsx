@@ -8,6 +8,8 @@ import { useEffect } from "react";
 import { AppState, Platform, Pressable, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { TourController } from "@/components/tour/TourController";
+import { TourOverlay } from "@/components/tour/TourOverlay";
 import { ConfirmHost, ToastHost } from "@/components/ui/Feedback";
 import { AuthProvider, useAuth } from "@/lib/auth/AuthProvider";
 import { flushErrorReports } from "@/lib/diagnostics";
@@ -100,7 +102,10 @@ function Shell() {
       <Background />
       <AppLockGate>
         <Slot />
+        <TourController />
       </AppLockGate>
+      {/* Abaixo do bloqueio por biometria (z 2000) e dos avisos (z 1000): o tutorial nunca cobre um nem o outro. */}
+      <TourOverlay />
       <ToastHost />
       <ConfirmHost />
     </>

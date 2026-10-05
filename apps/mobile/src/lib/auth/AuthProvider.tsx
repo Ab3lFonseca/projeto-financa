@@ -40,16 +40,16 @@ async function applySession(s: Session) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
   const [me, setMe] = useState<Me | null>(null);
-  const setThemeMode = useThemeStore((s) => s.setMode);
+  const adoptTheme = useThemeStore((s) => s.adoptProfile);
 
   const adoptMe = useCallback(
     (next: Me) => {
       setMe(next);
       setStatus("signedIn");
-      setThemeMode(next.profile.theme === "DARK" ? "dark" : next.profile.theme === "LIGHT" ? "light" : "system");
+      adoptTheme(next.profile);
       void AsyncStorage.setItem(ME_CACHE_KEY, JSON.stringify(next));
     },
-    [setThemeMode],
+    [adoptTheme],
   );
 
   const wipeLocal = useCallback(async () => {

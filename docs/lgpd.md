@@ -8,7 +8,7 @@
 | Dado | Finalidade | Onde fica |
 |---|---|---|
 | E-mail e senha | Autenticação | Supabase Auth (a senha nunca passa pelo nosso banco) |
-| Nome de exibição, fuso, tema, preferências | Personalização | `profiles` |
+| Nome de exibição, fuso, tema (preset e até 4 cores escolhidas), preferências, "tutorial concluído" | Personalização | `profiles` |
 | Contas, cartões, lançamentos, categorias, orçamentos, metas, recorrências | Função principal do app (informados pelo usuário) | tabelas com `user_id` |
 | Consentimentos | Prova de aceite (versão + data + hash do IP) | `consents` |
 | Token de push, nome do aparelho | Avisos | `push_tokens` |

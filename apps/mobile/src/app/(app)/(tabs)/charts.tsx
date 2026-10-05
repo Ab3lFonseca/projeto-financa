@@ -5,6 +5,7 @@ import { BarChart, DonutChart, Legend, LineChart } from "@/components/charts/Cha
 import { UpsellCard } from "@/components/feature/Common";
 import { Button } from "@/components/ui/Button";
 import { Chip, ChipRow, Segmented } from "@/components/ui/Controls";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { DateField } from "@/components/ui/DateField";
 import { EmptyState, Skeleton } from "@/components/ui/Feedback";
 import { Card, Divider, IconBadge, ListRow, Reveal, Row, Screen, Section } from "@/components/ui/Layout";
@@ -87,11 +88,13 @@ export default function ChartsScreen() {
   const header = (
     <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 12 }}>
       <Text variant="title">Gráficos</Text>
-      <ChipRow>
-        {RANGES.map((r) => (
-          <Chip key={r.value} label={r.label} icon={!advanced && !FREE_RANGES.includes(r.value) ? "lock" : undefined} selected={range === r.value} onPress={() => choose(r.value)} />
-        ))}
-      </ChipRow>
+      <TourTarget id="charts-range">
+        <ChipRow>
+          {RANGES.map((r) => (
+            <Chip key={r.value} label={r.label} icon={!advanced && !FREE_RANGES.includes(r.value) ? "lock" : undefined} selected={range === r.value} onPress={() => choose(r.value)} />
+          ))}
+        </ChipRow>
+      </TourTarget>
     </View>
   );
 

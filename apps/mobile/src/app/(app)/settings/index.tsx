@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { ShortcutRow } from "@/components/feature/Common";
 import { Button } from "@/components/ui/Button";
-import { Segmented, SwitchRow } from "@/components/ui/Controls";
+import { SwitchRow } from "@/components/ui/Controls";
 import { TextField } from "@/components/ui/Inputs";
 import { Card, Divider, Screen, ScreenHeader, Section } from "@/components/ui/Layout";
 import { Text } from "@/components/ui/Text";
@@ -12,8 +12,10 @@ import { useAuth, useMe } from "@/lib/auth/AuthProvider";
 import { useApiMutation } from "@/lib/hooks";
 import { biometricsAvailable, useLockSettings } from "@/lib/lock";
 import { registerForPush } from "@/lib/push";
+import { useTourStore } from "@/lib/tour/store";
 import { toast } from "@/lib/ui-store";
-import { useThemeStore, type ThemeMode } from "@/theme/ThemeProvider";
+import { THEME_META } from "@/theme/presets";
+import { useTheme, useThemeStore } from "@/theme/ThemeProvider";
 
 const go = (p: string) => router.push(p as never);
 
@@ -27,8 +29,9 @@ const PREFS: { key: "billsDue" | "invoicesDue" | "budgets" | "goals"; title: str
 export default function SettingsScreen() {
   const me = useMe();
   const { refreshMe } = useAuth();
-  const mode = useThemeStore((s) => s.mode);
-  const setMode = useThemeStore((s) => s.setMode);
+  const { colors } = useTheme();
+  const preset = useThemeStore((s) => s.preset);
+  const themeMeta = THEME_META.find((t) => t.id === preset) ?? THEME_META[0]!;
   const lock = useLockSettings();
   const [bioAvailable, setBioAvailable] = useState(false);
   const [name, setName] = useState(me.profile.displayName ?? "");
@@ -45,11 +48,6 @@ export default function SettingsScreen() {
     success: "Nome atualizado",
     onSuccess: () => void refreshMe(),
   });
-
-  const changeTheme = (m: ThemeMode) => {
-    setMode(m);
-    update.mutate({ theme: m === "dark" ? "DARK" : m === "light" ? "LIGHT" : "SYSTEM" });
-  };
 
   const prefs = me.profile.notificationPrefs;
   const nameChanged = name.trim() !== (me.profile.displayName ?? "");
@@ -70,7 +68,25 @@ export default function SettingsScreen() {
       </Section>
 
       <Section title="Aparência">
-        <Segmented<ThemeMode> options={[{ value: "system", label: "Sistema" }, { value: "light", label: "Claro" }, { value: "dark", label: "Escuro" }]} value={mode} onChange={changeTheme} />
+        <Card style={{ paddingVertical: 4 }}>
+          <ShortcutRow icon="palette" title="Tema do app" subtitle={`${themeMeta.emoji} ${themeMeta.label} · cores, modo escuro e personalização`} onPress={() => go("/settings/appearance")} color={colors.accent} />
+        </Card>
+      </Section>
+
+      <Section title="Ajuda">
+        <Card style={{ paddingVertical: 4 }}>
+          <ShortcutRow
+            icon="graduation-cap"
+            title="Tutorial do app"
+            subtitle="Veja de novo o passo a passo das funções"
+            onPress={() => {
+              // O tutorial navega entre as abas: volta ao início para ele começar do começo.
+              router.replace("/" as never);
+              useTourStore.getState().start("manual");
+            }}
+            color={colors.accent}
+          />
+        </Card>
       </Section>
 
       <Section title="Notificações">

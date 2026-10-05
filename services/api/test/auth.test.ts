@@ -261,6 +261,60 @@ describe("PATCH /v1/me", () => {
     expect((await u.patch("/v1/me", { timezone: "Marte/Olympus" })).status).toBe(422);
     expect((await u.patch("/v1/me", { role: "ADMIN" })).status).toBe(422);
   });
+
+  describe("aparência (tema da conta)", () => {
+    const CUSTOM = { primary: "#112233", accent: "#445566", background: "#0A0B10", surface: "#14161E" };
+
+    it("começa nula, guarda o tema (inclusive as cores personalizadas) e devolve no perfil", async () => {
+      const u = await env.newUser();
+      expect((await u.get("/v1/me")).body.profile.appearance).toBeNull();
+
+      const blue = await u.patch("/v1/me", { theme: "DARK", appearance: { preset: "blue" } });
+      expect(blue.status).toBe(200);
+      expect(blue.body.profile.appearance).toEqual({ preset: "blue" });
+      expect(blue.body.profile.theme).toBe("DARK");
+
+      const custom = await u.patch("/v1/me", { appearance: { preset: "custom", custom: CUSTOM } });
+      expect(custom.body.profile.appearance).toEqual({ preset: "custom", custom: CUSTOM });
+      // as cores ficam guardadas mesmo ao voltar para um tema pronto
+      const back = await u.patch("/v1/me", { appearance: { preset: "green", custom: CUSTOM } });
+      expect(back.body.profile.appearance).toEqual({ preset: "green", custom: CUSTOM });
+      // e persistem para quem entrar de novo
+      expect((await u.get("/v1/me")).body.profile.appearance).toEqual({ preset: "green", custom: CUSTOM });
+    });
+
+    it("null restaura o padrão e o tema de um usuário não vaza para outro", async () => {
+      const a = await env.newUser();
+      const b = await env.newUser();
+      await a.patch("/v1/me", { appearance: { preset: "red" } });
+      expect((await b.get("/v1/me")).body.profile.appearance).toBeNull();
+      expect((await a.patch("/v1/me", { appearance: null })).body.profile.appearance).toBeNull();
+    });
+
+    it("recusa tema inválido: preset desconhecido, cor malformada, custom ausente ou campos extras", async () => {
+      const u = await env.newUser();
+      const bad = [
+        { preset: "neon" },
+        { preset: "custom" }, // sem as cores
+        { preset: "custom", custom: { ...CUSTOM, primary: "vermelho" } },
+        { preset: "custom", custom: { ...CUSTOM, primary: "#12345" } },
+        { preset: "custom", custom: { primary: "#112233" } },
+        { preset: "dark", custom: { ...CUSTOM, extra: "#000000" } },
+        { preset: "dark", script: "<script>" },
+      ];
+      for (const appearance of bad) expect((await u.patch("/v1/me", { appearance })).status, JSON.stringify(appearance)).toBe(422);
+      expect((await u.get("/v1/me")).body.profile.appearance).toBeNull();
+    });
+
+    it("um valor inválido gravado direto no banco não quebra o perfil (vira nulo)", async () => {
+      const u = await env.newUser();
+      await u.get("/v1/me");
+      await env.prisma.profile.update({ where: { userId: u.id }, data: { appearance: { preset: "neon", lixo: true } } });
+      const me = await u.get("/v1/me");
+      expect(me.status).toBe(200);
+      expect(me.body.profile.appearance).toBeNull();
+    });
+  });
 });
 
 describe("POST /v1/me/change-password", () => {

@@ -7,6 +7,7 @@ import { Money } from "@/components/ui/Money";
 import { Text } from "@/components/ui/Text";
 import type { Account, BankOverview, Budget, Card as CardModel, Goal, Transaction } from "@/lib/api/endpoints";
 import { formatAgo, formatBRL, formatDateShort, formatPct } from "@/lib/format";
+import { withAlpha } from "@/theme/color";
 import { useTheme } from "@/theme/ThemeProvider";
 
 /** Linha de lançamento: ícone da categoria, descrição, origem e valor (verde/vermelho). */
@@ -91,6 +92,8 @@ const ACCOUNT_LABEL: Record<Account["type"], string> = {
 export function CreditCardView({ card, onPress, bank }: { card: CardModel; onPress?: () => void; bank?: BankOverview["cards"][number] }) {
   const { colors, radius } = useTheme();
   const tint = card.color ?? colors.primary;
+  // Texto sobre o cartão: branco nas cores escolhidas pelo usuário (como sempre foi); com a cor principal do tema, o texto próprio dela.
+  const fg = card.color ? "#FFFFFF" : colors.onPrimary;
   // Com Open Finance, os números do banco são a verdade (limite, disponível, fatura e vencimento).
   const limit = bank?.limitCents ?? card.limitCents;
   const available = bank?.availableCents ?? card.availableCents;
@@ -103,34 +106,34 @@ export function CreditCardView({ card, onPress, bank }: { card: CardModel; onPre
       <View style={{ borderRadius: radius.lg, backgroundColor: tint, padding: 18, gap: 18 }}>
         <Row style={{ justifyContent: "space-between" }}>
           <View style={{ flex: 1 }}>
-            <Text weight="700" style={{ color: "#fff" }} numberOfLines={1}>
+            <Text weight="700" style={{ color: fg }} numberOfLines={1}>
               {card.name}
             </Text>
-            <Text variant="caption" style={{ color: "rgba(255,255,255,0.8)" }}>
+            <Text variant="caption" style={{ color: withAlpha(fg, 0.8) }}>
               {card.bank?.shortName ?? card.brand} {card.last4 ? `• • • • ${card.last4}` : ""}
             </Text>
           </View>
-          <Icon name="credit-card" size={26} color="rgba(255,255,255,0.9)" />
+          <Icon name="credit-card" size={26} color={withAlpha(fg, 0.9)} />
         </Row>
         <View style={{ gap: 6 }}>
           <Row style={{ justifyContent: "space-between" }}>
-            <Text variant="caption" style={{ color: "rgba(255,255,255,0.8)" }}>
+            <Text variant="caption" style={{ color: withAlpha(fg, 0.8) }}>
               Limite disponível
             </Text>
-            <Money cents={available} variant="bodySm" weight="700" style={{ color: "#fff" }} />
+            <Money cents={available} variant="bodySm" weight="700" style={{ color: fg }} />
           </Row>
-          <ProgressBar value={usedPct} color="#FFFFFF" track="rgba(255,255,255,0.3)" height={6} />
+          <ProgressBar value={usedPct} color={fg} track={withAlpha(fg, 0.3)} height={6} />
           <Row style={{ justifyContent: "space-between" }}>
-            <Text variant="caption" style={{ color: "rgba(255,255,255,0.8)" }}>
+            <Text variant="caption" style={{ color: withAlpha(fg, 0.8) }}>
               {invoiceDue ? `Fatura atual · vence ${formatDateShort(invoiceDue)}` : "Sem fatura em aberto"}
             </Text>
-            <Money cents={invoiceTotal} variant="bodySm" weight="700" style={{ color: "#fff" }} />
+            <Money cents={invoiceTotal} variant="bodySm" weight="700" style={{ color: fg }} />
           </Row>
         </View>
         {bank ? (
           <Row gap={6}>
-            <Icon name="link" size={12} color="rgba(255,255,255,0.85)" />
-            <Text variant="caption" style={{ color: "rgba(255,255,255,0.85)" }}>
+            <Icon name="link" size={12} color={withAlpha(fg, 0.85)} />
+            <Text variant="caption" style={{ color: withAlpha(fg, 0.85) }}>
               Dados do banco · atualizado {formatAgo(bank.updatedAt)}
             </Text>
           </Row>

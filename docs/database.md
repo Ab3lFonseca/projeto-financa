@@ -162,9 +162,15 @@ Em aberto: por quanto tempo manter o **registro de consentimento** após a exclu
 ## 7. Fluxo de migrations
 
 ```
-20261004000000_init                  ← estrutura, GERADA do schema.prisma
-20261004000100_constraints_and_rls   ← SQL manual (CHECK, triggers, RLS, papéis)
+20261004000000_init                              ← estrutura, GERADA do schema.prisma
+20261004000100_constraints_and_rls               ← SQL manual (CHECK, triggers, RLS, papéis)
+20261004000200_open_finance_accounts             ← Open Finance: contas e importação automática
+20261004000300_open_finance_investments_cards    ← Open Finance: investimentos e dados de cartão
+20261005000100_profile_appearance                ← profiles.appearance (tema da conta, jsonb ≤ 512 bytes)
+20261005000200_function_search_path              ← search_path = '' em app_current_user_id() e set_updated_at()
 ```
+
+Ambiente que já existe (Supabase): depois de atualizar o código, rode `pnpm db:deploy` da sua máquina para aplicar as duas últimas.
 
 1. Primeira vez (sem banco necessário): `pnpm --filter @app/database migrate:init`
 2. Aplicar: `pnpm db:deploy` (produção) ou `pnpm db:migrate` (desenvolvimento).

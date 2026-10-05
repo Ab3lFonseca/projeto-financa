@@ -1,12 +1,14 @@
 import { router } from "expo-router";
 import { View } from "react-native";
 import { ShortcutRow } from "@/components/feature/Common";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { Badge } from "@/components/ui/Controls";
 import { Card, Divider, Screen } from "@/components/ui/Layout";
 import { Text } from "@/components/ui/Text";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useUnreadCount } from "@/lib/hooks";
 import { useOutbox } from "@/lib/offline/outbox";
+import { useTourStore } from "@/lib/tour/store";
 import { confirmDialog } from "@/lib/ui-store";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -38,30 +40,38 @@ export default function MoreScreen() {
         {me?.entitlements.plan === "PREMIUM" ? <Badge label={me.entitlements.billingEnforced ? "Premium" : "Beta Premium"} tone="primary" /> : <Badge label="Gratuito" />}
       </Card>
 
-      <Card style={{ paddingVertical: 4 }}>
-        <ShortcutRow icon="target" title="Orçamentos" subtitle="Limite por categoria no mês" onPress={() => go("/budgets")} color="#F59E0B" />
-        <Divider inset={52} />
-        <ShortcutRow icon="trophy" title="Metas" subtitle="Acompanhe seus objetivos" onPress={() => go("/goals")} color="#22C55E" />
-        <Divider inset={52} />
-        <ShortcutRow icon="repeat" title="Recorrências" subtitle="Contas e receitas que se repetem" onPress={() => go("/recurring")} color="#6366F1" />
-        <Divider inset={52} />
-        <ShortcutRow icon="tag" title="Categorias" subtitle="Crie e personalize" onPress={() => go("/categories")} color="#EC4899" />
-      </Card>
+      <TourTarget id="more-planning">
+        <Card style={{ paddingVertical: 4 }}>
+          <ShortcutRow icon="target" title="Orçamentos" subtitle="Limite por categoria no mês" onPress={() => go("/budgets")} color="#F59E0B" />
+          <Divider inset={52} />
+          <ShortcutRow icon="trophy" title="Metas" subtitle="Acompanhe seus objetivos" onPress={() => go("/goals")} color="#22C55E" />
+          <Divider inset={52} />
+          <ShortcutRow icon="repeat" title="Recorrências" subtitle="Contas e receitas que se repetem" onPress={() => go("/recurring")} color="#6366F1" />
+          <Divider inset={52} />
+          <ShortcutRow icon="tag" title="Categorias" subtitle="Crie e personalize" onPress={() => go("/categories")} color="#EC4899" />
+        </Card>
+      </TourTarget>
+
+      <TourTarget id="more-bank">
+        <Card style={{ paddingVertical: 4 }}>
+          <ShortcutRow icon="bell" title="Notificações" subtitle="Vencimentos, orçamentos e metas" onPress={() => go("/notifications")} badge={unread ? <Badge label={String(unread)} tone="negative" /> : undefined} color="#EF4444" />
+          {pending > 0 ? (
+            <>
+              <Divider inset={52} />
+              <ShortcutRow icon="cloud-off" title="Pendências de sincronização" subtitle={`${pending} lançamento(s) aguardando envio`} onPress={() => go("/settings/sync")} color="#F59E0B" />
+            </>
+          ) : null}
+          <Divider inset={52} />
+          <ShortcutRow icon="link" title="Open Finance" subtitle="Conecte seus bancos" onPress={() => go("/open-finance")} color="#0EA5E9" />
+        </Card>
+      </TourTarget>
 
       <Card style={{ paddingVertical: 4 }}>
-        <ShortcutRow icon="bell" title="Notificações" subtitle="Vencimentos, orçamentos e metas" onPress={() => go("/notifications")} badge={unread ? <Badge label={String(unread)} tone="negative" /> : undefined} color="#EF4444" />
-        {pending > 0 ? (
-          <>
-            <Divider inset={52} />
-            <ShortcutRow icon="cloud-off" title="Pendências de sincronização" subtitle={`${pending} lançamento(s) aguardando envio`} onPress={() => go("/settings/sync")} color="#F59E0B" />
-          </>
-        ) : null}
-        <Divider inset={52} />
-        <ShortcutRow icon="link" title="Open Finance" subtitle="Conecte seus bancos" onPress={() => go("/open-finance")} color="#0EA5E9" />
-      </Card>
-
-      <Card style={{ paddingVertical: 4 }}>
-        <ShortcutRow icon="settings" title="Configurações" subtitle="Perfil, aparência e segurança" onPress={() => go("/settings")} color="#64748B" />
+        <TourTarget id="more-settings">
+          <ShortcutRow icon="settings" title="Configurações" subtitle="Perfil, aparência e segurança" onPress={() => go("/settings")} color="#64748B" />
+          <Divider inset={52} />
+          <ShortcutRow icon="graduation-cap" title="Tutorial do app" subtitle="Reveja o que o Finança faz, passo a passo" onPress={() => useTourStore.getState().start("manual")} color={colors.accent} />
+        </TourTarget>
         <Divider inset={52} />
         <ShortcutRow icon="shield-check" title="Privacidade e dados" subtitle="Consentimentos, exportar e excluir" onPress={() => go("/settings/privacy")} color="#14B8A6" />
         <Divider inset={52} />

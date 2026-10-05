@@ -108,10 +108,11 @@ function addDaysISO(iso: ISODate, days: number): ISODate {
 
 /** Campo de data: mostra "Hoje"/"Ontem"/"4 out 2026" e abre o calendário. */
 export function DateField({ label, value, onChange, today, error, min, max }: { label?: string; value: ISODate; onChange: (d: ISODate) => void; today: ISODate; error?: string | null; min?: ISODate; max?: ISODate }) {
+  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
   return (
     <>
-      <SelectField label={label} value={formatDateRelative(value, today)} onPress={() => setOpen(true)} error={error} left={<Icon name="calendar" size={18} color="#9AA1B2" />} />
+      <SelectField label={label} value={formatDateRelative(value, today)} onPress={() => setOpen(true)} error={error} left={<Icon name="calendar" size={18} color={colors.textFaint} />} />
       <DatePickerSheet visible={open} value={value} today={today} onSelect={onChange} onClose={() => setOpen(false)} title={label ?? "Escolher data"} min={min} max={max} />
     </>
   );

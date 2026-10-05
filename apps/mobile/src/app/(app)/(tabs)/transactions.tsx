@@ -5,6 +5,7 @@ import { SectionList, View } from "react-native";
 import { Fab, PendingSyncBanner } from "@/components/feature/Common";
 import { TransactionRow } from "@/components/feature/Rows";
 import { IconButton } from "@/components/ui/Button";
+import { TourTarget } from "@/components/tour/TourTarget";
 import { Chip, ChipRow, Segmented } from "@/components/ui/Controls";
 import { DateField } from "@/components/ui/DateField";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/Feedback";
@@ -79,8 +80,10 @@ export default function TransactionsScreen() {
         <Text variant="title" style={{ flex: 1 }}>
           Transações
         </Text>
-        <IconButton icon="search" label="Buscar" tone={searchOpen || debouncedQ ? "primary" : "default"} onPress={() => setSearchOpen((s) => !s)} />
-        <IconButton icon="list-filter" label="Filtros" tone={activeFilters ? "primary" : "default"} badge={activeFilters || undefined} onPress={() => setFilterOpen(true)} />
+        <TourTarget id="tx-tools" style={{ flexDirection: "row", gap: 4 }}>
+          <IconButton icon="search" label="Buscar" tone={searchOpen || debouncedQ ? "primary" : "default"} onPress={() => setSearchOpen((s) => !s)} />
+          <IconButton icon="list-filter" label="Filtros" tone={activeFilters ? "primary" : "default"} badge={activeFilters || undefined} onPress={() => setFilterOpen(true)} />
+        </TourTarget>
       </View>
       {searchOpen ? (
         <View style={{ paddingHorizontal: 16 }}>

@@ -49,7 +49,7 @@ export function TextField({ label, error, helper, style, secure, left, right, mu
           borderRadius: radius.md,
           backgroundColor: colors.surface,
           borderWidth: 1.5,
-          borderColor: error ? colors.negative : focused ? colors.primary : colors.border,
+          borderColor: error ? colors.negative : focused ? colors.accent : colors.border,
         }}
       >
         {left}
@@ -127,7 +127,7 @@ export function MoneyField({
           borderRadius: radius.md,
           backgroundColor: large ? "transparent" : colors.surface,
           borderWidth: large ? 0 : 1.5,
-          borderColor: error ? colors.negative : focused ? colors.primary : colors.border,
+          borderColor: error ? colors.negative : focused ? colors.accent : colors.border,
         }}
       >
         {allowNegative ? (
