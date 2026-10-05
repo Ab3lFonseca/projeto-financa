@@ -122,10 +122,11 @@ export class SupabaseAuthProvider implements AuthProvider {
     };
   }
 
-  async signUp(input: { email: string; password: string; metadata: Record<string, unknown> }): Promise<SignUpResult> {
+  async signUp(input: { email: string; password: string; metadata: Record<string, unknown>; redirectTo?: string }): Promise<SignUpResult> {
     try {
       const raw = await this.request<Record<string, any>>("POST", "/signup", {
         body: { email: input.email, password: input.password, data: input.metadata },
+        query: input.redirectTo ? { redirect_to: input.redirectTo } : undefined,
       });
       if (raw.access_token) {
         return { userId: String(raw.user?.id ?? ""), session: this.toSession(raw), requiresEmailVerification: false };
@@ -167,8 +168,8 @@ export class SupabaseAuthProvider implements AuthProvider {
     });
   }
 
-  async resendVerification(email: string): Promise<void> {
-    await this.request("POST", "/resend", { body: { type: "signup", email } });
+  async resendVerification(email: string, redirectTo?: string): Promise<void> {
+    await this.request("POST", "/resend", { body: { type: "signup", email }, query: redirectTo ? { redirect_to: redirectTo } : undefined });
   }
 
   async updatePassword(accessToken: string, newPassword: string): Promise<void> {

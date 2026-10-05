@@ -22,6 +22,8 @@ const STRICT = (max: number) => ({ rateLimit: { max, timeWindow: "1 minute" } })
  */
 export const authRoutes: FastifyPluginAsyncZod = async (app) => {
   const { authProvider: provider, config } = app;
+  // Destino do link do e-mail de confirmação: SEMPRE vem da configuração (nunca do cliente), conforme a plataforma do app.
+  const confirmRedirect = (platform?: "native" | "web") => (platform === "web" ? config.EMAIL_CONFIRM_WEB_REDIRECT_URL : config.EMAIL_CONFIRM_REDIRECT_URL);
 
   app.post(
     "/register",
@@ -32,6 +34,7 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
     async (req, reply) => {
       const b = req.body;
       const result = await provider.signUp({
+        redirectTo: confirmRedirect(b.platform),
         email: b.email,
         password: b.password,
         // Os aceites viajam como metadados do usuário e viram registros de consentimento
@@ -119,7 +122,7 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
     { config: STRICT(3), schema: { tags: ["auth"], security: [], body: resendVerificationBody, response: { 200: okResponse } } },
     async (req) => {
       try {
-        await provider.resendVerification(req.body.email);
+        await provider.resendVerification(req.body.email, confirmRedirect(req.body.platform));
       } catch (err) {
         if (err instanceof AppError && (err.status === 429 || err.status >= 500)) throw err;
       }

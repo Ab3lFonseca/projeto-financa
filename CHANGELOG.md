@@ -11,6 +11,11 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Tela própria de confirmação de e-mail** (`/confirm-email`): o link do e-mail de cadastro agora leva a ela, em vez de cair no Site URL do
+  Supabase (que, por padrão, é `localhost:3000`). Mostra "E-mail confirmado!", "Link expirado ou já usado" (com pedido de novo e-mail) ou uma
+  orientação quando aberta direto. Tira a sessão (que vem no fragmento da URL) da barra de endereço e **nunca exibe texto vindo da URL**. A API
+  passa `redirect_to` ao Supabase a partir de `EMAIL_CONFIRM_REDIRECT_URL` (celular) e `EMAIL_CONFIRM_WEB_REDIRECT_URL` (web), nunca do cliente; o
+  cadastro e o reenvio aceitam `platform` (`native`|`web`). Os endereços precisam estar em *Redirect URLs* no Supabase.
 - **Open Finance puxa tudo sozinho.** Ao conectar um banco (opção "Importar tudo automaticamente", ligada por padrão),
   o app cria a conta e o cartão, importa as transações dos últimos 90 dias, ajusta o saldo inicial para bater com o
   do banco e passa a se atualizar uma vez ao dia, sem você revisar nada. Desligando a opção, volta o modo manual

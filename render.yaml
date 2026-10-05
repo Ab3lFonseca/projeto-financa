@@ -52,6 +52,9 @@ services:
         sync: false
       - key: CORS_ORIGINS # endereço do app web abaixo, ex.: https://financa-web.onrender.com
         sync: false
+      # Para onde o link do e-mail de confirmação leva: a tela /confirm-email do site. Também precisa estar em "Redirect URLs" no Supabase.
+      - key: EMAIL_CONFIRM_WEB_REDIRECT_URL # ex.: https://financa-web.onrender.com/confirm-email
+        sync: false
 
   # ---------------------------------------------------------------- App web (Expo, site estático)
   - type: web

@@ -31,6 +31,23 @@ describe("erros do Supabase Auth", () => {
   });
 });
 
+describe("destino do link de confirmação no Supabase", () => {
+  it("cadastro e reenvio mandam redirect_to na URL (e não mandam quando não há destino)", async () => {
+    const { p, calls } = provider();
+    await p.signUp({ email: "a@b.com", password: "senhaForte123", metadata: {}, redirectTo: "https://site.exemplo.dev/confirm-email" });
+    expect(new URL(calls[0]!.url).pathname).toBe("/auth/v1/signup");
+    expect(new URL(calls[0]!.url).searchParams.get("redirect_to")).toBe("https://site.exemplo.dev/confirm-email");
+    expect(JSON.stringify(calls[0]!.body)).not.toContain("redirect"); // o destino vai na URL, não no corpo
+
+    await p.resendVerification("a@b.com", "financa://confirm-email");
+    expect(new URL(calls[1]!.url).pathname).toBe("/auth/v1/resend");
+    expect(new URL(calls[1]!.url).searchParams.get("redirect_to")).toBe("financa://confirm-email");
+
+    await p.signUp({ email: "c@d.com", password: "senhaForte123", metadata: {} });
+    expect(new URL(calls[2]!.url).searchParams.has("redirect_to")).toBe(false);
+  });
+});
+
 describe("chaves do Supabase", () => {
   it("login e cadastro usam a chave pública só no cabeçalho apikey (sem Authorization)", async () => {
     const { p, calls } = provider({ anonKey: "sb_publishable_abc" });

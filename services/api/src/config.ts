@@ -62,6 +62,13 @@ const schema = z
     JWT_AUDIENCE: z.string().default("authenticated"),
     /** Link aberto pelo e-mail de recuperação de senha (deep link do app). */
     PASSWORD_RESET_REDIRECT_URL: z.string().optional(),
+    /**
+     * Para onde o link do e-mail de CONFIRMAÇÃO de cadastro leva: a tela /confirm-email do app. Celular: deep link
+     * (financa://confirm-email); web: https://SEU-SITE/confirm-email. Precisam estar em "Redirect URLs" no Supabase,
+     * senão ele cai no Site URL. Nunca vêm do cliente (sem redirecionamento aberto).
+     */
+    EMAIL_CONFIRM_REDIRECT_URL: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().trim().min(1).optional()),
+    EMAIL_CONFIRM_WEB_REDIRECT_URL: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.url().optional()),
 
     /** Segredo para HMAC de IPs (consentimentos/auditoria). Nunca armazenamos IP em claro. */
     IP_HASH_PEPPER: z.string().min(16, "IP_HASH_PEPPER precisa de ao menos 16 caracteres").default("dev-only-pepper-change-me"),

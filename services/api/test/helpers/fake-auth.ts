@@ -65,7 +65,11 @@ export class FakeAuthProvider implements AuthProvider {
     };
   }
 
-  async signUp(input: { email: string; password: string; metadata: Record<string, unknown> }): Promise<SignUpResult> {
+  /** Destino pedido para o link do e-mail de confirmação, em cada cadastro/reenvio (para os testes conferirem). */
+  readonly confirmRedirects: Array<{ kind: "signup" | "resend"; email: string; redirectTo?: string }> = [];
+
+  async signUp(input: { email: string; password: string; metadata: Record<string, unknown>; redirectTo?: string }): Promise<SignUpResult> {
+    this.confirmRedirects.push({ kind: "signup", email: input.email, redirectTo: input.redirectTo });
     if (this.byEmail(input.email)) {
       // Igual ao provedor real: não revela que o e-mail já existe.
       return { userId: null, session: null, requiresEmailVerification: true };
@@ -104,7 +108,9 @@ export class FakeAuthProvider implements AuthProvider {
   }
 
   async requestPasswordReset(): Promise<void> {}
-  async resendVerification(): Promise<void> {}
+  async resendVerification(email?: string, redirectTo?: string): Promise<void> {
+    this.confirmRedirects.push({ kind: "resend", email: email ?? "", redirectTo });
+  }
 
   async updatePassword(accessToken: string, newPassword: string): Promise<void> {
     const { payload } = await jwtVerify(accessToken, new TextEncoder().encode(TEST_JWT_SECRET), {

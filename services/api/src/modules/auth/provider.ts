@@ -23,12 +23,13 @@ export type SignUpResult = {
 };
 
 export interface AuthProvider {
-  signUp(input: { email: string; password: string; metadata: Record<string, unknown> }): Promise<SignUpResult>;
+  /** `redirectTo`: para onde o link do e-mail de confirmação leva (precisa estar liberado no provedor). */
+  signUp(input: { email: string; password: string; metadata: Record<string, unknown>; redirectTo?: string }): Promise<SignUpResult>;
   signIn(email: string, password: string): Promise<ProviderSession>;
   refresh(refreshToken: string): Promise<ProviderSession>;
   signOut(accessToken: string, scope?: "global" | "local" | "others"): Promise<void>;
   requestPasswordReset(email: string, redirectTo?: string): Promise<void>;
-  resendVerification(email: string): Promise<void>;
+  resendVerification(email: string, redirectTo?: string): Promise<void>;
   /** Troca a senha do usuário dono do token (usado também no fluxo de recuperação). */
   updatePassword(accessToken: string, newPassword: string): Promise<void>;
   /** Remove o usuário do provedor (exclusão de conta — LGPD). */

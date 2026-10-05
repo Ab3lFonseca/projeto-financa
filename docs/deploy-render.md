@@ -48,6 +48,11 @@ Isso serve para **testar**. Para uso real e contínuo, prefira o Fly.io (ou um p
    (`https://financa-web.onrender.com`) e o mesmo endereço em **Redirect URLs**. Sem isso, o link do e-mail de confirmação aponta para
    `http://localhost:3000` (o padrão do Supabase). A conta é confirmada mesmo assim: só o redirecionamento final quebra, e você pode
    simplesmente abrir o site e entrar.
+   **Tela de confirmação própria:** o app tem a tela `/confirm-email` e a API pede ao Supabase que o link do e-mail leve até ela. Para isso:
+   (a) na **API → Environment**, `EMAIL_CONFIRM_WEB_REDIRECT_URL` = `https://financa-web.onrender.com/confirm-email` (e, para o app de celular,
+   `EMAIL_CONFIRM_REDIRECT_URL` = `financa://confirm-email`); (b) no Supabase, em **Redirect URLs**, adicione esses mesmos endereços
+   (`https://financa-web.onrender.com/confirm-email` e `financa://confirm-email`). **Se o endereço não estiver na lista do Supabase, ele ignora o pedido
+   e usa o Site URL.** A tela mostra "E-mail confirmado!", "Link expirado" (com pedido de novo e-mail) ou, aberta direto, uma orientação.
 7. Abra o site, crie a conta e confirme o e-mail (o e-mail padrão do Supabase tem limite baixo; serve para poucos testes).
 
 ### Atualizar

@@ -15,6 +15,9 @@ export const email = z
   .max(254)
   .pipe(z.email("E-mail inválido"));
 
+/** Onde o app roda: define para qual endereço o link do e-mail de confirmação leva (deep link no celular, página na web). */
+export const clientPlatform = z.enum(["native", "web"]);
+
 export const registerBody = z.strictObject({
   email,
   password,
@@ -24,6 +27,7 @@ export const registerBody = z.strictObject({
   termsVersion: z.string().min(1).max(32),
   privacyVersion: z.string().min(1).max(32),
   marketingOptIn: z.boolean().default(false),
+  platform: clientPlatform.optional(),
 });
 
 export const loginBody = z.strictObject({
@@ -34,7 +38,7 @@ export const loginBody = z.strictObject({
 
 export const refreshBody = z.strictObject({ refreshToken: z.string().min(10).max(2000) });
 export const forgotPasswordBody = z.strictObject({ email });
-export const resendVerificationBody = z.strictObject({ email });
+export const resendVerificationBody = z.strictObject({ email, platform: clientPlatform.optional() });
 export const resetPasswordBody = z.strictObject({ password });
 export const changePasswordBody = z.strictObject({
   currentPassword: z.string().min(1).max(200),

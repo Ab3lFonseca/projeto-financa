@@ -102,7 +102,9 @@ Instale as CLIs: `npm i -g eas-cli` e o `flyctl` ([fly.io/docs/flyctl/install](h
    Use um provedor (Resend, Brevo, Amazon SES, etc.) com o domínio autenticado (SPF/DKIM). Preços do provedor: confirme com ele.
    Quem tenta se cadastrar sem isso recebe `429 EMAIL_RATE_LIMITED` (limite de envio) ou `503 EMAIL_DELIVERY_RESTRICTED` (endereço não autorizado).
 4. **URL Configuration**: `Site URL` = site/página do produto; em *Redirect URLs* inclua o deep link
-   `financa://reset-password`.
+   `financa://reset-password` e as telas de confirmação de e-mail: `financa://confirm-email` (celular) e `https://SEU-SITE/confirm-email` (web).
+   A API manda o Supabase redirecionar o link do e-mail de confirmação para elas (`EMAIL_CONFIRM_REDIRECT_URL` e
+   `EMAIL_CONFIRM_WEB_REDIRECT_URL`); endereços fora dessa lista são ignorados e ele cai no Site URL.
 5. Em **Project Settings → API** copie: `Project URL` (`SUPABASE_URL`), chave **anon/publishable**
    (`SUPABASE_ANON_KEY`) e a chave **service_role** (`SUPABASE_SERVICE_ROLE_KEY` — **secreta**, só no servidor;
    é com ela que a exclusão de conta LGPD apaga o usuário no Auth). **Chaves novas × legadas:** a chave *publishable* (`sb_publishable_...`)

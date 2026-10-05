@@ -78,10 +78,12 @@ const v1 = "/v1";
 export const api = {
   auth: {
     login: (email: string, password: string) => http.post<Session>(`${v1}/auth/login`, { email, password }, { auth: false }),
+    // `platform` diz à API para onde o link do e-mail de confirmação deve levar (a tela /confirm-email do app ou do site).
     register: (body: In<typeof S.registerBody>) =>
-      http.post<Out<typeof S.registerResponse>>(`${v1}/auth/register`, body, { auth: false }),
+      http.post<Out<typeof S.registerResponse>>(`${v1}/auth/register`, { ...body, platform: Platform.OS === "web" ? "web" : "native" }, { auth: false }),
     forgotPassword: (email: string) => http.post<{ ok: true }>(`${v1}/auth/forgot-password`, { email }, { auth: false }),
-    resendVerification: (email: string) => http.post<{ ok: true }>(`${v1}/auth/resend-verification`, { email }, { auth: false }),
+    resendVerification: (email: string) =>
+      http.post<{ ok: true }>(`${v1}/auth/resend-verification`, { email, platform: Platform.OS === "web" ? "web" : "native" }, { auth: false }),
     logout: () => http.post<{ ok: true }>(`${v1}/auth/logout`),
   },
 
