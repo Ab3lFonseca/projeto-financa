@@ -78,6 +78,10 @@ seção 10 do [open-finance.md](open-finance.md).
   `pnpm install --frozen-lockfile --filter "@app/mobile..."` e `expo export --platform web` (via `npx pnpm@12.9.1`: o Render **não permite
   `npm install -g`**, que falha com `EROFS: read-only file system`); localmente ele leva ~2 min. O Node vem do `.nvmrc` (24).
 - **O site abre mas "Servidor indisponível"**: `EXPO_PUBLIC_API_URL` errado (refaça o deploy do site) ou API ainda acordando.
+  Se o console do navegador (F12) mostra chamadas para `http://localhost:3000/...` e a mensagem `[config] Este site (...) está apontando
+  para a API local`, a variável **não existia durante o build do site**: o endereço da API é gravado no app na hora do build, então
+  cadastre `EXPO_PUBLIC_API_URL` em *Environment* **deste** site (nome exato, sem aspas nem barra no final) e faça *Manual Deploy →
+  Clear build cache & deploy*. Conferido localmente: com a variável definida e o cache limpo, o endereço entra no site gerado.
 - **Erro de CORS no console do navegador**: `CORS_ORIGINS` precisa ser exatamente o endereço do site (com `https://`, sem barra no final).
 - **A API não sobe**: o log mostra qual variável falta (a API recusa produção sem `SUPABASE_*` e pepper próprio).
 - Logs: painel do serviço → *Logs*. Dentro do app: *Mais → Configurações → Diagnóstico*.

@@ -61,6 +61,8 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   consentimento no app do banco cobrir tudo o que o app mostra.
 
 ### Corrigido
+- Site publicado sem `EXPO_PUBLIC_API_URL` chamava `http://localhost:3000` e só mostrava erro de rede/CORS; agora o app registra um
+  aviso claro no console e em *Diagnóstico* (`[config] Este site ... está apontando para a API local`).
 - Publicação no Render: o `Dockerfile` da API não copiava o `tsconfig.base.json` (o build parava no `prisma generate`), e o build do site
   usava `npm install -g pnpm`, que o Render bloqueia (sistema de arquivos somente leitura); agora usa `npx pnpm@12.9.1`.
 - Exclusão de conta (LGPD) com as **chaves novas do Supabase** (`sb_secret_...`): a chave era enviada também em
