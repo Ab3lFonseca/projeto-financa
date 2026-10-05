@@ -36,7 +36,8 @@ const config: ExpoConfig = {
   },
   web: { bundler: "metro", output: "single", favicon: "./assets/favicon.png" },
   plugins: [
-    "expo-router",
+    // sitemap: false remove a rota pública /_sitemap (lista os arquivos de rota e a versão do Expo); ver src/app/+not-found.tsx.
+    ["expo-router", { sitemap: false }],
     ["expo-splash-screen", { image: "./assets/splash-icon.png", imageWidth: 160, backgroundColor: "#4F46E5" }],
     "expo-secure-store",
     "expo-sharing",

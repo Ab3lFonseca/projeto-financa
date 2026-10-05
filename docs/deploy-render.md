@@ -76,6 +76,19 @@ o comando da seção 5 do [open-finance.md](open-finance.md) com esse segredo e 
 com essa variável em produção** (o Render roda com `NODE_ENV=production`). Para o teste gratuito use o ambiente local — veja a
 seção 10 do [open-finance.md](open-finance.md).
 
+## 4.1 Teste fechado com amigos (cadastro e e-mail)
+
+Com o e-mail embutido do Supabase, **só a equipe do projeto recebe e-mail** e o limite é de 2 por hora (veja a seção 5 do [deploy.md](deploy.md)):
+o cadastro dos seus amigos falha com `429 EMAIL_RATE_LIMITED` ou `503 EMAIL_DELIVERY_RESTRICTED`. Duas saídas:
+
+1. **SMTP próprio** no Supabase (*Authentication → SMTP*): é o caminho certo para qualquer uso além do seu próprio teste.
+2. **Só para um teste fechado**: *Authentication → Providers → Email → Confirm email = OFF*. O cadastro passa a entrar direto, sem e-mail
+   (a API já trata os dois casos). Efeitos: qualquer e-mail é aceito sem prova de posse, e "esqueci minha senha" não envia nada.
+   **Religue antes de abrir para o público.**
+
+Dica para diferenciar os `429` no navegador (F12 → Network → resposta): `EMAIL_RATE_LIMITED` é o limite de e-mail do Supabase;
+`RATE_LIMITED` é o limite da nossa API (5 cadastros por minuto por IP, 10 logins por minuto).
+
 ## 5. Quando algo dá errado
 
 - **Build do site falha em "pnpm"/"expo"**: veja o log do deploy no Render. O build roda

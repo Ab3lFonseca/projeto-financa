@@ -41,8 +41,13 @@ export function mapGoTrueError(status: number, payload: GoTrueError | null): App
       return Errors.forbidden("Cadastros desativados no momento", "SIGNUP_DISABLED");
     case "user_banned":
       return Errors.forbidden("Conta suspensa", "ACCOUNT_SUSPENDED");
-    case "over_request_rate_limit":
     case "over_email_send_rate_limit":
+      // Limite de ENVIO DE E-MAIL do Supabase (o embutido manda poucos por hora): não é o limite de requisições da nossa API.
+      return new AppError(429, "EMAIL_RATE_LIMITED", "Limite de envio de e-mails atingido. Tente novamente mais tarde.");
+    case "email_address_not_authorized":
+      // E-mail embutido do Supabase só entrega para a equipe do projeto; outros endereços exigem SMTP próprio.
+      return Errors.unavailable("O envio de e-mails do servidor ainda não aceita este endereço. Fale com o suporte.", "EMAIL_DELIVERY_RESTRICTED");
+    case "over_request_rate_limit":
     case "over_sms_send_rate_limit":
       return Errors.tooMany();
     case "refresh_token_not_found":

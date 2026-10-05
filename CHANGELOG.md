@@ -61,6 +61,13 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   consentimento no app do banco cobrir tudo o que o app mostra.
 
 ### Corrigido
+- **App web expunha a estrutura interna:** qualquer endereço inexistente (ex.: `/admin`) abria a tela padrão do Expo Router com um link
+  *Sitemap*, e `/_sitemap` (aberto sem login) listava os arquivos de rota e a versão do Expo. Não havia tela de administração nem acesso a
+  dados (a API continua exigindo login e papel de administrador), mas a informação era pública. Agora a rota `_sitemap` está desligada
+  (`sitemap: false`) e há uma tela própria de "Página não encontrada".
+- Cadastro com o e-mail embutido do Supabase (2 por hora, só para a equipe do projeto): o limite de envio virou o erro claro
+  `429 EMAIL_RATE_LIMITED` e o endereço não autorizado virou `503 EMAIL_DELIVERY_RESTRICTED` (antes pareciam "muitas requisições" ou
+  "senha incorreta"). O guia explica as saídas (SMTP próprio, ou desligar "Confirm email" só em teste fechado).
 - Site publicado sem `EXPO_PUBLIC_API_URL` chamava `http://localhost:3000` e só mostrava erro de rede/CORS; agora o app registra um
   aviso claro no console e em *Diagnóstico* (`[config] Este site ... está apontando para a API local`).
 - Publicação no Render: o `Dockerfile` da API não copiava o `tsconfig.base.json` (o build parava no `prisma generate`), e o build do site

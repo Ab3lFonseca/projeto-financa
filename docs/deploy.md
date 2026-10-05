@@ -95,8 +95,12 @@ Instale as CLIs: `npm i -g eas-cli` e o `flyctl` ([fly.io/docs/flyctl/install](h
 
 1. **Authentication → Providers → Email**: ligado; **Confirm email: ON** (a API devolve "confirme seu e-mail").
 2. **Authentication → Policies/Settings**: senha mínima de **10** caracteres (a API valida 10+ com letras e números).
-3. **SMTP próprio** (Authentication → SMTP): o e-mail padrão do Supabase tem limite baixo e é só para teste;
-   use um provedor (Resend, Brevo, Amazon SES, etc.) com o domínio autenticado (SPF/DKIM). Preços do provedor: confirme com ele.
+3. **SMTP próprio** (Authentication → SMTP): o e-mail embutido do Supabase é só para teste: envia **no máximo 2 e-mails por hora**
+   e **só para endereços da equipe do projeto** (os demais falham com "Email address not authorized"). Com SMTP próprio o limite inicial
+   é de 30 por hora e pode ser ajustado em *Authentication → Rate Limits* (fontes: [auth-smtp](https://supabase.com/docs/guides/auth/auth-smtp) e
+   [rate-limits](https://supabase.com/docs/guides/auth/rate-limits), consultadas em 2026-10-04 — confirme os números atuais).
+   Use um provedor (Resend, Brevo, Amazon SES, etc.) com o domínio autenticado (SPF/DKIM). Preços do provedor: confirme com ele.
+   Quem tenta se cadastrar sem isso recebe `429 EMAIL_RATE_LIMITED` (limite de envio) ou `503 EMAIL_DELIVERY_RESTRICTED` (endereço não autorizado).
 4. **URL Configuration**: `Site URL` = site/página do produto; em *Redirect URLs* inclua o deep link
    `financa://reset-password`.
 5. Em **Project Settings → API** copie: `Project URL` (`SUPABASE_URL`), chave **anon/publishable**

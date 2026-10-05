@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SupabaseAuthProvider } from "../src/modules/auth/supabase-provider";
+import { mapGoTrueError, SupabaseAuthProvider } from "../src/modules/auth/supabase-provider";
 
 type Call = { url: string; method: string; headers: Record<string, string>; body: any };
 
@@ -14,6 +14,22 @@ function provider(extra: { anonKey?: string; serviceRoleKey?: string } = {}) {
 }
 
 const JWT_LIKE = "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.assinatura";
+
+describe("erros do Supabase Auth", () => {
+  it("limite de envio de e-mail tem código próprio (não se confunde com o limite de requisições da API)", () => {
+    const email = mapGoTrueError(429, { error_code: "over_email_send_rate_limit" });
+    expect(email).toMatchObject({ status: 429, code: "EMAIL_RATE_LIMITED" });
+    expect(email.message).toMatch(/e-mails/);
+    expect(mapGoTrueError(429, { error_code: "over_request_rate_limit" })).toMatchObject({ status: 429, code: "RATE_LIMITED" });
+    expect(mapGoTrueError(429, null)).toMatchObject({ status: 429, code: "RATE_LIMITED" });
+  });
+
+  it("endereço não autorizado no e-mail embutido vira erro claro de configuração (não 'senha incorreta')", () => {
+    const err = mapGoTrueError(400, { error_code: "email_address_not_authorized", msg: "Email address not authorized" });
+    expect(err).toMatchObject({ status: 503, code: "EMAIL_DELIVERY_RESTRICTED" });
+    expect(err.code).not.toBe("INVALID_CREDENTIALS");
+  });
+});
 
 describe("chaves do Supabase", () => {
   it("login e cadastro usam a chave pública só no cabeçalho apikey (sem Authorization)", async () => {
