@@ -44,7 +44,11 @@ Isso serve para **testar**. Para uso real e contínuo, prefira o Fly.io (ou um p
      **Manual Deploy → Deploy latest commit** (o endereço da API é embutido no app durante o build).
 5. Teste a API: `https://financa-api.onrender.com/health` deve responder `{"status":"ok"}` e `/ready` `{"status":"ready"}`
    (este fala com o banco; na primeira vez espere o serviço acordar).
-6. Abra o site, crie a conta e confirme o e-mail (o e-mail padrão do Supabase tem limite baixo; serve para poucos testes).
+6. **Antes de criar a conta**, no Supabase: *Authentication → URL Configuration* → **Site URL** = o endereço do site
+   (`https://financa-web.onrender.com`) e o mesmo endereço em **Redirect URLs**. Sem isso, o link do e-mail de confirmação aponta para
+   `http://localhost:3000` (o padrão do Supabase). A conta é confirmada mesmo assim: só o redirecionamento final quebra, e você pode
+   simplesmente abrir o site e entrar.
+7. Abra o site, crie a conta e confirme o e-mail (o e-mail padrão do Supabase tem limite baixo; serve para poucos testes).
 
 ### Atualizar
 
