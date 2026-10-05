@@ -82,6 +82,12 @@ seção 10 do [open-finance.md](open-finance.md).
   para a API local`, a variável **não existia durante o build do site**: o endereço da API é gravado no app na hora do build, então
   cadastre `EXPO_PUBLIC_API_URL` em *Environment* **deste** site (nome exato, sem aspas nem barra no final) e faça *Manual Deploy →
   Clear build cache & deploy*. Conferido localmente: com a variável definida e o cache limpo, o endereço entra no site gerado.
+  Para o build **avisar sozinho**, use este *Build Command* (ele para com um erro claro se a variável não existir e imprime o endereço
+  usado; o `render.yaml` já traz o mesmo):
+
+  ```
+  test -n "$EXPO_PUBLIC_API_URL" || { echo "ERRO: a variavel EXPO_PUBLIC_API_URL nao esta definida neste site (aba Environment)"; exit 1; } && echo "API usada pelo site: $EXPO_PUBLIC_API_URL" && npx --yes pnpm@12.9.1 install --frozen-lockfile --filter "@app/mobile..." && npx --yes pnpm@12.9.1 --filter @app/mobile exec expo export --platform web
+  ```
 - **Erro de CORS no console do navegador**: `CORS_ORIGINS` precisa ser exatamente o endereço do site (com `https://`, sem barra no final).
 - **A API não sobe**: o log mostra qual variável falta (a API recusa produção sem `SUPABASE_*` e pepper próprio).
 - Logs: painel do serviço → *Logs*. Dentro do app: *Mais → Configurações → Diagnóstico*.

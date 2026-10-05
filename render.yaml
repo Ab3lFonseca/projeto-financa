@@ -53,7 +53,13 @@ services:
   - type: web
     name: financa-web
     runtime: static
-    buildCommand: npx --yes pnpm@12.9.1 install --frozen-lockfile --filter "@app/mobile..." && npx --yes pnpm@12.9.1 --filter @app/mobile exec expo export --platform web
+    # O primeiro trecho falha o build (com mensagem clara) se EXPO_PUBLIC_API_URL não estiver definida neste site; sem isso o
+    # site sairia apontando para http://localhost:3000. O endereço usado aparece no log do build.
+    buildCommand: >-
+      test -n "$EXPO_PUBLIC_API_URL" || { echo "ERRO: a variavel EXPO_PUBLIC_API_URL nao esta definida neste site (aba Environment)"; exit 1; } &&
+      echo "API usada pelo site: $EXPO_PUBLIC_API_URL" &&
+      npx --yes pnpm@12.9.1 install --frozen-lockfile --filter "@app/mobile..." &&
+      npx --yes pnpm@12.9.1 --filter @app/mobile exec expo export --platform web
     staticPublishPath: apps/mobile/dist
     # App de página única: qualquer caminho cai no index.html (o expo-router resolve a rota no navegador).
     routes:
