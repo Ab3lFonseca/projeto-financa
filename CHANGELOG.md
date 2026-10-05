@@ -60,6 +60,14 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 - O widget do Pluggy pede explicitamente `ACCOUNTS`, `CREDIT_CARDS`, `TRANSACTIONS` e `INVESTMENTS`, para o
   consentimento no app do banco cobrir tudo o que o app mostra.
 
+### Segurança
+- **Limite de tentativas contornável pelo `X-Forwarded-For`** (achado de um teste externo, severidade média): a API confiava em todo o cabeçalho,
+  inclusive no que o cliente enviava, e quem o trocava ganhava um contador novo (ex.: cadastro). Novo `CLIENT_IP_HEADER` (Render:
+  `cf-connecting-ip`; Fly: `fly-client-ip`) usa o IP escrito só pela borda e ignora o `X-Forwarded-For`; sem ele a API avisa ao iniciar em
+  produção. Testes cobrem o ataque (controle negativo) e a correção. Veja [docs/seguranca.md](docs/seguranca.md).
+- Site: `X-Frame-Options: DENY`, `frame-ancestors 'none'` (CSP), `Referrer-Policy` e `Permissions-Policy` (no `render.yaml`; no painel, aba Headers).
+  A CSP completa fica para depois de testar com o widget do Pluggy.
+
 ### Corrigido
 - **App web expunha a estrutura interna:** qualquer endereço inexistente (ex.: `/admin`) abria a tela padrão do Expo Router com um link
   *Sitemap*, e `/_sitemap` (aberto sem login) listava os arquivos de rota e a versão do Expo. Não havia tela de administração nem acesso a

@@ -25,6 +25,10 @@ services:
         value: info
       - key: TRUST_PROXY
         value: "true"
+      # IP real do cliente para os limites de tentativas: o Render passa pelo Cloudflare, que escreve cf-connecting-ip e o cliente não
+      # consegue forjar. Com isso o X-Forwarded-For (que o cliente controla) é ignorado; sem isso o limite de cadastro era burlável.
+      - key: CLIENT_IP_HEADER
+        value: cf-connecting-ip
       # Os jobs rodam dentro da API; no plano gratuito ela "dorme" após 15 min sem tráfego (veja o guia).
       - key: JOBS_ENABLED
         value: "true"
@@ -66,6 +70,21 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+    # Cabeçalhos de segurança do site (a API já manda os dela; o HTML do site é servido pelo Render e precisa dos seus). Só as
+    # diretivas seguras estão aplicadas; uma CSP completa (script-src etc.) deve ser testada antes, por causa do widget do Pluggy.
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Content-Security-Policy
+        value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=(), payment=()"
     # O Node (24) vem do .nvmrc da raiz. O build usa `npx pnpm@...` porque o Render não deixa instalar pacotes globais
     # (`npm install -g` falha com "read-only file system").
     envVars:

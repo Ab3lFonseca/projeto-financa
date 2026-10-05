@@ -31,8 +31,20 @@ const schema = z
 
     /** Origens permitidas no CORS (painel web futuro). O app mobile não usa CORS. */
     CORS_ORIGINS: csv,
-    /** Atrás do proxy do Fly/Cloudflare: confiar em X-Forwarded-For. */
+    /**
+     * Confiar no X-Forwarded-For. ATENÇÃO: confia em TODOS os valores do cabeçalho, inclusive os que o cliente envia, então
+     * quem muda o X-Forwarded-For ganha um contador novo nos limitadores de tentativas. Em produção prefira CLIENT_IP_HEADER.
+     */
     TRUST_PROXY: bool(true),
+    /**
+     * Cabeçalho com o IP real do cliente, escrito pelo SEU proxy de borda e que o cliente não consegue forjar
+     * (Render, que passa pelo Cloudflare: `cf-connecting-ip`; Fly.io: `fly-client-ip`). Quando definido, o X-Forwarded-For
+     * é ignorado e esse cabeçalho vira o IP usado nos limites de tentativas e na auditoria.
+     */
+    CLIENT_IP_HEADER: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z.string().trim().toLowerCase().regex(/^[a-z0-9-]{1,64}$/, "Nome de cabeçalho inválido").optional(),
+    ),
 
     // --- Autenticação ---
     /** "supabase" (padrão) ou "dev" (somente desenvolvimento local; recusado em produção). */

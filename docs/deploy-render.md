@@ -76,6 +76,15 @@ o comando da seção 5 do [open-finance.md](open-finance.md) com esse segredo e 
 com essa variável em produção** (o Render roda com `NODE_ENV=production`). Para o teste gratuito use o ambiente local — veja a
 seção 10 do [open-finance.md](open-finance.md).
 
+## 4.0 Segurança que o painel manual não herda do `render.yaml`
+Se você criou os serviços **pelo formulário** (e não pelo Blueprint), faça à mão:
+
+- **API → Environment**: `CLIENT_IP_HEADER` = `cf-connecting-ip`. **Sem isso o limite de tentativas pode ser burlado** trocando o `X-Forwarded-For`
+  (veja [seguranca.md](seguranca.md)). Depois, no log da API ao iniciar, a linha `"API no ar"` mostra `"clientIpHeader":"cf-connecting-ip"`;
+  se vier `null`, ela não chegou (e aparece um aviso de `TRUST_PROXY`).
+- **Site → Headers**: adicione (Path `/*`) `X-Frame-Options` = `DENY`; `Content-Security-Policy` = `frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'`;
+  `Referrer-Policy` = `strict-origin-when-cross-origin`; `Permissions-Policy` = `camera=(), microphone=(), geolocation=(), payment=()`.
+
 ## 4.1 Teste fechado com amigos (cadastro e e-mail)
 
 Com o e-mail embutido do Supabase, **só a equipe do projeto recebe e-mail** e o limite é de 2 por hora (veja a seção 5 do [deploy.md](deploy.md)):

@@ -38,7 +38,13 @@ process.on("unhandledRejection", (reason) => fatal("unhandledRejection", reason)
 try {
   await app.listen({ port: config.PORT, host: config.HOST });
   // corsOrigins vazio = CORS desligado: o app nativo funciona, mas o app web (navegador) é bloqueado.
-  app.log.info({ port: config.PORT, env: config.NODE_ENV, auth: config.AUTH_MODE, jobs: config.JOBS_ENABLED, openFinance: config.OPEN_FINANCE_ENABLED, corsOrigins: config.CORS_ORIGINS }, "API no ar");
+  app.log.info(
+    { port: config.PORT, env: config.NODE_ENV, auth: config.AUTH_MODE, jobs: config.JOBS_ENABLED, openFinance: config.OPEN_FINANCE_ENABLED, corsOrigins: config.CORS_ORIGINS, clientIpHeader: config.CLIENT_IP_HEADER ?? null },
+    "API no ar",
+  );
+  if (config.NODE_ENV === "production" && config.TRUST_PROXY && !config.CLIENT_IP_HEADER) {
+    app.log.warn("TRUST_PROXY confia no X-Forwarded-For enviado pelo cliente: os limites de tentativas podem ser contornados. Defina CLIENT_IP_HEADER (Render: cf-connecting-ip; Fly: fly-client-ip).");
+  }
   if (config.JOBS_ENABLED) stopJobs = startJobs(app);
 } catch (err) {
   if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {

@@ -2,6 +2,7 @@ import { createPrismaClient, type PrismaClient } from "@app/database";
 import Fastify, { type FastifyInstance } from "fastify";
 import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
 import { randomUUID } from "node:crypto";
+import { isIP } from "node:net";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
@@ -177,13 +178,25 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const logging = await createLogging(config);
   const app = Fastify({
     logger: loggerOptions(config, logging.level, logging.sinks.stream),
-    trustProxy: config.TRUST_PROXY,
+    // Com CLIENT_IP_HEADER o X-Forwarded-For é ignorado (o IP vem do cabeçalho da borda, abaixo).
+    trustProxy: config.CLIENT_IP_HEADER ? false : config.TRUST_PROXY,
     bodyLimit: 512 * 1024,
     genReqId: (req) => {
       const header = req.headers["x-request-id"];
       return typeof header === "string" && /^[\w-]{8,64}$/.test(header) ? header : randomUUID();
     },
   });
+
+  // IP real do cliente vindo de um cabeçalho que só o proxy de borda escreve (o cliente não consegue forjá-lo). Roda antes de tudo
+  // (limitador de tentativas, auditoria): valor ausente ou que não seja um IP válido cai no IP da conexão, nunca no que o cliente enviar.
+  if (config.CLIENT_IP_HEADER) {
+    const header = config.CLIENT_IP_HEADER;
+    app.addHook("onRequest", async (req) => {
+      const raw = req.headers[header];
+      const value = (Array.isArray(raw) ? raw[0] : raw)?.trim();
+      if (value && isIP(value) !== 0) Object.defineProperty(req, "ip", { value, configurable: true });
+    });
+  }
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);

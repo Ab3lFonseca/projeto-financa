@@ -14,6 +14,8 @@ primary_region = "gru"       # São Paulo — mesma região do Supabase (sa-east
   HOST = "0.0.0.0"
   LOG_LEVEL = "info"
   TRUST_PROXY = "true"
+  # O proxy do Fly escreve o IP real do cliente aqui (o cliente não consegue forjar); o X-Forwarded-For passa a ser ignorado.
+  CLIENT_IP_HEADER = "fly-client-ip"
   JOBS_ENABLED = "true"
   # Beta: todos têm recursos Premium. Mude para "true" quando ligar a cobrança.
   BILLING_ENFORCED = "false"
