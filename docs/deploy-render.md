@@ -123,6 +123,12 @@ Dica para diferenciar os `429` no navegador (F12 → Network → resposta): `EMA
   endereço do site (com `https://`, **sem barra no final**), na **API** (não no site). Vazia, o CORS fica desligado e o navegador é
   bloqueado. Depois de salvar, é preciso um deploy da API. Confira no log da API ao iniciar: a linha `"API no ar"` mostra
   `"corsOrigins":["https://..."]`; se vier `[]`, a variável não chegou.
+- **Cadastro falha com "Não foi possível enviar o e-mail" (`EMAIL_SEND_FAILED`) ou "Serviço de autenticação indisponível" (`AUTH_PROVIDER_ERROR`)**:
+  o Supabase respondeu com erro. O motivo exato está no **Supabase → Logs → Auth** (procure `Error sending confirmation email`). Causas comuns
+  depois de configurar SMTP próprio: senha/API key errada; **domínio do remetente não verificado** no provedor (no Resend o e-mail "de" precisa ser
+  de um domínio verificado; sem isso só envia para o dono da conta); host/porta/usuário trocados (Resend: `smtp.resend.com`, `465`, usuário `resend`).
+  No log da API, a linha de erro traz `details.upstreamStatus` e `details.upstreamCode`; `upstreamCode: "network_error"` significa que o Supabase nem
+  respondeu (URL do projeto errada, projeto pausado ou rede). Para destravar um teste enquanto isso, desligue *Confirm email* (veja 4.1).
 - **A API não sobe**: o log mostra qual variável falta (a API recusa produção sem `SUPABASE_*` e pepper próprio).
 - Logs: painel do serviço → *Logs*. Dentro do app: *Mais → Configurações → Diagnóstico*.
 

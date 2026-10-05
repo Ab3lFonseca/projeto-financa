@@ -24,6 +24,27 @@ describe("erros do Supabase Auth", () => {
     expect(mapGoTrueError(429, null)).toMatchObject({ status: 429, code: "RATE_LIMITED" });
   });
 
+  it("falha ao ENVIAR o e-mail (SMTP) tem código próprio, e o erro genérico leva status e código do Supabase", () => {
+    const smtp = mapGoTrueError(500, { code: 500, error_code: "unexpected_failure", msg: "Error sending confirmation email" });
+    expect(smtp).toMatchObject({ status: 502, code: "EMAIL_SEND_FAILED", details: { upstreamStatus: 500, upstreamCode: "unexpected_failure" } });
+    expect(mapGoTrueError(500, { msg: "SMTP connection refused" })).toMatchObject({ code: "EMAIL_SEND_FAILED" });
+
+    const generic = mapGoTrueError(500, { error_code: "unexpected_failure", msg: "alguma outra falha interna" });
+    expect(generic).toMatchObject({ status: 502, code: "AUTH_PROVIDER_ERROR", details: { upstreamStatus: 500, upstreamCode: "unexpected_failure" } });
+    // a mensagem livre do Supabase não vai para a resposta nem para o log
+    expect(JSON.stringify(generic.details)).not.toContain("falha interna");
+    expect(mapGoTrueError(503, null)).toMatchObject({ code: "AUTH_PROVIDER_ERROR", details: { upstreamStatus: 503, upstreamCode: null } });
+  });
+
+  it("sem resposta do Supabase (rede/tempo esgotado) é identificado como network_error", async () => {
+    const down = new SupabaseAuthProvider({ url: "https://abc.supabase.co", anonKey: "k", fetch: (async () => { throw new Error("ECONNREFUSED"); }) as typeof fetch });
+    await expect(down.signUp({ email: "a@b.com", password: "senhaForte123", metadata: {} })).rejects.toMatchObject({
+      status: 502,
+      code: "AUTH_PROVIDER_ERROR",
+      details: { upstreamStatus: null, upstreamCode: "network_error" },
+    });
+  });
+
   it("endereço não autorizado no e-mail embutido vira erro claro de configuração (não 'senha incorreta')", () => {
     const err = mapGoTrueError(400, { error_code: "email_address_not_authorized", msg: "Email address not authorized" });
     expect(err).toMatchObject({ status: 503, code: "EMAIL_DELIVERY_RESTRICTED" });

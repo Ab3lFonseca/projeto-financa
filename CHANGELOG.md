@@ -74,6 +74,9 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   A CSP completa fica para depois de testar com o widget do Pluggy.
 
 ### Corrigido
+- Falhas do Supabase Auth eram todas "Serviço de autenticação indisponível", sem pista do motivo. Agora: falha ao enviar e-mail (SMTP) vira
+  `502 EMAIL_SEND_FAILED`; o erro genérico passa a levar `details.upstreamStatus`/`upstreamCode` (sem texto livre do Supabase) para o log, e
+  "sem resposta" (rede, tempo esgotado) é `upstreamCode: network_error`. O guia diz onde olhar (Supabase → Logs → Auth).
 - **App web expunha a estrutura interna:** qualquer endereço inexistente (ex.: `/admin`) abria a tela padrão do Expo Router com um link
   *Sitemap*, e `/_sitemap` (aberto sem login) listava os arquivos de rota e a versão do Expo. Não havia tela de administração nem acesso a
   dados (a API continua exigindo login e papel de administrador), mas a informação era pública. Agora a rota `_sitemap` está desligada

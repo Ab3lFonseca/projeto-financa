@@ -58,8 +58,15 @@ export function mapGoTrueError(status: number, payload: GoTrueError | null): App
       return Errors.unauthorized("Sessão expirada. Entre novamente.", "INVALID_REFRESH_TOKEN");
   }
   if (status === 429) return Errors.tooMany();
+  // Falha ao ENVIAR o e-mail (SMTP próprio com senha errada, domínio do remetente não verificado, porta errada...): o Supabase
+  // responde 500 "Error sending confirmation email". Vale um código próprio: o motivo real está nos Auth Logs do Supabase.
+  const msg = String(payload?.msg ?? payload?.message ?? "").toLowerCase();
+  if (status >= 500 && /sending .*e-?mail|smtp/.test(msg)) {
+    return new AppError(502, "EMAIL_SEND_FAILED", "Não foi possível enviar o e-mail de confirmação agora. Tente novamente em instantes.", { upstreamStatus: status, upstreamCode: code || null });
+  }
   if (status === 401 || status === 400) return Errors.unauthorized("Não foi possível autenticar", "INVALID_CREDENTIALS");
-  return Errors.upstream("Serviço de autenticação indisponível", "AUTH_PROVIDER_ERROR");
+  // Resposta genérica, mas com o status e o código do Supabase (sem mensagem livre) para o log e o diagnóstico.
+  return new AppError(502, "AUTH_PROVIDER_ERROR", "Serviço de autenticação indisponível", { upstreamStatus: status, upstreamCode: code || null });
 }
 
 export class SupabaseAuthProvider implements AuthProvider {
@@ -95,7 +102,8 @@ export class SupabaseAuthProvider implements AuthProvider {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch {
-      throw Errors.upstream("Serviço de autenticação indisponível", "AUTH_PROVIDER_ERROR");
+      // Sem resposta do Supabase (rede, DNS ou tempo esgotado): distinto de "o Supabase respondeu com erro".
+      throw new AppError(502, "AUTH_PROVIDER_ERROR", "Serviço de autenticação indisponível", { upstreamStatus: null, upstreamCode: "network_error" });
     }
 
     const text = await res.text();
