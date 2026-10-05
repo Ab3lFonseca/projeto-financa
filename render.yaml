@@ -53,16 +53,16 @@ services:
   - type: web
     name: financa-web
     runtime: static
-    buildCommand: npm install -g pnpm@12.9.1 && pnpm install --frozen-lockfile --filter "@app/mobile..." && pnpm --filter @app/mobile exec expo export --platform web
+    buildCommand: npx --yes pnpm@12.9.1 install --frozen-lockfile --filter "@app/mobile..." && npx --yes pnpm@12.9.1 --filter @app/mobile exec expo export --platform web
     staticPublishPath: apps/mobile/dist
     # App de página única: qualquer caminho cai no index.html (o expo-router resolve a rota no navegador).
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
+    # O Node (24) vem do .nvmrc da raiz. O build usa `npx pnpm@...` porque o Render não deixa instalar pacotes globais
+    # (`npm install -g` falha com "read-only file system").
     envVars:
-      - key: NODE_VERSION
-        value: "24"
       - key: EXPO_NO_TELEMETRY
         value: "1"
       # Embutida no app na hora do build: mudou o endereço da API? Faça um novo deploy deste serviço.

@@ -75,8 +75,8 @@ seção 10 do [open-finance.md](open-finance.md).
 ## 5. Quando algo dá errado
 
 - **Build do site falha em "pnpm"/"expo"**: veja o log do deploy no Render. O build roda
-  `pnpm install --frozen-lockfile --filter "@app/mobile..."` e `expo export --platform web`; localmente ele leva ~2 min.
-  Se o Render reclamar de `NODE_VERSION=24`, use uma versão completa (ex.: `24.0.0`) ou a LTS que ele aceitar.
+  `pnpm install --frozen-lockfile --filter "@app/mobile..."` e `expo export --platform web` (via `npx pnpm@12.9.1`: o Render **não permite
+  `npm install -g`**, que falha com `EROFS: read-only file system`); localmente ele leva ~2 min. O Node vem do `.nvmrc` (24).
 - **O site abre mas "Servidor indisponível"**: `EXPO_PUBLIC_API_URL` errado (refaça o deploy do site) ou API ainda acordando.
 - **Erro de CORS no console do navegador**: `CORS_ORIGINS` precisa ser exatamente o endereço do site (com `https://`, sem barra no final).
 - **A API não sobe**: o log mostra qual variável falta (a API recusa produção sem `SUPABASE_*` e pepper próprio).
