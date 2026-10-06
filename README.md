@@ -54,7 +54,7 @@ Login de demonstração: `demo@financa.dev` / `Demo@12345678`.
 Biometria, push, exportar arquivo e o widget do Open Finance só funcionam no app nativo.
 
 Os logs ficam em `.data/logs` (`errors-AAAA-MM-DD.log` é o primeiro a abrir quando algo falhar); no app, veja
-*Mais → Configurações → Diagnóstico*. Detalhes em [docs/logs.md](docs/logs.md).
+*Mais → Diagnóstico* (só para a conta administradora). Detalhes em [docs/logs.md](docs/logs.md).
 
 Testes e verificações:
 

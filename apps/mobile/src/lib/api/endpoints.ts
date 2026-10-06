@@ -40,6 +40,10 @@ export type MonthComparison = S.MonthComparisonDTO;
 export type TransactionSummary = Out<typeof S.transactionSummaryDTO>;
 export type InvoicePayment = Out<typeof S.invoicePaymentDTO>;
 export type GoalContribution = Out<typeof S.goalContributionDTO>;
+export type AdminUser = S.AdminUserDTO;
+export type AdminUserDetail = S.AdminUserDetailDTO;
+export type AdminStats = S.AdminStatsDTO;
+export type AdminIntegrations = S.AdminIntegrationsDTO;
 export type OpenFinanceStatus = S.OpenFinanceStatusDTO;
 export type BankConnection = S.ConnectionDTO;
 export type BankTransaction = S.BankTransactionDTO;
@@ -190,6 +194,14 @@ export const api = {
     unreadCount: () => http.get<{ count: number }>(`${v1}/notifications/unread-count`),
     markRead: (id: string) => http.patch<AppNotification>(`${v1}/notifications/${id}/read`),
     markAllRead: () => http.post<{ ok: true }>(`${v1}/notifications/read-all`),
+  },
+
+  // Só administradores (o servidor confere o papel a cada chamada). Metadados de conta e números agregados; nada financeiro.
+  admin: {
+    stats: () => http.get<AdminStats>(`${v1}/admin/stats`),
+    integrations: () => http.get<AdminIntegrations>(`${v1}/admin/integrations`),
+    users: (params: { search?: string; cursor?: string; limit?: number } = {}) => http.get<Page<AdminUser>>(`${v1}/admin/users`, { query: params }),
+    user: (id: string) => http.get<AdminUserDetail>(`${v1}/admin/users/${id}`),
   },
 
   diagnostics: {

@@ -70,6 +70,22 @@ export const useUnreadCount = () =>
 
 export const useConsents = () => useQuery({ queryKey: ["consents"], queryFn: api.privacy.consents });
 
+// ------------------------------------------------------------------ administração (só para administradores)
+
+/** `enabled` evita qualquer chamada quando a pessoa não é administradora (a tela também nem é mostrada). */
+export const useAdminStats = (enabled = true) => useQuery({ queryKey: ["admin", "stats"], queryFn: api.admin.stats, enabled, refetchInterval: 60_000 });
+export const useAdminIntegrations = (enabled = true) => useQuery({ queryKey: ["admin", "integrations"], queryFn: api.admin.integrations, enabled });
+export const useAdminUsers = (search: string, enabled = true) =>
+  useInfiniteQuery({
+    queryKey: ["admin", "users", search],
+    queryFn: ({ pageParam }) => api.admin.users({ search: search || undefined, cursor: pageParam, limit: 25 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.page.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+export const useAdminUser = (id: string | null) => useQuery({ queryKey: ["admin", "user", id], queryFn: () => api.admin.user(id!), enabled: !!id });
+
 export const useOpenFinanceStatus = () => useQuery({ queryKey: ["of-status"], queryFn: api.openFinance.status });
 export const useBankConnections = () => useQuery({ queryKey: ["of-connections"], queryFn: api.openFinance.connections });
 

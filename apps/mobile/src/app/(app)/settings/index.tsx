@@ -14,6 +14,7 @@ import { biometricsAvailable, useLockSettings } from "@/lib/lock";
 import { registerForPush } from "@/lib/push";
 import { useTourStore } from "@/lib/tour/store";
 import { toast } from "@/lib/ui-store";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 import { THEME_META } from "@/theme/presets";
 import { useTheme, useThemeStore } from "@/theme/ThemeProvider";
 
@@ -28,6 +29,7 @@ const PREFS: { key: "billsDue" | "invoicesDue" | "budgets" | "goals"; title: str
 
 export default function SettingsScreen() {
   const me = useMe();
+  const isAdmin = useIsAdmin();
   const { refreshMe } = useAuth();
   const { colors } = useTheme();
   const preset = useThemeStore((s) => s.preset);
@@ -120,8 +122,13 @@ export default function SettingsScreen() {
           <ShortcutRow icon="shield-check" title="Privacidade e dados" subtitle="Consentimentos, exportar e excluir conta" onPress={() => go("/settings/privacy")} color="#14B8A6" />
           <Divider inset={52} />
           <ShortcutRow icon="refresh-cw" title="Sincronização" subtitle="Lançamentos feitos sem internet" onPress={() => go("/settings/sync")} color="#F59E0B" />
-          <Divider inset={52} />
-          <ShortcutRow icon="file-text" title="Diagnóstico" subtitle="Registro de erros do app" onPress={() => go("/settings/diagnostics")} color="#64748B" />
+          {/* O registro de erros e das respostas da API é só do administrador. O envio de relatórios é uma escolha de todos, em Privacidade e dados. */}
+          {isAdmin ? (
+            <>
+              <Divider inset={52} />
+              <ShortcutRow icon="file-text" title="Diagnóstico" subtitle="Registro de erros do app (administrador)" onPress={() => go("/settings/diagnostics")} color="#64748B" />
+            </>
+          ) : null}
         </Card>
       </Section>
     </Screen>

@@ -53,7 +53,7 @@ Get-Content .data\logs\errors-*.log | ForEach-Object { $l = $_ | ConvertFrom-Jso
 
 ## 2. Registro do app (no aparelho)
 
-*Mais → Configurações → Diagnóstico* mostra os últimos 300 eventos: exceções não tratadas, promessas rejeitadas,
+*Mais → Diagnóstico* (**só para administradores**; outros usuários não veem a tela) mostra os últimos 300 eventos: exceções não tratadas, promessas rejeitadas,
 `console.error`, telas quebradas e falhas de conexão/servidor (com o `requestId` para achar a linha correspondente
 no log da API). Dali dá para **compartilhar o registro** (arquivo `.txt`) ou apagá-lo. Eventos repetidos em
 sequência aparecem uma vez com `×N`.

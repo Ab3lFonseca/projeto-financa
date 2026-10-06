@@ -26,17 +26,19 @@ Definidos em [`packages/shared/src/plans.ts`](../packages/shared/src/plans.ts) e
 
 ## Administração (API)
 
-Só metadados; **nunca** expõe senha, token, credencial bancária nem valores de lançamentos. Toda escrita é
-auditada. Exige `role = 'ADMIN'` (ver como promover em [deploy.md](deploy.md#8-primeiro-administrador)).
+Só metadados de cadastro (nome, e-mail, plano, situação, datas e tema) e números agregados; **nunca** expõe senha, token, credencial bancária,
+bancos conectados, contas, cartões, saldos nem lançamentos de ninguém. Toda escrita **e toda leitura de dados de usuários** é auditada (sem dados
+pessoais na trilha). Exige `role = 'ADMIN'` (ver como promover, inclusive pela configuração `ADMIN_USER_IDS`, em [deploy.md](deploy.md#8-primeiro-administrador)).
 
 | Endpoint | Para quê |
 |---|---|
-| `GET /v1/admin/users` | Lista usuários (busca por e-mail, filtro por status, paginação) |
-| `GET /v1/admin/users/:id` | Detalhe: plano, status, contagens (contas, cartões, lançamentos, metas) e conexões bancárias (sem valores) |
+| `GET /v1/admin/users` | Lista usuários (nome, e-mail, plano, situação; busca por nome ou e-mail, filtro por status, paginação) |
+| `GET /v1/admin/users/:id` | Detalhe: os mesmos dados da lista mais o tema escolhido (sem contagens, bancos conectados nem nada financeiro) |
 | `PATCH /v1/admin/users/:id` | Suspender/reativar conta (não vale para você mesmo nem para outro admin) |
-| `GET /v1/admin/stats` | Usuários (total, ativos, suspensos, premium, novos em 7/30 dias), cadastros por dia e conexões por status |
+| `GET /v1/admin/stats` | Usuários (total, ativos, suspensos, premium, novos em 7/30 dias, quem concluiu o tutorial), cadastros por dia, temas em uso e conexões por status (só números) |
 | `GET /v1/admin/integrations` | Estado de Auth, Open Finance (ligado/configurado, webhooks e erros em 24 h, códigos de erro mais comuns) e push |
-| `GET /v1/admin/issues` | Problemas recentes: conexões bancárias com erro, webhooks que falharam e pedidos LGPD que falharam |
+| `GET /v1/admin/issues` | Problemas recentes: conexões bancárias com erro (só o código, nunca o banco), webhooks que falharam e pedidos LGPD que falharam |
 
-**Não implementado:** painel web (`apps/admin`). A API está pronta para um; hoje use o Swagger local
-(`/openapi.json`) ou o SQL Editor do Supabase para consultas pontuais.
+**Painel no app:** quem é administrador vê, em *Mais*, o *Painel do administrador* (números do app, cadastros dos últimos 30 dias,
+temas escolhidos, estado do login/Open Finance/avisos e a lista de usuários com detalhe) e o *Diagnóstico* (erros e respostas da API). As telas
+voltam ao início para quem não é administrador e a API responde 403.

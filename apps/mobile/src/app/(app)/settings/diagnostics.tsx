@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Platform, View } from "react-native";
+import { AdminGate } from "@/components/AdminGate";
 import { Button } from "@/components/ui/Button";
-import { Badge, SwitchRow } from "@/components/ui/Controls";
+import { Badge } from "@/components/ui/Controls";
 import { EmptyState } from "@/components/ui/Feedback";
 import { Card, Divider, IconBadge, ListRow, Screen, ScreenHeader, Section } from "@/components/ui/Layout";
 import { Sheet } from "@/components/ui/Sheet";
@@ -20,12 +21,22 @@ function clock(iso: string): string {
   return `${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
 }
 
-/** Registro de eventos do app: para você (ou o suporte) investigar erros depois. */
+/**
+ * Registro de eventos do app (erros, respostas da API, endereço do servidor): **só para o administrador**. Para os demais
+ * usuários a tela nem existe (volta ao início); o envio de relatórios de erro é uma escolha de todos, em Privacidade e dados.
+ */
 export default function DiagnosticsScreen() {
+  return (
+    <AdminGate>
+      <DiagnosticsContent />
+    </AdminGate>
+  );
+}
+
+function DiagnosticsContent() {
   const { colors } = useTheme();
   const entries = useLogStore((s) => s.entries);
   const reportsEnabled = useLogStore((s) => s.reportsEnabled);
-  const setReportsEnabled = useLogStore((s) => s.setReportsEnabled);
   const clear = useLogStore((s) => s.clear);
   const [selected, setSelected] = useState<LogEntry | null>(null);
   const [sending, setSending] = useState(false);
@@ -57,14 +68,9 @@ export default function DiagnosticsScreen() {
         </Text>
       </Card>
 
-      <Card style={{ paddingVertical: 6 }}>
-        <SwitchRow
-          title="Enviar relatórios de erro"
-          subtitle="Manda ao servidor só erros técnicos, sem dados pessoais, para podermos corrigi-los"
-          value={reportsEnabled}
-          onChange={setReportsEnabled}
-        />
-      </Card>
+      <Text variant="caption" tone="muted">
+        O envio automático de relatórios de erro fica ligado ou desligado em Privacidade e dados ({reportsEnabled ? "ligado" : "desligado"} agora).
+      </Text>
 
       <View style={{ gap: 8 }}>
         <Button

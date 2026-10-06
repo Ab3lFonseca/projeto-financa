@@ -14,7 +14,8 @@
 | Token de push, nome do aparelho | Avisos | `push_tokens` |
 | Conexões, contas, cartões, transações e **investimentos** do banco (Open Finance, se ligado) | Importar e mostrar os dados do banco com consentimento específico (somente leitura) | `bank_connections`, `bank_connection_accounts`, `bank_transactions`, `bank_investments`, `bank_investment_snapshots` |
 | Auditoria (ações sensíveis) | Segurança e prova | `audit_logs` (sem valores financeiros) |
-| Logs técnicos da API e relatórios de erro do app | Segurança, estabilidade e correção de falhas | Arquivos de log do servidor (id do usuário como pseudônimo; sem e-mail, valores, tokens nem corpo de requisição). O envio de erros do app pode ser desligado em *Configurações → Diagnóstico* ([logs.md](logs.md)) |
+| Acesso do administrador (equipe técnica) | Operar o app: saber quem se cadastrou, dar suporte e acompanhar números agregados | O painel mostra nome, e-mail, plano, situação, datas e tema da conta. **Não** mostra saldos, lançamentos, contas, cartões nem bancos conectados. Só contas com papel `ADMIN` (definidas pela equipe) acessam; toda leitura vira registro de auditoria **sem dados pessoais** (`admin.users.listed`, `admin.user.viewed`) |
+| Logs técnicos da API e relatórios de erro do app | Segurança, estabilidade e correção de falhas | Arquivos de log do servidor (id do usuário como pseudônimo; sem e-mail, valores, tokens nem corpo de requisição). Cada pessoa pode desligar o envio de erros do app em *Privacidade e dados*; quem lê o registro é só o administrador ([logs.md](logs.md)) |
 
 Não coletamos localização, contatos, câmera nem identificadores de publicidade. **IP nunca é guardado em claro**:
 só um HMAC com segredo do servidor (`IP_HASH_PEPPER`).

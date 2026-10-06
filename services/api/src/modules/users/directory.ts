@@ -1,5 +1,6 @@
 import { Prisma, seedDefaultCategories, type PrismaClient } from "@app/database";
 import type { Config } from "../../config";
+import { audit } from "../../lib/audit";
 import { Errors } from "../../lib/errors";
 import { resolvePlan } from "../../lib/plan";
 import type { AuthUser } from "../../types";
@@ -57,6 +58,13 @@ export class UserDirectory {
     }
     if (row.status === "DELETING") {
       throw Errors.forbidden("Conta em processo de exclusão.", "ACCOUNT_DELETING");
+    }
+
+    // Administradores definidos na configuração (ADMIN_USER_IDS): promove na primeira vez em que a conta é vista.
+    if (row.role !== "ADMIN" && this.config.ADMIN_USER_IDS.includes(row.id)) {
+      await this.prisma.user.update({ where: { id: row.id }, data: { role: "ADMIN" } });
+      row = { ...row, role: "ADMIN" };
+      await audit(this.prisma, this.config.IP_HASH_PEPPER, { action: "admin.bootstrap", entity: "user", entityId: row.id });
     }
 
     if (claims.email && claims.email !== row.email) {

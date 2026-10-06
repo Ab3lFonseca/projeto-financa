@@ -164,12 +164,22 @@ e a finalização de exclusões de conta rodam dentro da API; com a máquina par
 
 ## 8. Primeiro administrador
 
-Não existe cadastro de admin pela API (de propósito). Depois de criar sua conta pelo app:
+Não existe cadastro de admin pela API (de propósito). Depois de criar sua conta pelo app, há dois caminhos:
+
+**Pela configuração (recomendado):** copie o *User UID* da sua conta (Supabase → Authentication → Users) e defina no servidor
+`ADMIN_USER_IDS=<uid>` (vários IDs, separados por vírgula). No Render: **financa-api → Environment**. Na próxima vez em que a conta
+entrar, a API a promove a `ADMIN` no banco (idempotente, auditado como `admin.bootstrap`). Fica na configuração, e não no código, porque
+o repositório é público. Remover um ID da variável **não** rebaixa ninguém: isso se faz no banco.
+
+**Pelo banco:**
 
 ```sql
 UPDATE users SET role = 'ADMIN' WHERE email = 'voce@seudominio.com.br';
 ```
-Rode no SQL Editor do Supabase. Os endpoints administrativos ficam em `/v1/admin/*` (ver
+Rode no SQL Editor do Supabase.
+
+Quem é administrador vê, em **Mais**, o *Painel do administrador* (usuários, números do app) e o *Diagnóstico* (registro de erros e
+respostas da API), que **não aparecem para mais ninguém**. Os endpoints administrativos ficam em `/v1/admin/*` (ver
 [produto-e-admin.md](produto-e-admin.md)).
 
 ## 9. App mobile

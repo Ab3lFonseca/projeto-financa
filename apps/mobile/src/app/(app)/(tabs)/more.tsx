@@ -10,6 +10,7 @@ import { useUnreadCount } from "@/lib/hooks";
 import { useOutbox } from "@/lib/offline/outbox";
 import { useTourStore } from "@/lib/tour/store";
 import { confirmDialog } from "@/lib/ui-store";
+import { useIsAdmin } from "@/lib/useIsAdmin";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const go = (p: string) => router.push(p as never);
@@ -17,6 +18,7 @@ const go = (p: string) => router.push(p as never);
 export default function MoreScreen() {
   const { colors } = useTheme();
   const { me, signOut } = useAuth();
+  const isAdmin = useIsAdmin();
   const unread = useUnreadCount().data?.count ?? 0;
   const pending = useOutbox((s) => s.items.length);
   const name = me?.profile.displayName || me?.email.split("@")[0] || "Você";
@@ -39,6 +41,15 @@ export default function MoreScreen() {
         </View>
         {me?.entitlements.plan === "PREMIUM" ? <Badge label={me.entitlements.billingEnforced ? "Premium" : "Beta Premium"} tone="primary" /> : <Badge label="Gratuito" />}
       </Card>
+
+      {/* Só administradores veem esta área (o servidor confere o papel a cada chamada). */}
+      {isAdmin ? (
+        <Card style={{ paddingVertical: 6 }}>
+          <ShortcutRow icon="shield" title="Painel do administrador" subtitle="Usuários, números do app e diagnóstico" onPress={() => go("/admin")} color={colors.accent} />
+          <Divider inset={52} />
+          <ShortcutRow icon="file-text" title="Diagnóstico" subtitle="Erros e respostas da API" onPress={() => go("/settings/diagnostics")} color="#64748B" />
+        </Card>
+      ) : null}
 
       <TourTarget id="more-planning">
         <Card style={{ paddingVertical: 6 }}>

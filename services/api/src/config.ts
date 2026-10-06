@@ -76,6 +76,13 @@ const schema = z
     LEGAL_TERMS_VERSION: z.string().default("2026-10-01"),
     LEGAL_PRIVACY_VERSION: z.string().default("2026-10-01"),
 
+    /**
+     * IDs (UUID, separados por vírgula) de quem é SEMPRE administrador. Ao entrar, a conta listada é promovida a ADMIN no
+     * banco (idempotente). Fica na configuração do servidor, e não no código, para o repositório não guardar quem administra.
+     * Remover um ID daqui não rebaixa ninguém: isso se faz no banco.
+     */
+    ADMIN_USER_IDS: csv.pipe(z.array(z.uuid()).transform((ids) => ids.map((id) => id.toLowerCase()))),
+
     /** false = beta: todos têm recursos Premium. true = limites do plano gratuito valem. */
     BILLING_ENFORCED: bool(false),
 

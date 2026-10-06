@@ -52,6 +52,10 @@ services:
         sync: false
       - key: CORS_ORIGINS # endereço do app web abaixo, ex.: https://financa-web.onrender.com
         sync: false
+      # Quem é administrador (ID da sua conta no Supabase → Authentication → Users → "User UID"; vários, separados por vírgula).
+      # Fica só no painel do Render: o repositório é público e não deve registrar quem administra.
+      - key: ADMIN_USER_IDS
+        sync: false
       # Para onde o link do e-mail de confirmação leva: a tela /confirm-email do site. Também precisa estar em "Redirect URLs" no Supabase.
       - key: EMAIL_CONFIRM_WEB_REDIRECT_URL # ex.: https://financa-web.onrender.com/confirm-email
         sync: false

@@ -1,41 +1,32 @@
 import { z } from "zod";
-import { ConnectionStatus, Plan, UserRole, UserStatus } from "../enums";
+import { Plan, UserRole, UserStatus } from "../enums";
 import { cursorQuery, isoDate, timestamp, uuid } from "./common";
 
 // O painel administrativo NUNCA expõe senhas, tokens, credenciais bancárias nem dados financeiros
-// (valores, lançamentos, saldos) dos usuários. Só metadados de conta, contagens e status.
+// (valores, lançamentos, saldos, contas, cartões, bancos conectados) dos usuários. Só metadados de conta e de perfil
+// (nome, e-mail, plano, status, datas e preferências de aparência) e números agregados.
 
 export const adminUserDTO = z.object({
   id: uuid,
   email: z.string(),
+  /** Nome de exibição que a própria pessoa escolheu no cadastro. */
+  displayName: z.string().nullable(),
   role: UserRole,
   status: UserStatus,
   plan: Plan,
   createdAt: timestamp,
   lastSeenAt: timestamp.nullable(),
+  /** Concluiu (ou pulou) o tutorial de primeiro uso. */
+  onboardingCompleted: z.boolean(),
 });
 
+/** Detalhe de um usuário: os mesmos dados da lista mais a aparência escolhida. Nada financeiro. */
 export const adminUserDetailDTO = adminUserDTO.extend({
-  counts: z.object({
-    accounts: z.number().int(),
-    cards: z.number().int(),
-    transactions: z.number().int(),
-    goals: z.number().int(),
-    bankConnections: z.number().int(),
-  }),
-  bankConnections: z.array(
-    z.object({
-      id: uuid,
-      provider: z.string(),
-      institutionName: z.string(),
-      status: ConnectionStatus,
-      lastSyncAt: timestamp.nullable(),
-      lastErrorCode: z.string().nullable(),
-    }),
-  ),
+  themePreset: z.string().nullable(),
 });
 
 export const listAdminUsersQuery = z.object({
+  /** Busca por e-mail ou nome. */
   search: z.string().trim().min(1).max(100).optional(),
   status: UserStatus.optional(),
   ...cursorQuery.shape,
@@ -52,8 +43,12 @@ export const adminStatsDTO = z.object({
     newLast7Days: z.number().int(),
     newLast30Days: z.number().int(),
     activeLast7Days: z.number().int(),
+    /** Quantos já concluíram o tutorial de primeiro uso. */
+    onboardingCompleted: z.number().int(),
   }),
   signupsByDay: z.array(z.object({ date: isoDate, count: z.number().int() })),
+  /** Quantas pessoas usam cada tema (id do tema → total). */
+  themes: z.record(z.string(), z.number().int()),
   bankConnections: z.record(z.string(), z.number().int()),
 });
 
@@ -80,4 +75,7 @@ export const adminIssueDTO = z.object({
 });
 
 export type AdminUserDTO = z.infer<typeof adminUserDTO>;
+export type AdminUserDetailDTO = z.infer<typeof adminUserDetailDTO>;
 export type AdminStatsDTO = z.infer<typeof adminStatsDTO>;
+export type AdminIntegrationsDTO = z.infer<typeof adminIntegrationsDTO>;
+export type AdminIssueDTO = z.infer<typeof adminIssueDTO>;

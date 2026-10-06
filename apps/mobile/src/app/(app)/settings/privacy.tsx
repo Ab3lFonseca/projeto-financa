@@ -14,6 +14,7 @@ import { api } from "@/lib/api/endpoints";
 import { useAuth, useMe } from "@/lib/auth/AuthProvider";
 import { saveTextFile } from "@/lib/export-file";
 import { useApiMutation, useConsents } from "@/lib/hooks";
+import { useLogStore } from "@/lib/logger";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/lib/ui-store";
 
@@ -31,6 +32,8 @@ export default function PrivacyScreen() {
   const me = useMe();
   const { wipeLocal } = useAuth();
   const consents = useConsents();
+  const reportsEnabled = useLogStore((s) => s.reportsEnabled);
+  const setReportsEnabled = useLogStore((s) => s.setReportsEnabled);
   const requests = useQuery({ queryKey: ["privacy-requests"], queryFn: api.privacy.requests });
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -80,6 +83,13 @@ export default function PrivacyScreen() {
           <ListRow title="Política de Privacidade" subtitle={`Versão ${me.legalVersions.privacy} · aceito`} right={<Badge label="Obrigatório" />} chevron onPress={() => go("/legal/privacy")} />
           <Divider />
           <SwitchRow title="Novidades e dicas por e-mail" subtitle="Opcional. Você pode desligar quando quiser." value={marketing} onChange={(granted) => setConsent.mutate({ type: "MARKETING", granted })} />
+          <Divider />
+          <SwitchRow
+            title="Enviar relatórios de erro"
+            subtitle="Manda ao servidor só erros técnicos, sem dados pessoais, para podermos corrigi-los. Só a equipe técnica vê."
+            value={reportsEnabled}
+            onChange={setReportsEnabled}
+          />
           {openFinance ? (
             <>
               <Divider />

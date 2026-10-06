@@ -1,13 +1,16 @@
+import { Prisma } from "@app/database";
 import {
   adminIntegrationsDTO,
   adminIssueDTO,
   adminStatsDTO,
   adminUserDetailDTO,
   adminUserDTO,
+  appearanceSchema,
   idParam,
   listAdminUsersQuery,
   listOf,
   setUserStatusBody,
+  THEME_PRESET_IDS,
   toISODate,
   type AdminUserDTO,
 } from "@app/shared";
@@ -21,30 +24,45 @@ import { decodeCursor, encodeCursor, slicePage } from "../../lib/pagination";
 const cursorShape = z.object({ t: z.string(), id: z.uuid() });
 const DAY_MS = 86_400_000;
 
+/** Tema que a pessoa usa: o escolhido na tela Aparência ou, se nunca escolheu, o antigo Claro/Escuro/Automático. */
+function themeOf(profile: { theme: "SYSTEM" | "LIGHT" | "DARK"; appearance: unknown } | null): string | null {
+  if (!profile) return null;
+  const chosen = appearanceSchema.safeParse(profile.appearance);
+  if (chosen.success) return chosen.data.preset;
+  return profile.theme === "DARK" ? "dark" : profile.theme === "LIGHT" ? "light" : "system";
+}
+
 /**
- * Painel administrativo (API). Só metadados: contas, status, contagens, integrações e erros.
- * NÃO expõe senhas (não existem aqui), tokens, credenciais bancárias nem valores/lançamentos.
- * Todas as ações de escrita são auditadas.
+ * Painel administrativo (API). Só metadados de conta e de perfil (nome, e-mail, plano, status, datas, tema) e números
+ * agregados. NÃO expõe senhas (não existem aqui), tokens, credenciais bancárias, bancos conectados nem valores,
+ * saldos, contas, cartões ou lançamentos. Escritas e leituras de dados de usuários são auditadas (sem dados pessoais
+ * na trilha: só quem, o quê e qual registro).
  */
 export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
   const { prisma, config } = app;
   app.addHook("onRequest", app.requireAdmin);
 
-  const toUserDTO = (u: {
+  type UserRow = {
     id: string; email: string; role: AdminUserDTO["role"]; status: AdminUserDTO["status"];
     createdAt: Date; lastSeenAt: Date | null; subscription: { plan: AdminUserDTO["plan"]; status: string } | null;
-  }): AdminUserDTO => ({
+    profile: { displayName: string | null; onboardingCompletedAt: Date | null; theme: "SYSTEM" | "LIGHT" | "DARK"; appearance: unknown } | null;
+  };
+
+  const toUserDTO = (u: UserRow): AdminUserDTO => ({
     id: u.id,
     email: u.email,
+    displayName: u.profile?.displayName ?? null,
     role: u.role,
     status: u.status,
     plan: u.subscription?.plan === "PREMIUM" && ["ACTIVE", "TRIALING"].includes(u.subscription.status) ? "PREMIUM" : "FREE",
     createdAt: tsOut(u.createdAt),
     lastSeenAt: u.lastSeenAt ? tsOut(u.lastSeenAt) : null,
+    onboardingCompleted: Boolean(u.profile?.onboardingCompletedAt),
   });
   const userSelect = {
     id: true, email: true, role: true, status: true, createdAt: true, lastSeenAt: true,
     subscription: { select: { plan: true, status: true } },
+    profile: { select: { displayName: true, onboardingCompletedAt: true, theme: true, appearance: true } },
   } as const;
 
   app.get(
@@ -56,8 +74,15 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       const rows = await prisma.user.findMany({
         where: {
           ...(status ? { status } : {}),
-          ...(search ? { email: { contains: search.toLowerCase() } } : {}),
-          ...(c ? { OR: [{ createdAt: { lt: new Date(c.t) } }, { createdAt: new Date(c.t), id: { lt: c.id } }] } : {}),
+          ...(search
+            ? {
+                OR: [
+                  { email: { contains: search.toLowerCase() } },
+                  { profile: { displayName: { contains: search, mode: "insensitive" as const } } },
+                ],
+              }
+            : {}),
+          ...(c ? { AND: [{ OR: [{ createdAt: { lt: new Date(c.t) } }, { createdAt: new Date(c.t), id: { lt: c.id } }] }] } : {}),
         },
         select: userSelect,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -65,6 +90,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       });
       const { items, hasMore } = slicePage(rows, limit);
       const last = items[items.length - 1];
+      await audit(prisma, config.IP_HASH_PEPPER, { actorId: req.user!.id, action: "admin.users.listed", entity: "user", ip: req.ip, metadata: { searched: Boolean(search), results: items.length } }, req.log);
       return {
         data: items.map(toUserDTO),
         page: { hasMore, nextCursor: hasMore && last ? encodeCursor({ t: last.createdAt.toISOString(), id: last.id }) : null },
@@ -78,25 +104,8 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
     async (req) => {
       const u = await prisma.user.findUnique({ where: { id: req.params.id }, select: userSelect });
       if (!u) throw Errors.notFound("Usuário");
-      const id = u.id;
-      const [accounts, cards, transactions, goals, connections] = [
-        await prisma.account.count({ where: { userId: id, deletedAt: null } }),
-        await prisma.creditCard.count({ where: { userId: id, deletedAt: null } }),
-        await prisma.transaction.count({ where: { userId: id, deletedAt: null } }),
-        await prisma.goal.count({ where: { userId: id, deletedAt: null } }),
-        await prisma.bankConnection.findMany({
-          where: { userId: id },
-          select: { id: true, provider: true, institutionName: true, status: true, lastSyncAt: true, lastErrorCode: true },
-        }),
-      ];
-      return {
-        ...toUserDTO(u),
-        counts: { accounts, cards, transactions, goals, bankConnections: connections.length },
-        bankConnections: connections.map((b) => ({
-          ...b,
-          lastSyncAt: b.lastSyncAt ? tsOut(b.lastSyncAt) : null,
-        })),
-      };
+      await audit(prisma, config.IP_HASH_PEPPER, { actorId: req.user!.id, action: "admin.user.viewed", entity: "user", entityId: u.id, ip: req.ip }, req.log);
+      return { ...toUserDTO(u), themePreset: themeOf(u.profile) };
     },
   );
 
@@ -136,16 +145,30 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       const new7 = await prisma.user.count({ where: { createdAt: { gte: d7 } } });
       const new30 = await prisma.user.count({ where: { createdAt: { gte: d30 } } });
       const active7 = await prisma.user.count({ where: { lastSeenAt: { gte: d7 } } });
+      const onboarded = await prisma.profile.count({ where: { onboardingCompletedAt: { not: null } } });
 
       const recent = await prisma.user.findMany({ where: { createdAt: { gte: d30 } }, select: { createdAt: true } });
       const byDay = new Map<string, number>();
       for (const r of recent) byDay.set(toISODate(r.createdAt), (byDay.get(toISODate(r.createdAt)) ?? 0) + 1);
       const signupsByDay = [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, count]) => ({ date, count }));
 
+      // Tema em uso: o escolhido na tela Aparência ou, sem escolha, o antigo Claro/Escuro/Automático.
+      const themeRows = await prisma.$queryRaw<{ preset: string; n: number }[]>(Prisma.sql`
+        SELECT COALESCE(appearance->>'preset', CASE theme::text WHEN 'LIGHT' THEN 'light' WHEN 'DARK' THEN 'dark' ELSE 'system' END) AS preset,
+               COUNT(*)::int AS n
+        FROM profiles GROUP BY 1`);
+      const known = new Set<string>(THEME_PRESET_IDS);
+      const themes: Record<string, number> = {};
+      for (const r of themeRows) {
+        const key = known.has(r.preset) ? r.preset : "outro";
+        themes[key] = (themes[key] ?? 0) + Number(r.n);
+      }
+
       const conns = await prisma.bankConnection.groupBy({ by: ["status"], _count: { _all: true } });
       return {
-        users: { total, active, suspended, premium, newLast7Days: new7, newLast30Days: new30, activeLast7Days: active7 },
+        users: { total, active, suspended, premium, newLast7Days: new7, newLast30Days: new30, activeLast7Days: active7, onboardingCompleted: onboarded },
         signupsByDay,
+        themes,
         bankConnections: Object.fromEntries(conns.map((c) => [c.status, c._count._all])),
       };
     },
@@ -186,13 +209,14 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
   );
 
   // Problemas recentes: conexões bancárias com erro, webhooks que falharam, pedidos LGPD que falharam.
+  // O nome do banco da conexão NÃO aparece: o painel mostra que existe um problema e o código, nunca qual banco.
   app.get(
     "/issues",
     { schema: { tags: ["admin"], response: { 200: z.object({ data: z.array(adminIssueDTO) }) } } },
     async () => {
       const conns = await prisma.bankConnection.findMany({
         where: { status: "ERROR" },
-        select: { id: true, institutionName: true, lastErrorCode: true, updatedAt: true },
+        select: { id: true, lastErrorCode: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
         take: 20,
       });
@@ -209,7 +233,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
         take: 20,
       });
       const data = [
-        ...conns.map((c) => ({ kind: "BANK_CONNECTION_ERROR" as const, at: tsOut(c.updatedAt), summary: `${c.institutionName}: ${c.lastErrorCode ?? "erro"}`, ref: c.id })),
+        ...conns.map((c) => ({ kind: "BANK_CONNECTION_ERROR" as const, at: tsOut(c.updatedAt), summary: `Conexão bancária: ${c.lastErrorCode ?? "erro"}`, ref: c.id })),
         ...hooks.map((h) => ({ kind: "WEBHOOK_ERROR" as const, at: tsOut(h.receivedAt), summary: `${h.eventType}: ${(h.error ?? "").slice(0, 120)}`, ref: h.id })),
         ...privacy.map((p) => ({ kind: "PRIVACY_REQUEST_FAILED" as const, at: tsOut(p.requestedAt), summary: `Pedido ${p.type} falhou`, ref: p.id })),
       ].sort((a, b) => b.at.localeCompare(a.at));

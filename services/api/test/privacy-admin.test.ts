@@ -238,17 +238,42 @@ describe("administração", () => {
     const target = await createWorld(env, { email: "alvo-admin@teste.dev" });
     await target.expense({ description: "Dado financeiro sensível", amountCents: 987_654 });
 
+    await env.prisma.profile.update({ where: { userId: target.user.id }, data: { displayName: "Maria Alvo Silva" } });
+    await env.prisma.bankConnection.create({
+      data: { userId: target.user.id, provider: "PLUGGY", providerItemId: `item-detail-${Date.now()}`, institutionName: "Banco Secreto S.A.", status: "ACTIVE" },
+    });
+
     const found = await admin.get("/v1/admin/users", { query: { search: "ALVO-ADMIN" } });
     expect(found.body.data).toHaveLength(1);
-    expect(found.body.data[0]).toMatchObject({ email: "alvo-admin@teste.dev", role: "USER", status: "ACTIVE", plan: "FREE" });
+    expect(found.body.data[0]).toMatchObject({ email: "alvo-admin@teste.dev", displayName: "Maria Alvo Silva", role: "USER", status: "ACTIVE", plan: "FREE", onboardingCompleted: false });
+
+    // A busca também acha pelo nome (sem diferenciar maiúsculas).
+    const byName = await admin.get("/v1/admin/users", { query: { search: "maria alvo" } });
+    expect(byName.body.data.map((u: any) => u.id)).toEqual([target.user.id]);
 
     const detail = (await admin.get(`/v1/admin/users/${target.user.id}`)).body;
-    expect(detail.counts).toMatchObject({ accounts: 1, transactions: 1, cards: 0, goals: 0, bankConnections: 0 });
+    expect(detail).toMatchObject({ id: target.user.id, displayName: "Maria Alvo Silva", themePreset: "system" });
+
+    // Contrato fechado: só estes campos, nunca nada financeiro ou bancário (contagens, bancos conectados...).
+    expect(Object.keys(detail).sort()).toEqual(
+      ["createdAt", "displayName", "email", "id", "lastSeenAt", "onboardingCompleted", "plan", "role", "status", "themePreset"].sort(),
+    );
+    expect(Object.keys(found.body.data[0]).sort()).toEqual(
+      ["createdAt", "displayName", "email", "id", "lastSeenAt", "onboardingCompleted", "plan", "role", "status"].sort(),
+    );
 
     const everything = JSON.stringify([found.body, detail]);
     expect(everything).not.toContain("Dado financeiro sensível");
     expect(everything).not.toContain("987654");
-    expect(everything).not.toMatch(/password|senha|secret|token|service-key|anon-key/i);
+    expect(everything).not.toContain("Banco Secreto");
+    expect(everything).not.toMatch(/password|senha|secret|token|service-key|anon-key|bankConnections|institution|counts|balance|amountCents/i);
+
+    // Ler a lista e o detalhe de usuários deixa rastro na auditoria (sem dados pessoais).
+    const reads = await env.prisma.auditLog.findMany({ where: { actorId: admin.id, action: { in: ["admin.users.listed", "admin.user.viewed"] } } });
+    expect(reads.map((a) => a.action)).toEqual(expect.arrayContaining(["admin.users.listed", "admin.user.viewed"]));
+    const readsJson = JSON.stringify(reads, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
+    expect(readsJson).not.toContain("alvo-admin@teste.dev");
+    expect(readsJson).not.toContain("Maria Alvo");
 
     const page1 = await admin.get("/v1/admin/users", { query: { limit: "2" } });
     expect(page1.body.data).toHaveLength(2);
@@ -290,10 +315,17 @@ describe("administração", () => {
       data: { provider: "PLUGGY", eventId: `evt-${Date.now()}`, eventType: "item/error", payload: {}, error: "falha ao processar" },
     });
 
+    await env.prisma.profile.update({ where: { userId: w.user.id }, data: { onboardingCompletedAt: new Date(), appearance: { preset: "purple" } } });
+
     const stats = (await admin.get("/v1/admin/stats")).body;
     expect(stats.users.total).toBeGreaterThan(0);
     expect(stats.users.active).toBeGreaterThan(0);
+    expect(stats.users.onboardingCompleted).toBeGreaterThanOrEqual(1);
     expect(stats.bankConnections.ERROR).toBeGreaterThanOrEqual(1);
+    // Temas: quem escolheu pela tela Aparência conta pelo tema escolhido; quem nunca escolheu conta como "system".
+    expect(stats.themes.purple).toBeGreaterThanOrEqual(1);
+    expect(stats.themes.system).toBeGreaterThanOrEqual(1);
+    expect(Object.values(stats.themes).reduce((a: number, b) => a + (b as number), 0)).toBe(await env.prisma.profile.count());
 
     const integrations = (await admin.get("/v1/admin/integrations")).body;
     expect(integrations.auth).toEqual({ provider: "supabase", configured: true });
@@ -304,6 +336,9 @@ describe("administração", () => {
 
     const issues = (await admin.get("/v1/admin/issues")).body.data;
     expect(issues.map((i: any) => i.kind)).toEqual(expect.arrayContaining(["BANK_CONNECTION_ERROR", "WEBHOOK_ERROR"]));
+    // O painel mostra que há um problema e o código, nunca qual banco.
+    expect(JSON.stringify(issues)).not.toContain("Banco X");
+    expect(issues.find((i: any) => i.kind === "BANK_CONNECTION_ERROR").summary).toBe("Conexão bancária: LOGIN_FAILED");
   });
 });
 

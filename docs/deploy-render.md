@@ -130,7 +130,7 @@ Dica para diferenciar os `429` no navegador (F12 → Network → resposta): `EMA
   No log da API, a linha de erro traz `details.upstreamStatus` e `details.upstreamCode`; `upstreamCode: "network_error"` significa que o Supabase nem
   respondeu (URL do projeto errada, projeto pausado ou rede). Para destravar um teste enquanto isso, desligue *Confirm email* (veja 4.1).
 - **A API não sobe**: o log mostra qual variável falta (a API recusa produção sem `SUPABASE_*` e pepper próprio).
-- Logs: painel do serviço → *Logs*. Dentro do app: *Mais → Configurações → Diagnóstico*.
+- Logs: painel do serviço → *Logs*. Dentro do app (só para a conta administradora): *Mais → Diagnóstico*.
 
 > **Não validado:** o `render.yaml` e o build estático no Render nunca foram executados (só o build local, que funciona). O primeiro deploy pode
 > pedir ajustes pequenos; me mande o log que eu corrijo.

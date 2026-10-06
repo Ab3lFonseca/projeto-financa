@@ -80,7 +80,14 @@ export function DonutChart({ data, size = 168, thickness = 22, children }: { dat
 
 // ---------------------------------------------------------------------------- barras
 
-export type BarDatum = { key: string; label: string; values: number[] };
+export type BarDatum = {
+  key: string;
+  /** Rótulo no eixo (pode ser vazio para não poluir quando há muitas barras). */
+  label: string;
+  values: number[];
+  /** Título do quadro que aparece ao tocar na barra (padrão: o próprio rótulo). */
+  detail?: string;
+};
 
 /** Barra que cresce a partir da linha do zero (para cima se positiva, para baixo se negativa). */
 function GrowBar({
@@ -126,12 +133,18 @@ export function BarChart({
   seriesLabels,
   height = 200,
   empty = "Sem dados no período",
+  axisFormat = formatCompactBRL,
+  valueFormat = formatBRL,
 }: {
   data: BarDatum[];
   colors: string[];
   seriesLabels?: string[];
   height?: number;
   empty?: string;
+  /** Texto dos rótulos do eixo (padrão: reais compactos, "1,3 mil"). Use `String` para contagens. */
+  axisFormat?: (v: number) => string;
+  /** Texto do valor ao tocar numa barra (padrão: reais, "R$ 1.250,00"). */
+  valueFormat?: (v: number) => string;
 }) {
   const { colors } = useTheme();
   const [width, setWidth] = useState(0);
@@ -160,7 +173,7 @@ export function BarChart({
             <G key={`y${vi}`}>
               <Line x1={padL} x2={width} y1={y(v)} y2={y(v)} stroke={v === 0 ? colors.textFaint : colors.border} strokeWidth={v === 0 ? 1 : 0.75} strokeDasharray={v === 0 ? undefined : "3 4"} />
               <SvgText x={padL - 8} y={y(v) + 4} fontSize={10} fill={colors.textFaint} textAnchor="end">
-                {formatCompactBRL(v)}
+                {axisFormat(v)}
               </SvgText>
             </G>
           ))}
@@ -204,7 +217,7 @@ export function BarChart({
       {width > 0 ? (
         <View style={{ position: "absolute", left: padL, top: 0, width: innerW, height, flexDirection: "row" }}>
           {data.map((d, i) => (
-            <Pressable key={d.key} accessibilityRole="button" accessibilityLabel={`${d.label}: ver valores`} onPress={() => setSelected(selected === i ? null : i)} style={{ flex: 1 }} />
+            <Pressable key={d.key} accessibilityRole="button" accessibilityLabel={`${d.detail ?? d.label}: ver valores`} onPress={() => setSelected(selected === i ? null : i)} style={{ flex: 1 }} />
           ))}
         </View>
       ) : null}
@@ -218,7 +231,7 @@ export function BarChart({
       {sel ? (
         <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: colors.surfaceAlt, gap: 4 }}>
           <Text variant="caption" tone="muted" weight="600">
-            {sel.label}
+            {sel.detail ?? sel.label}
           </Text>
           <View style={{ flexDirection: "row", gap: 16, flexWrap: "wrap" }}>
             {sel.values.map((v, s) => (
@@ -226,7 +239,7 @@ export function BarChart({
                 <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: seriesColors[s] }} />
                 <Text variant="bodySm" weight="600" tabular>
                   {seriesLabels?.[s] ? `${seriesLabels[s]}: ` : ""}
-                  {formatBRL(v)}
+                  {valueFormat(v)}
                 </Text>
               </View>
             ))}

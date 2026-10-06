@@ -11,6 +11,12 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Painel do administrador no app** (*Mais → Painel do administrador*, só para contas `ADMIN`): números de usuários (total, novos, ativos,
+  premium, suspensos, quem concluiu o tutorial), cadastros dos últimos 30 dias, temas escolhidos, estado do login/Open Finance/avisos e a **lista de usuários
+  com nome, e-mail, plano e situação** (busca por nome ou e-mail, detalhe em folha). Só dados de cadastro: nada de saldos, lançamentos, contas,
+  cartões nem bancos conectados. Toda leitura de dados de usuários fica na auditoria sem dados pessoais (`admin.users.listed`, `admin.user.viewed`).
+- **Administrador definido na configuração:** `ADMIN_USER_IDS` (UUIDs separados por vírgula) promove a conta a `ADMIN` na primeira vez em que ela é
+  vista (idempotente, auditado como `admin.bootstrap`). Fica no painel do Render, e não no código, porque o repositório é público.
 - **Movimento e acabamento em todo o app.** Tempos e curvas únicos (`components/ui/motion.ts`) e o "reduzir movimento" do sistema é respeitado.
   Linhas de lista e cartões ganham mola ao tocar e destaque ao passar o mouse; a seta das linhas anda um pouco; a aba ativa tem uma pílula
   animada e troca de aba tem fade; o seletor segmentado tem um marcador que desliza; saldos e totais em destaque **contam até o valor**
@@ -80,6 +86,10 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 - **Testes:** 513 automatizados (compartilhado 76, banco 31, app 83, API 323).
 
 ### Alterado
+- **Diagnóstico agora é só do administrador.** O registro de erros do app, as respostas da API e o endereço do servidor não aparecem mais para
+  os demais usuários (a tela volta ao início). O interruptor "Enviar relatórios de erro" continua com todos, agora em *Privacidade e dados*.
+- API de administração: a lista traz o nome de exibição e se concluiu o tutorial; o detalhe do usuário **deixou de trazer contagens (contas,
+  cartões, lançamentos, metas) e conexões bancárias**; `/stats` ganhou quem concluiu o tutorial e os temas em uso; `/issues` não mostra mais o nome do banco.
 - *Configurações → Aparência* deixou de ser um seletor de três opções: virou a tela "Tema do app" (galeria de temas com miniatura, editor do tema
   personalizado e prévia). O antigo claro/escuro/automático continua existindo como os presets Claro, Escuro e Automático, e a escolha antiga é
   mantida na primeira abertura depois da atualização. `profile.theme` segue sendo gravado (Claro/Escuro/Automático), para versões antigas do app.
