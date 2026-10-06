@@ -126,6 +126,11 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   A CSP completa fica para depois de testar com o widget do Pluggy.
 
 ### Corrigido
+- **O fundo do ícone da aba ativa cobria o começo do rótulo no computador.** Em telas largas (a partir de 768 px) o React Navigation põe o rótulo ao
+  lado do ícone e a pílula encostava na palavra (Início, Transações...). Agora o rótulo fica sempre embaixo do ícone (`tabBarLabelPosition`), como no
+  celular, que é o formato para o qual a altura da barra foi calculada. Conferido em 1280 px: 2 px de folga entre a pílula e o texto, nenhum rótulo cortado.
+- **Fica claro no log do deploy se há administrador configurado.** A linha "API no ar" agora mostra `admins` (só a quantidade, nunca os IDs) e a situação
+  da cobrança, e a API avisa quando `ADMIN_USER_IDS` está vazia (sem ela, o painel do administrador e o Diagnóstico não aparecem para ninguém).
 - **Rótulos da barra de abas cortados no celular (de novo).** O fundo arredondado do hover tirou 4 px de altura de cada aba sem que a barra
   crescesse, e o rótulo (Início, Transações...) era espremido e cortado em qualquer largura. Agora as medidas ficam num lugar só
   (`tabBarMetrics.ts`: a altura é a soma de ícone, rótulo, preenchimentos, folga do hover e borda, conferida por teste), o rótulo tem linha fixa e

@@ -28,6 +28,9 @@ export default function TabsLayout() {
         animation: "fade",
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textFaint,
+        // Rótulo SEMPRE embaixo do ícone. Sem isto, em telas largas (>= 768 px: computador, tablet) o React Navigation põe o rótulo ao lado do
+        // ícone e a pílula da aba ativa cobre o começo da palavra. Toda a conta de altura da barra (tabBarMetrics.ts) vale para o rótulo embaixo.
+        tabBarLabelPosition: "below-icon",
         // Rótulo com linha fixa e sem escala da fonte do sistema: a barra tem altura fixa, então o texto não pode crescer nem ser espremido.
         tabBarAllowFontScaling: false,
         tabBarLabelStyle: { fontSize: 10, lineHeight: TAB_METRICS.labelLine, fontWeight: "600", marginTop: TAB_METRICS.labelGap, flexShrink: 0 },

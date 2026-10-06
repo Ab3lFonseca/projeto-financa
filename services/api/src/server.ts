@@ -39,9 +39,23 @@ try {
   await app.listen({ port: config.PORT, host: config.HOST });
   // corsOrigins vazio = CORS desligado: o app nativo funciona, mas o app web (navegador) é bloqueado.
   app.log.info(
-    { port: config.PORT, env: config.NODE_ENV, auth: config.AUTH_MODE, jobs: config.JOBS_ENABLED, openFinance: config.OPEN_FINANCE_ENABLED, corsOrigins: config.CORS_ORIGINS, clientIpHeader: config.CLIENT_IP_HEADER ?? null },
+    {
+      port: config.PORT,
+      env: config.NODE_ENV,
+      auth: config.AUTH_MODE,
+      jobs: config.JOBS_ENABLED,
+      openFinance: config.OPEN_FINANCE_ENABLED,
+      corsOrigins: config.CORS_ORIGINS,
+      clientIpHeader: config.CLIENT_IP_HEADER ?? null,
+      // Só a quantidade (nunca os IDs): confirma no log do deploy que ADMIN_USER_IDS foi lida.
+      admins: config.ADMIN_USER_IDS.length,
+      billing: { enforced: config.BILLING_ENFORCED, provider: config.BILLING_PROVIDER },
+    },
     "API no ar",
   );
+  if (config.ADMIN_USER_IDS.length === 0) {
+    app.log.warn("ADMIN_USER_IDS está vazia: o painel do administrador e o Diagnóstico só aparecem para contas que já sejam ADMIN no banco. Defina a variável com o ID da sua conta (Supabase → Authentication → Users → User UID).");
+  }
   if (config.NODE_ENV === "production" && config.TRUST_PROXY && !config.CLIENT_IP_HEADER) {
     app.log.warn("TRUST_PROXY confia no X-Forwarded-For enviado pelo cliente: os limites de tentativas podem ser contornados. Defina CLIENT_IP_HEADER (Render: cf-connecting-ip; Fly: fly-client-ip).");
   }
