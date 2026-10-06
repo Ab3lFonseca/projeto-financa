@@ -70,6 +70,10 @@ export const useUnreadCount = () =>
 
 export const useConsents = () => useQuery({ queryKey: ["consents"], queryFn: api.privacy.consents });
 
+/** Assinatura: estado, preços e o que dá para fazer. `poll` relê de 2 em 2 s (volta do pagamento, enquanto o provedor confirma). */
+export const useBilling = (poll = false) =>
+  useQuery({ queryKey: ["billing"], queryFn: api.billing.get, refetchInterval: poll ? 2_000 : false, retry: planRetry });
+
 // ------------------------------------------------------------------ administração (só para administradores)
 
 /** `enabled` evita qualquer chamada quando a pessoa não é administradora (a tela também nem é mostrada). */
@@ -87,6 +91,15 @@ export const useAdminUsers = (search: string, enabled = true) =>
 export const useAdminUser = (id: string | null) => useQuery({ queryKey: ["admin", "user", id], queryFn: () => api.admin.user(id!), enabled: !!id });
 
 export const useOpenFinanceStatus = () => useQuery({ queryKey: ["of-status"], queryFn: api.openFinance.status });
+
+/**
+ * Para onde levar quem toca em "conectar banco": a tela real só quando o recurso está ligado no servidor; senão, a explicação "em breve"
+ * do mural (a conexão com bancos ainda não foi lançada para o público).
+ */
+export function useBankEntry(): { enabled: boolean; href: string } {
+  const enabled = useOpenFinanceStatus().data?.enabled === true;
+  return { enabled, href: enabled ? "/open-finance" : "/updates?item=bank-connection" };
+}
 export const useBankConnections = () => useQuery({ queryKey: ["of-connections"], queryFn: api.openFinance.connections });
 
 /**

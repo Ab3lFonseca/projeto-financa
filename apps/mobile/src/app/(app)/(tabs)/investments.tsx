@@ -10,7 +10,7 @@ import { Money } from "@/components/ui/Money";
 import { Text } from "@/components/ui/Text";
 import { api } from "@/lib/api/endpoints";
 import { formatAgo, formatPct } from "@/lib/format";
-import { useBankConnections, useInvestments, useOpenFinanceStatus, useSyncStaleConnections } from "@/lib/hooks";
+import { useBankConnections, useBankEntry, useInvestments, useSyncStaleConnections } from "@/lib/hooks";
 import { toast } from "@/lib/ui-store";
 import { COLOR_CHOICES } from "@/theme/tokens";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -22,7 +22,7 @@ const go = (p: string) => router.push(p as never);
 export default function InvestmentsScreen() {
   const { colors } = useTheme();
   const qc = useQueryClient();
-  const status = useOpenFinanceStatus();
+  const bank = useBankEntry();
   const connections = useBankConnections();
   const inv = useInvestments();
   const [refreshing, setRefreshing] = useState(false);
@@ -68,17 +68,25 @@ export default function InvestmentsScreen() {
         <ErrorState error={inv.error} onRetry={() => void inv.refetch()} />
       ) : conns.length === 0 && (data?.items.length ?? 0) === 0 ? (
         <Card style={{ gap: 14 }}>
-          <EmptyState
-            icon="piggy-bank"
-            title="Veja seus investimentos aqui"
-            message="Conecte seu banco pelo Open Finance e o app traz sozinho seus CDBs, caixinhas, cofrinhos, porquinhos, LCI/LCA e fundos, com o rendimento atualizado todos os dias."
-          />
-          {status.data && !status.data.enabled ? (
-            <Text variant="caption" tone="muted" align="center">
-              O Open Finance ainda não está ligado neste ambiente.
-            </Text>
+          {bank.enabled ? (
+            <>
+              <EmptyState
+                icon="piggy-bank"
+                title="Veja seus investimentos aqui"
+                message="Conecte seu banco e o app traz sozinho seus CDBs, caixinhas, cofrinhos, porquinhos, LCI/LCA e fundos, com o rendimento atualizado todos os dias."
+              />
+              <Button label="Conectar meu banco" icon="link" size="lg" onPress={() => go(bank.href)} />
+            </>
           ) : (
-            <Button label="Conectar meu banco" icon="link" size="lg" onPress={() => go("/open-finance")} />
+            <>
+              <EmptyState
+                icon="piggy-bank"
+                title="Seus investimentos, em breve"
+                message="Estamos preparando o acompanhamento de CDI, CDB e do seu porquinho, e a conexão automática com bancos. Veja como vai funcionar."
+              />
+              <Button label="Ver como vai funcionar" icon="sparkles" size="lg" onPress={() => go("/updates?item=investments")} />
+              <Button label="Conexão com bancos" variant="ghost" onPress={() => go(bank.href)} />
+            </>
           )}
         </Card>
       ) : !data || data.items.length === 0 ? (

@@ -8,6 +8,7 @@ import { Badge, ProgressBar } from "@/components/ui/Controls";
 import { Banner, ErrorState, SkeletonCard } from "@/components/ui/Feedback";
 import { Card, Divider, IconBadge, ListRow, Reveal, Screen, ScreenHeader, Section } from "@/components/ui/Layout";
 import { Text } from "@/components/ui/Text";
+import { formatMoneyCents } from "@/lib/access";
 import { fillSignups, onboardingRate, themeRows } from "@/lib/admin";
 import { useAdminIntegrations, useAdminStats, useToday } from "@/lib/hooks";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -49,7 +50,7 @@ function Dashboard() {
   }
   if (!stats.data) return null;
 
-  const { users, signupsByDay, themes } = stats.data;
+  const { users, signupsByDay, themes, billing } = stats.data;
   const days = fillSignups(signupsByDay, today, 30);
   const rate = onboardingRate(users.onboardingCompleted, users.total);
   const rows = themeRows(themes);
@@ -73,6 +74,36 @@ function Dashboard() {
       </Reveal>
 
       <Reveal index={1}>
+        <Section title="Assinaturas">
+          {billing.enforced ? null : (
+            <Banner tone="info" icon="info">
+              A cobrança está desligada (beta). Os números mostram como ficaria quando ela começar.
+            </Banner>
+          )}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+            <StatTile label="Em teste grátis" value={billing.trial} tone="primary" />
+            <StatTile label="Assinantes" value={billing.paid} tone="positive" />
+            <StatTile label="Cortesias" value={billing.complimentary} tone="primary" hint="acesso sem pagar" />
+            <StatTile label="Teste vencido" value={billing.expired} tone={billing.expired > 0 ? "negative" : "primary"} hint="somente leitura" />
+            <StatTile label="Com Rendimentos" value={billing.investmentsAddon} tone="primary" />
+          </View>
+          <Card style={{ gap: 4 }}>
+            <Text variant="caption" tone="muted" weight="600">
+              Receita mensal estimada
+            </Text>
+            <Text variant="title" weight="700" tabular>
+              {billing.monthlyRevenueCents !== null ? formatMoneyCents(billing.monthlyRevenueCents, billing.currency ?? "BRL") : "—"}
+            </Text>
+            <Text variant="caption" tone="faint">
+              {billing.monthlyRevenueCents !== null
+                ? "Assinantes × preço do plano (e do adicional) lido do provedor. Cortesias não entram."
+                : "Aparece quando o provedor de pagamento estiver configurado."}
+            </Text>
+          </Card>
+        </Section>
+      </Reveal>
+
+      <Reveal index={2}>
         <Section title="Cadastros nos últimos 30 dias" action="Ver usuários" onAction={() => go("/admin/users")}>
           <Card>
             <BarChart

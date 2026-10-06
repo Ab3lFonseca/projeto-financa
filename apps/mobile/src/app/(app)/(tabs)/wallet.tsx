@@ -5,12 +5,12 @@ import { Icon } from "@/components/Icon";
 import { AccountTile, CreditCardView } from "@/components/feature/Rows";
 import { TourTarget } from "@/components/tour/TourTarget";
 import { Button } from "@/components/ui/Button";
-import { Segmented } from "@/components/ui/Controls";
+import { Badge, Segmented } from "@/components/ui/Controls";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/ui/Feedback";
 import { Card, Reveal, Row, Screen, Section } from "@/components/ui/Layout";
 import { Money } from "@/components/ui/Money";
 import { Text } from "@/components/ui/Text";
-import { useAccounts, useBankOverview, useCards, useSyncStaleConnections } from "@/lib/hooks";
+import { useAccounts, useBankEntry, useBankOverview, useCards, useSyncStaleConnections } from "@/lib/hooks";
 import { useTheme } from "@/theme/ThemeProvider";
 
 type Tab = "accounts" | "cards";
@@ -141,18 +141,27 @@ export default function WalletScreen() {
   );
 }
 
-/** Convite para conectar bancos automaticamente (Open Finance, recurso Premium). */
+/**
+ * Convite para conectar bancos automaticamente. A conexão ainda não foi lançada para o público: o cartão mostra "Em breve" e leva à explicação
+ * (para que serve, como vai funcionar, o que esperar). Só quando o recurso está ligado no servidor ele abre a conexão de verdade.
+ */
 function OpenFinanceCard() {
   const { colors, radius } = useTheme();
+  const bank = useBankEntry();
   return (
-    <Card onPress={() => go("/open-finance")} tone="primarySoft" style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+    <Card onPress={() => go(bank.href)} tone="primarySoft" style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
       <View style={{ width: 44, height: 44, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
         <Icon name="link" size={22} color={colors.onPrimary} />
       </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text weight="700">Conectar banco automaticamente</Text>
+      <View style={{ flex: 1, gap: 4 }}>
+        <Row gap={8}>
+          <Text weight="700" style={{ flexShrink: 1 }}>
+            {bank.enabled ? "Conectar banco automaticamente" : "Conexão automática com bancos"}
+          </Text>
+          {bank.enabled ? null : <Badge label="Em breve" tone="warning" />}
+        </Row>
         <Text variant="bodySm" tone="muted">
-          Open Finance: traga saldos e transações do seu banco com segurança.
+          {bank.enabled ? "Traga saldos e transações do seu banco com segurança." : "Traga saldos e movimentações do seu banco sem digitar. Toque para ver como vai funcionar."}
         </Text>
       </View>
       <Icon name="chevron-right" size={18} color={colors.textMuted} />

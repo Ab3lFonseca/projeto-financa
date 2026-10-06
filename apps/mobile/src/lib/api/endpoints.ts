@@ -40,6 +40,8 @@ export type MonthComparison = S.MonthComparisonDTO;
 export type TransactionSummary = Out<typeof S.transactionSummaryDTO>;
 export type InvoicePayment = Out<typeof S.invoicePaymentDTO>;
 export type GoalContribution = Out<typeof S.goalContributionDTO>;
+export type Billing = S.BillingDTO;
+export type Checkout = Out<typeof S.checkoutDTO>;
 export type AdminUser = S.AdminUserDTO;
 export type AdminUserDetail = S.AdminUserDetailDTO;
 export type AdminStats = S.AdminStatsDTO;
@@ -196,12 +198,23 @@ export const api = {
     markAllRead: () => http.post<{ ok: true }>(`${v1}/notifications/read-all`),
   },
 
+  // Assinatura: estado, pagamento (página do provedor), portal, adicional. Preços vêm do provedor, nunca do app.
+  billing: {
+    get: () => http.get<Billing>(`${v1}/billing`),
+    checkout: (investments: boolean) => http.post<Checkout>(`${v1}/billing/checkout`, { investments }),
+    portal: () => http.post<{ url: string }>(`${v1}/billing/portal`),
+    addon: (enabled: boolean) => http.post<Billing>(`${v1}/billing/addon`, { enabled }),
+  },
+
   // Só administradores (o servidor confere o papel a cada chamada). Metadados de conta e números agregados; nada financeiro.
   admin: {
     stats: () => http.get<AdminStats>(`${v1}/admin/stats`),
     integrations: () => http.get<AdminIntegrations>(`${v1}/admin/integrations`),
     users: (params: { search?: string; cursor?: string; limit?: number } = {}) => http.get<Page<AdminUser>>(`${v1}/admin/users`, { query: params }),
     user: (id: string) => http.get<AdminUserDetail>(`${v1}/admin/users/${id}`),
+    /** Cortesia: `days: null` = sem prazo. */
+    grantAccess: (id: string, body: { days: number | null; investments: boolean }) => http.post<AdminUser>(`${v1}/admin/users/${id}/access`, body),
+    revokeAccess: (id: string) => http.delete<AdminUser>(`${v1}/admin/users/${id}/access`),
   },
 
   diagnostics: {

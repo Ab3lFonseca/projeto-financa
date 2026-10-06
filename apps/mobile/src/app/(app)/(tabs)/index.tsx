@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { BarChart, DonutChart, Legend, LineChart } from "@/components/charts/Charts";
+import { AccessBanner } from "@/components/feature/AccessBanner";
 import { Fab, InsightCard, PendingSyncBanner } from "@/components/feature/Common";
 import { TourTarget } from "@/components/tour/TourTarget";
 import { AccountTile, BudgetRow, CreditCardView, GoalCard, SummaryTile, TransactionRow } from "@/components/feature/Rows";
@@ -69,6 +70,7 @@ export default function HomeScreen() {
   return (
     <View style={{ flex: 1 }}>
       <Screen header={header} tabs refreshing={isRefetching} onRefresh={() => void refetch()} contentStyle={{ paddingBottom: 96 }}>
+        <AccessBanner />
         <PendingSyncBanner />
 
         {/* Saldo total */}

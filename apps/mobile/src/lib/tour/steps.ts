@@ -24,7 +24,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     route: "/",
     icon: "sparkles",
     title: "Bem-vindo(a) ao Finança",
-    body: "Em cerca de 1 minuto você conhece tudo: registrar gastos, acompanhar contas e cartões, ver gráficos, controlar orçamentos e metas e até conectar seus bancos.",
+    body: "Em cerca de 1 minuto você conhece tudo: registrar gastos, acompanhar contas e cartões, ver gráficos, controlar orçamentos e metas e acompanhar as novidades que estão chegando.",
     why: "Você pode pular quando quiser e rever o tutorial depois em Mais → Tutorial.",
   },
   {
@@ -78,8 +78,8 @@ export const TOUR_STEPS: readonly TourStep[] = [
     target: "tab-investments",
     icon: "piggy-bank",
     title: "Seus investimentos",
-    body: "Conectando o seu banco pelo Open Finance, CDB, caixinhas, cofrinhos, LCI/LCA e fundos aparecem aqui com saldo e rendimento, atualizados sozinhos.",
-    why: "Veja quanto o seu dinheiro rende sem montar planilha.",
+    body: "Esta aba vai reunir os seus investimentos, com o CDI, o CDB e o seu porquinho rendendo dia a dia. Está em construção: toque nela para ver como vai funcionar.",
+    why: "Quando chegar, você verá quanto o seu dinheiro rende sem montar planilha.",
   },
   {
     id: "planning",
@@ -95,9 +95,9 @@ export const TOUR_STEPS: readonly TourStep[] = [
     route: "/more",
     target: "more-bank",
     icon: "link",
-    title: "Conecte os seus bancos",
-    body: "O Open Finance traz contas, cartões, transações e investimentos automaticamente. É só leitura, você autoriza no app do próprio banco e pode encerrar quando quiser.",
-    why: "Menos digitação, saldos sempre em dia. Nós nunca pedimos a senha do banco.",
+    title: "O que vem por aí",
+    body: "Aqui ficam as Novidades e a explicação da conexão automática com bancos, que está a caminho: saldos e movimentações sem digitar, só leitura, autorizada no app do próprio banco.",
+    why: "Você acompanha o que já chegou e o que está sendo preparado. Nunca pediremos a senha do seu banco.",
   },
   {
     id: "personalize",

@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { AppState, Platform, Pressable, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { PaywallHost } from "@/components/PaywallHost";
 import { TourController } from "@/components/tour/TourController";
 import { TourOverlay } from "@/components/tour/TourOverlay";
 import { ConfirmHost, ToastHost } from "@/components/ui/Feedback";
@@ -108,6 +109,7 @@ function Shell() {
       <TourOverlay />
       <ToastHost />
       <ConfirmHost />
+      <PaywallHost />
     </>
   );
 }

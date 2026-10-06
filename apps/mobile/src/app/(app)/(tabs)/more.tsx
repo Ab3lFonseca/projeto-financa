@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/Controls";
 import { Card, Divider, Screen } from "@/components/ui/Layout";
 import { Text } from "@/components/ui/Text";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { useUnreadCount } from "@/lib/hooks";
+import { accessBadge, accessSummary } from "@/lib/access";
+import { useBankEntry, useUnreadCount } from "@/lib/hooks";
 import { useOutbox } from "@/lib/offline/outbox";
 import { useTourStore } from "@/lib/tour/store";
 import { confirmDialog } from "@/lib/ui-store";
@@ -20,6 +21,7 @@ export default function MoreScreen() {
   const { me, signOut } = useAuth();
   const isAdmin = useIsAdmin();
   const unread = useUnreadCount().data?.count ?? 0;
+  const bank = useBankEntry();
   const pending = useOutbox((s) => s.items.length);
   const name = me?.profile.displayName || me?.email.split("@")[0] || "Você";
 
@@ -39,8 +41,15 @@ export default function MoreScreen() {
             {me?.email}
           </Text>
         </View>
-        {me?.entitlements.plan === "PREMIUM" ? <Badge label={me.entitlements.billingEnforced ? "Premium" : "Beta Premium"} tone="primary" /> : <Badge label="Gratuito" />}
+        {me ? <Badge label={accessBadge(me.entitlements.access).label} tone={accessBadge(me.entitlements.access).tone} /> : null}
       </Card>
+
+      {/* Com a cobrança desligada (beta) não há o que assinar: o cartão nem aparece. */}
+      {me?.entitlements.billingEnforced ? (
+        <Card style={{ paddingVertical: 6 }}>
+          <ShortcutRow icon="crown" title="Assinatura" subtitle={accessSummary(me.entitlements.access).title} onPress={() => go("/subscription")} color={colors.primary} />
+        </Card>
+      ) : null}
 
       {/* Só administradores veem esta área (o servidor confere o papel a cada chamada). */}
       {isAdmin ? (
@@ -73,7 +82,16 @@ export default function MoreScreen() {
             </>
           ) : null}
           <Divider inset={52} />
-          <ShortcutRow icon="link" title="Open Finance" subtitle="Conecte seus bancos" onPress={() => go("/open-finance")} color="#0EA5E9" />
+          <ShortcutRow
+            icon="link"
+            title={bank.enabled ? "Open Finance" : "Conexão com bancos"}
+            subtitle={bank.enabled ? "Conecte seus bancos" : "Saldos e movimentações sem digitar"}
+            onPress={() => go(bank.href)}
+            badge={bank.enabled ? undefined : <Badge label="Em breve" tone="warning" />}
+            color="#0EA5E9"
+          />
+          <Divider inset={52} />
+          <ShortcutRow icon="sparkles" title="Novidades" subtitle="O que já chegou e o que vem por aí" onPress={() => go("/updates")} color={colors.accent} />
         </Card>
       </TourTarget>
 

@@ -1,6 +1,7 @@
 import { API_URL } from "../config";
 import { tokenStore } from "../auth/tokens";
 import { log } from "../logger";
+import { usePaywall } from "../paywall";
 
 /** Erro padronizado da API (`{ error: { code, message, details } }`) ou de rede (status 0). */
 export class ApiError extends Error {
@@ -167,7 +168,12 @@ async function requestInner<T>(method: string, path: string, opts: RequestOption
     }
   }
 
-  if (!res.ok) throw await toError(res);
+  if (!res.ok) {
+    const err = await toError(res);
+    // Teste grátis acabou e a pessoa tentou criar/editar: convida a assinar (o aviso de erro da tela continua valendo).
+    if (err.status === 402 && err.code === "SUBSCRIPTION_REQUIRED") usePaywall.getState().show();
+    throw err;
+  }
   if (res.status === 204) return undefined as T;
   if (opts.raw) return (await res.text()) as T;
   return (await res.json()) as T;
