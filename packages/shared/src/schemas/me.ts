@@ -79,6 +79,15 @@ export const meDTO = z.object({
   email: z.string(),
   role: UserRole,
   profile: profileDTO,
+  /** Segurança da conta: o que o app precisa saber para decidir o que mostrar (pergunta do primeiro acesso, atalhos). */
+  security: z.object({
+    mfaEnabled: z.boolean(),
+    /** Já respondeu à pergunta "ativar a verificação em duas etapas?" (ela sai uma vez só). */
+    promptAnswered: z.boolean(),
+    hasPassword: z.boolean(),
+  }),
+  /** Avisos de primeiro acesso já mostrados (cada um sai uma vez só, em qualquer aparelho). */
+  notices: z.object({ trialIntroSeen: z.boolean() }),
   /** true quando faltam os aceites da versão vigente dos Termos/Privacidade. */
   consentRequired: z.boolean(),
   legalVersions: z.object({ terms: z.string(), privacy: z.string() }),
@@ -92,8 +101,8 @@ export const pushTokenBody = z.strictObject({
 });
 
 export const deleteAccountBody = z.strictObject({
-  /** Reautenticação: a exclusão é irreversível. */
-  password: z.string().min(1).max(200),
+  /** Reautenticação: a exclusão é irreversível. Contas sem senha (entrada só por Google/Facebook...) confirmam com um login recente. */
+  password: z.string().min(1).max(200).optional(),
   confirm: z.literal("EXCLUIR"),
 });
 

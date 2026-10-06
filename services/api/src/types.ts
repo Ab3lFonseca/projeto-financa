@@ -4,7 +4,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Config } from "./config";
 import type { AccessInfo } from "./lib/access";
 import type { AuthProvider } from "./modules/auth/provider";
-import type { TokenVerifier } from "./modules/auth/token-verifier";
+import type { TokenVerifier, VerifiedToken } from "./modules/auth/token-verifier";
 import type { BillingService } from "./modules/billing/service";
 import type { UserDirectory } from "./modules/users/directory";
 import type { PushNotifier } from "./modules/notifications/notifier";
@@ -22,6 +22,10 @@ export type AuthUser = {
   timezone: string;
   /** Aceitou a versão vigente dos Termos e da Política de Privacidade. */
   consentOk: boolean;
+  /** Verificação em duas etapas ligada: a API só aceita sessões que já passaram pelo código (aal2). */
+  mfaEnabled: boolean;
+  /** Fator TOTP no provedor de login (nulo se a verificação está desligada). */
+  mfaFactorId: string | null;
 };
 
 declare module "fastify" {
@@ -47,5 +51,7 @@ declare module "fastify" {
     user: AuthUser | null;
     /** Token bruto (necessário no logout e na troca de senha). */
     accessToken: string | null;
+    /** O que o token diz sobre esta sessão (nível de autenticação, formas de entrada, quando o login foi feito). */
+    claims: VerifiedToken | null;
   }
 }

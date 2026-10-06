@@ -11,6 +11,14 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Segurança e conta (servidor; as telas vêm na sequência).** Verificação em duas etapas (TOTP) com trava de tentativas e perguntada uma vez no primeiro
+  acesso; **cadastro e login por Google, Facebook e outras contas** (PKCE, endereço de retorno só da configuração; o Instagram entra pelo Facebook);
+  **Minha conta** (dados de cadastro, aceites, trocar nome, e-mail e senha com limites por mês e por ano, link de redefinição por e-mail); contas sem
+  senha definem a primeira com login recente. Ver [docs/login-social-e-2fa.md](docs/login-social-e-2fa.md).
+- **Mais ferramentas de administrador:** excluir a conta de uma pessoa (apagamento definitivo), promover/rebaixar administradores, enviar redefinição de
+  senha, prorrogar o teste grátis, desligar a 2FA de quem perdeu o celular e ver a atividade dos administradores. Tudo auditado, sem dado pessoal.
+- **Aviso do teste grátis no primeiro acesso:** o servidor registra quem já viu a mensagem de "30 dias grátis" e a pergunta da 2FA (uma vez só, em qualquer
+  aparelho). Quem já tinha conta começa o teste na data `BILLING_STARTS_AT` (administradores nunca são limitados).
 - **Assinatura (servidor):** 30 dias de teste grátis com tudo liberado e, depois, mensalidade; sem assinar, o app vira **somente leitura** (consulta e
   exporta, não cria nem edita: `402 SUBSCRIPTION_REQUIRED`; nada é apagado). Pagamento hospedado pelo Stripe (Checkout + portal do cliente; dados de
   cartão nunca passam por aqui), adicional **Rendimentos** como segundo item da assinatura, webhook com assinatura HMAC, idempotente e à prova de eventos

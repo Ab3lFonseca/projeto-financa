@@ -264,6 +264,8 @@ async function authUserFor(deps: AutoDeps, userId: string): Promise<AuthUser> {
     access,
     timezone: profile?.timezone ?? "America/Sao_Paulo",
     consentOk: true,
+    mfaEnabled: false,
+    mfaFactorId: null,
   };
 }
 

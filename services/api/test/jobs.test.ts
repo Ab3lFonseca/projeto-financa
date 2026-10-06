@@ -121,6 +121,8 @@ describe("manutenção e retenção", () => {
     await env.prisma.webhookEvent.create({ data: { provider: "PLUGGY", eventId: "novo", eventType: "x", payload: {}, receivedAt: env.now() } });
     await env.prisma.billingEvent.create({ data: { provider: "stripe", eventId: "evt_velho", eventType: "x", receivedAt: old } });
     await env.prisma.billingEvent.create({ data: { provider: "stripe", eventId: "evt_novo", eventType: "x", receivedAt: env.now() } });
+    await env.prisma.accountChange.create({ data: { userId: w.user.id, kind: "NAME", createdAt: new Date("2025-01-01T00:00:00Z") } }); // > 400 dias
+    await env.prisma.accountChange.create({ data: { userId: w.user.id, kind: "EMAIL", createdAt: env.now() } });
     await env.prisma.auditLog.create({ data: { action: "teste.velho", createdAt: old } });
     await env.prisma.auditLog.create({ data: { action: "teste.novo", createdAt: env.now() } });
     await env.prisma.notification.create({ data: { userId: w.user.id, type: "SYSTEM", title: "velha", body: "x", readAt: old, createdAt: old } });
@@ -130,6 +132,8 @@ describe("manutenção e retenção", () => {
     expect(result.idempotencyKeys).toBeGreaterThanOrEqual(1);
     expect(result.webhookEvents).toBeGreaterThanOrEqual(1);
     expect(result.billingEvents).toBeGreaterThanOrEqual(1);
+    expect(result.accountChanges).toBeGreaterThanOrEqual(1);
+    expect(await env.prisma.accountChange.count({ where: { userId: w.user.id } })).toBe(1); // só a recente sobrou
     expect(result.auditLogs).toBeGreaterThanOrEqual(1);
     expect(result.notifications).toBeGreaterThanOrEqual(1);
 

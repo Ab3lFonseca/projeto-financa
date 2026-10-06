@@ -90,6 +90,22 @@ export async function createTestEnv(overrides: Record<string, string> = {}, extr
     delete: <T = any>(url: string, opts?: CallOptions) => call<T>("DELETE", url, opts),
   };
 
+  /** Usuário de teste a partir de uma sessão qualquer (ex.: aal2 depois do código, ou conta criada por login social). */
+  function asUser(session: { accessToken: string; user: { id: string; email: string } }, password = ""): TestUser {
+    const token = session.accessToken;
+    return {
+      id: session.user.id,
+      email: session.user.email,
+      password,
+      token,
+      get: (url, o) => call("GET", url, { ...o, token }),
+      post: (url, body, o) => call("POST", url, { ...o, body, token }),
+      put: (url, body, o) => call("PUT", url, { ...o, body, token }),
+      patch: (url, body, o) => call("PATCH", url, { ...o, body, token }),
+      delete: (url, o) => call("DELETE", url, { ...o, token }),
+    };
+  }
+
   /** Cria um usuário já cadastrado e autenticado. Por padrão, com os aceites legais em dia. */
   async function newUser(opts: { email?: string; consent?: boolean; password?: string } = {}): Promise<TestUser> {
     const email = opts.email ?? `user-${randomUUID()}@teste.dev`;
@@ -130,6 +146,7 @@ export async function createTestEnv(overrides: Record<string, string> = {}, extr
     anon,
     call,
     newUser,
+    asUser,
     setNow: (iso: string) => {
       now = new Date(iso);
     },

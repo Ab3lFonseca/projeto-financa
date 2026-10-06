@@ -10,10 +10,12 @@ const DAY = 86_400_000;
  */
 export async function runMaintenance(prisma: PrismaClient, now: Date): Promise<Record<string, number>> {
   const ago = (days: number) => new Date(now.getTime() - days * DAY);
-  const [idem, hooks, billingHooks, audits, notifs, tokens] = [
+  const [idem, hooks, billingHooks, accountChanges, audits, notifs, tokens] = [
     await prisma.idempotencyKey.deleteMany({ where: { createdAt: { lt: ago(2) } } }),
     await prisma.webhookEvent.deleteMany({ where: { receivedAt: { lt: ago(30) } } }),
     await prisma.billingEvent.deleteMany({ where: { receivedAt: { lt: ago(30) } } }),
+    // Histórico de trocas de nome/e-mail/senha: só interessa a janela do limite anual (365 dias).
+    await prisma.accountChange.deleteMany({ where: { createdAt: { lt: ago(400) } } }),
     await prisma.auditLog.deleteMany({ where: { createdAt: { lt: ago(180) } } }),
     await prisma.notification.deleteMany({ where: { readAt: { not: null, lt: ago(90) } } }),
     await prisma.pushToken.deleteMany({ where: { lastSeenAt: { lt: ago(180) } } }),
@@ -22,6 +24,7 @@ export async function runMaintenance(prisma: PrismaClient, now: Date): Promise<R
     idempotencyKeys: idem.count,
     webhookEvents: hooks.count,
     billingEvents: billingHooks.count,
+    accountChanges: accountChanges.count,
     auditLogs: audits.count,
     notifications: notifs.count,
     pushTokens: tokens.count,

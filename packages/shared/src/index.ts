@@ -13,6 +13,8 @@ export * from "./schemas/auth";
 export * from "./schemas/appearance";
 export * from "./schemas/billing";
 export * from "./schemas/me";
+export * from "./schemas/account";
+export * from "./schemas/security";
 export * from "./schemas/categories";
 export * from "./schemas/accounts";
 export * from "./schemas/transactions";

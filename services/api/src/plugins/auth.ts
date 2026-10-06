@@ -5,6 +5,7 @@ import { Errors } from "../lib/errors";
 export function registerAuthHooks(app: FastifyInstance): void {
   app.decorateRequest("user", null);
   app.decorateRequest("accessToken", null);
+  app.decorateRequest("claims", null);
 
   app.decorate("authenticate", async (req) => {
     const header = req.headers.authorization;
@@ -14,7 +15,11 @@ export function registerAuthHooks(app: FastifyInstance): void {
 
     const claims = await app.tokenVerifier.verify(token);
     req.accessToken = token;
+    req.claims = claims;
     req.user = await app.users.resolve(claims);
+    // Verificação em duas etapas: com ela ligada, uma sessão que só digitou a senha (aal1) não abre nada. O app recebe MFA_REQUIRED
+    // e pede o código (POST /v1/auth/mfa/verify). Vale para TODAS as rotas autenticadas, sem exceção.
+    if (req.user.mfaEnabled && claims.aal !== "aal2") throw Errors.mfaRequired(req.user.mfaFactorId);
     // Toda linha de log desta requisição passa a carregar o id (pseudônimo) do usuário: é o que
     // permite reconstituir "o que aconteceu com esta conta" ao investigar um erro.
     req.log = req.log.child({ uid: req.user.id });

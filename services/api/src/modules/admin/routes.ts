@@ -1,15 +1,20 @@
 import { Prisma } from "@app/database";
 import {
+  adminAuditEntryDTO,
   adminIntegrationsDTO,
   adminIssueDTO,
   adminStatsDTO,
   adminUserDetailDTO,
   adminUserDTO,
   appearanceSchema,
+  deleteUserBody,
+  extendTrialBody,
   grantAccessBody,
   idParam,
+  listAdminAuditQuery,
   listAdminUsersQuery,
   listOf,
+  setUserRoleBody,
   setUserStatusBody,
   THEME_PRESET_IDS,
   toISODate,
@@ -17,12 +22,14 @@ import {
 } from "@app/shared";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { resolveAccess, type SubscriptionInfo } from "../../lib/access";
+import { resolveAccess, trialEnd, type SubscriptionInfo } from "../../lib/access";
 import { accessConfigOf, subscriptionAccessSelect } from "../../lib/access-db";
 import { audit } from "../../lib/audit";
 import { tsOut } from "../../lib/dto";
 import { Errors } from "../../lib/errors";
 import { decodeCursor, encodeCursor, slicePage } from "../../lib/pagination";
+import { beforeEraseOf } from "../privacy/before-erase";
+import { eraseAccount } from "../privacy/service";
 
 const cursorShape = z.object({ t: z.string(), id: z.uuid() });
 const DAY_MS = 86_400_000;
@@ -48,6 +55,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
   type UserRow = {
     id: string; email: string; role: AdminUserDTO["role"]; status: AdminUserDTO["status"];
     createdAt: Date; lastSeenAt: Date | null; subscription: SubscriptionInfo;
+    mfaFactorId: string | null; mfaEnabledAt: Date | null;
     profile: { displayName: string | null; onboardingCompletedAt: Date | null; theme: "SYSTEM" | "LIGHT" | "DARK"; appearance: unknown } | null;
   };
 
@@ -68,10 +76,11 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       lastSeenAt: u.lastSeenAt ? tsOut(u.lastSeenAt) : null,
       onboardingCompleted: Boolean(u.profile?.onboardingCompletedAt),
       access: { state: access.state, expiresAt: access.expiresAt ? tsOut(access.expiresAt) : null, investments: access.features.investments },
+      mfaEnabled: u.mfaFactorId !== null && u.mfaEnabledAt !== null,
     };
   };
   const userSelect = {
-    id: true, email: true, role: true, status: true, createdAt: true, lastSeenAt: true,
+    id: true, email: true, role: true, status: true, createdAt: true, lastSeenAt: true, mfaFactorId: true, mfaEnabledAt: true,
     subscription: { select: subscriptionAccessSelect },
     profile: { select: { displayName: true, onboardingCompletedAt: true, theme: true, appearance: true } },
   } as const;
@@ -142,6 +151,148 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 
+  /** Carrega o alvo de uma ação administrativa e aplica as proteções comuns: não vale para você mesmo (use o seu perfil). */
+  const targetOf = async (req: { params: { id: string }; user: { id: string } | null }, opts: { allowAdmin?: boolean } = {}) => {
+    if (req.params.id === req.user!.id) throw Errors.unprocessable("Use as suas configurações para isso: aqui só vale para outras contas.", "SELF_ACTION");
+    const target = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, email: true, role: true, status: true, createdAt: true, mfaFactorId: true, subscription: { select: subscriptionAccessSelect } } });
+    if (!target) throw Errors.notFound("Usuário");
+    if (target.role === "ADMIN" && !opts.allowAdmin) throw Errors.forbidden("Esta ação não vale para administradores. Remova o papel de administrador primeiro.", "ADMIN_PROTECTED");
+    return target;
+  };
+
+  // Excluir a conta de outra pessoa: o mesmo apagamento definitivo do pedido dela (LGPD): cancela a assinatura e as conexões nos provedores,
+  // remove o login e TODOS os dados. Fica na auditoria sem dado pessoal. Exige a palavra EXCLUIR.
+  app.delete(
+    "/users/:id",
+    {
+      config: { rateLimit: { max: 20, timeWindow: "1 hour" } },
+      schema: { tags: ["admin"], params: idParam, body: deleteUserBody, response: { 200: z.object({ ok: z.literal(true) }) } },
+    },
+    async (req) => {
+      const target = await targetOf(req);
+      await audit(prisma, config.IP_HASH_PEPPER, { actorId: req.user!.id, action: "admin.user.deleted", entity: "user", entityId: target.id, ip: req.ip }, req.log);
+      await eraseAccount(target.id, {
+        prisma,
+        authProvider: app.authProvider,
+        pepper: config.IP_HASH_PEPPER,
+        now: app.clock,
+        log: req.log,
+        beforeErase: beforeEraseOf(app),
+      });
+      app.users.invalidate(target.id);
+      return { ok: true as const };
+    },
+  );
+
+  // Promover a administrador ou voltar a usuário comum. Contas listadas em ADMIN_USER_IDS voltariam a ser promovidas no próximo acesso:
+  // essas só se rebaixam tirando o ID da configuração.
+  app.post(
+    "/users/:id/role",
+    { schema: { tags: ["admin"], params: idParam, body: setUserRoleBody, response: { 200: adminUserDTO } } },
+    async (req) => {
+      const target = await targetOf(req, { allowAdmin: true });
+      if (req.body.role === "ADMIN" && target.status !== "ACTIVE") throw Errors.conflict("Só contas ativas podem ser administradoras.", "ACCOUNT_NOT_ACTIVE");
+      if (req.body.role === "USER" && target.role === "ADMIN" && config.ADMIN_USER_IDS.includes(target.id)) {
+        throw Errors.conflict("Esta conta é administradora pela configuração do servidor (ADMIN_USER_IDS). Tire o ID de lá para rebaixá-la.", "ADMIN_FROM_CONFIG");
+      }
+      if (target.role !== req.body.role) {
+        await prisma.user.update({ where: { id: target.id }, data: { role: req.body.role } });
+        app.users.invalidate(target.id);
+        await audit(prisma, config.IP_HASH_PEPPER, { actorId: req.user!.id, action: "admin.user.role_changed", entity: "user", entityId: target.id, ip: req.ip, metadata: { role: req.body.role } }, req.log);
+      }
+      return toUserDTO(await prisma.user.findUniqueOrThrow({ where: { id: target.id }, select: userSelect }));
+    },
+  );
+
+  // Manda à pessoa o e-mail de redefinição de senha (suporte). O administrador nunca vê nem define a senha.
+  app.post(
+    "/users/:id/password-reset",
+    { config: { rateLimit: { max: 20, timeWindow: "1 hour" } }, schema: { tags: ["admin"], params: idParam, response: { 200: z.object({ ok: z.literal(true) }) } } },
+    async (req) => {
+      const target = await targetOf(req, { allowAdmin: true });
+      await app.authProvider.requestPasswordReset(target.email, config.PASSWORD_RESET_REDIRECT_URL);
+      await audit(prisma, config.IP_HASH_PEPPER, { actorId: req.user!.id, action: "admin.user.password_reset_sent", entity: "user", entityId: target.id, ip: req.ip }, req.log);
+      return { ok: true as const };
+    },
+  );
+
+  // Prorroga o teste grátis (suporte, cortesia de boas-vindas...): soma dias ao fim atual, ou a partir de hoje se o teste já tinha acabado.
+  app.post(
+    "/users/:id/trial",
+    { schema: { tags: ["admin"], params: idParam, body: extendTrialBody, response: { 200: adminUserDTO } } },
+    async (req) => {
+      const target = await targetOf(req);
+      const now = app.clock();
+      const currentEnd = trialEnd(target.createdAt, target.subscription, accessConfigOf(config));
+      const newEnd = new Date(Math.max(currentEnd.getTime(), now.getTime()) + req.body.days * DAY_MS);
+      await prisma.subscription.upsert({ where: { userId: target.id }, create: { userId: target.id, trialEndsAt: newEnd }, update: { trialEndsAt: newEnd } });
+      app.users.invalidate(target.id);
+      await audit(prisma, config.IP_HASH_PEPPER, { actorId: req.user!.id, action: "admin.trial.extended", entity: "user", entityId: target.id, ip: req.ip, metadata: { days: req.body.days } }, req.log);
+      return toUserDTO(await prisma.user.findUniqueOrThrow({ where: { id: target.id }, select: userSelect }));
+    },
+  );
+
+  // Perdeu o celular e não consegue o código: o suporte desliga a verificação em duas etapas dessa conta (ela entra de novo com a senha).
+  app.delete(
+    "/users/:id/mfa",
+    { config: { rateLimit: { max: 20, timeWindow: "1 hour" } }, schema: { tags: ["admin"], params: idParam, response: { 200: adminUserDTO } } },
+    async (req) => {
+      const target = await targetOf(req);
+      if (!target.mfaFactorId) throw Errors.conflict("Esta conta não usa verificação em duas etapas.", "MFA_NOT_ENABLED");
+      await app.authProvider.adminRemoveMfa(target.id);
+      await prisma.user.update({ where: { id: target.id }, data: { mfaFactorId: null, mfaEnabledAt: null } });
+      app.users.invalidate(target.id);
+      await audit(prisma, config.IP_HASH_PEPPER, { actorId: req.user!.id, action: "admin.mfa.removed", entity: "user", entityId: target.id, ip: req.ip }, req.log);
+      return toUserDTO(await prisma.user.findUniqueOrThrow({ where: { id: target.id }, select: userSelect }));
+    },
+  );
+
+  // Atividade dos administradores (do mais recente para o mais antigo): o que foi feito, por quem e em qual conta.
+  const auditDetail = (action: string, metadata: unknown): string | null => {
+    const m = (metadata && typeof metadata === "object" ? metadata : {}) as Record<string, unknown>;
+    if (action === "admin.access.granted") {
+      const days = typeof m.days === "number" ? `${m.days} dias` : "sem prazo";
+      return `${days}${m.investments === true ? " · com Rendimentos" : ""}`;
+    }
+    if (action === "admin.trial.extended" && typeof m.days === "number") return `+${m.days} dias`;
+    if (action === "admin.user.role_changed" && typeof m.role === "string") return m.role === "ADMIN" ? "virou administrador" : "voltou a usuário";
+    return null;
+  };
+  app.get(
+    "/audit",
+    { schema: { tags: ["admin"], querystring: listAdminAuditQuery, response: { 200: listOf(adminAuditEntryDTO) } } },
+    async (req) => {
+      const { limit, cursor } = req.query;
+      const c = cursor ? decodeCursor(cursor, z.object({ id: z.string().regex(/^\d+$/) })) : null;
+      const rows = await prisma.auditLog.findMany({
+        where: { action: { startsWith: "admin." }, ...(c ? { id: { lt: BigInt(c.id) } } : {}) },
+        orderBy: { id: "desc" },
+        take: limit + 1,
+      });
+      const { items, hasMore } = slicePage(rows, limit);
+      const ids = [...new Set(items.flatMap((r) => [r.actorId, r.entityId]).filter((v): v is string => !!v && /^[0-9a-f-]{36}$/i.test(v)))];
+      const people = ids.length
+        ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, email: true, profile: { select: { displayName: true } } } })
+        : [];
+      const label = (id: string | null) => {
+        const p = id ? people.find((x) => x.id === id) : undefined;
+        return p ? (p.profile?.displayName?.trim() || p.email.split("@")[0] || p.email) : null;
+      };
+      const last = items[items.length - 1];
+      return {
+        data: items.map((r) => ({
+          id: r.id.toString(),
+          action: r.action,
+          at: tsOut(r.createdAt),
+          actor: { id: r.actorId, label: label(r.actorId) },
+          target: r.entityId ? { id: r.entityId, label: label(r.entityId) } : null,
+          detail: auditDetail(r.action, r.metadata),
+        })),
+        page: { hasMore, nextCursor: hasMore && last ? encodeCursor({ id: last.id.toString() }) : null },
+      };
+    },
+  );
+
   // Cortesia: acesso sem pagar (dias ou sem prazo, com ou sem o adicional Rendimentos). Quem já paga não é sobrescrito.
   app.post(
     "/users/:id/access",
@@ -178,6 +329,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       const new30 = await prisma.user.count({ where: { createdAt: { gte: d30 } } });
       const active7 = await prisma.user.count({ where: { lastSeenAt: { gte: d7 } } });
       const onboarded = await prisma.profile.count({ where: { onboardingCompletedAt: { not: null } } });
+      const withMfa = await prisma.user.count({ where: { mfaFactorId: { not: null } } });
 
       const recent = await prisma.user.findMany({ where: { createdAt: { gte: d30 } }, select: { createdAt: true } });
       const byDay = new Map<string, number>();
@@ -225,7 +377,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const conns = await prisma.bankConnection.groupBy({ by: ["status"], _count: { _all: true } });
       return {
-        users: { total, active, suspended, premium, newLast7Days: new7, newLast30Days: new30, activeLast7Days: active7, onboardingCompleted: onboarded },
+        users: { total, active, suspended, premium, newLast7Days: new7, newLast30Days: new30, activeLast7Days: active7, onboardingCompleted: onboarded, mfaEnabled: withMfa },
         signupsByDay,
         themes,
         billing: { ...billing, monthlyRevenueCents, currency },

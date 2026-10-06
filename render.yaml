@@ -76,6 +76,13 @@ services:
       # Fica só no painel do Render: o repositório é público e não deve registrar quem administra.
       - key: ADMIN_USER_IDS
         sync: false
+      # Login por outras contas (docs/login-social-e-2fa.md). Vazio = só e-mail e senha. Os endereços também vão em "Redirect URLs" no Supabase.
+      - key: OAUTH_PROVIDERS # ex.: google,facebook
+        sync: false
+      - key: OAUTH_WEB_REDIRECT_URL # ex.: https://financa-web.onrender.com/auth/callback
+        sync: false
+      - key: OAUTH_REDIRECT_URL # deep link do celular, ex.: financa://auth/callback
+        sync: false
       # Para onde o link do e-mail de confirmação leva: a tela /confirm-email do site. Também precisa estar em "Redirect URLs" no Supabase.
       - key: EMAIL_CONFIRM_WEB_REDIRECT_URL # ex.: https://financa-web.onrender.com/confirm-email
         sync: false

@@ -1,5 +1,6 @@
+import { randomBytes } from "node:crypto";
 import { AppError, Errors } from "../../lib/errors";
-import type { AuthProvider, ProviderSession, SignUpResult } from "./provider";
+import type { AuthProvider, MfaEnrollment, ProviderSession, SignUpResult } from "./provider";
 
 export type SupabaseProviderConfig = {
   /** Ex.: https://abcd.supabase.co */
@@ -50,6 +51,17 @@ export function mapGoTrueError(status: number, payload: GoTrueError | null): App
     case "over_request_rate_limit":
     case "over_sms_send_rate_limit":
       return Errors.tooMany();
+    case "mfa_verification_failed":
+    case "mfa_challenge_expired":
+    case "mfa_verification_rejected":
+      return Errors.unprocessable("Código incorreto ou expirado. Confira o aplicativo autenticador e tente de novo.", "INVALID_MFA_CODE");
+    case "mfa_factor_not_found":
+      return Errors.notFound("Fator de verificação");
+    case "insufficient_aal":
+      return Errors.unauthorized("Confirme o código da verificação em duas etapas para continuar.", "MFA_REQUIRED");
+    case "too_many_enrolled_mfa_factors":
+    case "mfa_factor_name_conflict":
+      return Errors.conflict("Já existe uma verificação em andamento. Tente de novo em instantes.", "MFA_ENROLL_CONFLICT");
     case "refresh_token_not_found":
     case "refresh_token_already_used":
     case "session_expired":
@@ -184,12 +196,88 @@ export class SupabaseAuthProvider implements AuthProvider {
     await this.request("PUT", "/user", { bearer: accessToken, body: { password: newPassword } });
   }
 
+  /** Credenciais da chave de serviço. As chaves novas (sb_secret_...) não são JWT: vão só em `apikey`. A legada (service_role) também vai em Authorization. */
+  private adminAuth(): { bearer?: string; apiKey: string } {
+    const key = this.config.serviceRoleKey;
+    if (!key) throw Errors.unavailable("Operação de administração indisponível: chave de serviço não configurada", "ADMIN_KEY_MISSING");
+    return { bearer: key.startsWith("eyJ") ? key : undefined, apiKey: key };
+  }
+
   async deleteUser(userId: string): Promise<void> {
     const key = this.config.serviceRoleKey;
     if (!key) throw Errors.unavailable("Exclusão de conta indisponível: chave de serviço não configurada", "ADMIN_KEY_MISSING");
-    // Chave legada (service_role) é um JWT e também vai em Authorization. As chaves novas (sb_secret_...) NÃO são JWT:
-    // o Supabase manda enviá-las só no cabeçalho `apikey` (no Bearer a verificação do JWT falharia).
-    const isJwt = key.startsWith("eyJ");
-    await this.request("DELETE", `/admin/users/${encodeURIComponent(userId)}`, { bearer: isJwt ? key : undefined, apiKey: key });
+    await this.request("DELETE", `/admin/users/${encodeURIComponent(userId)}`, this.adminAuth());
+  }
+
+  async requestEmailChange(accessToken: string, newEmail: string, redirectTo?: string): Promise<void> {
+    try {
+      await this.request("PUT", "/user", { bearer: accessToken, body: { email: newEmail }, query: redirectTo ? { redirect_to: redirectTo } : undefined });
+    } catch (err) {
+      // E-mail de outra conta: não revelamos (anti-enumeração). A pessoa simplesmente não recebe o link.
+      if (err instanceof AppError && err.code === "EMAIL_IN_USE") return;
+      throw err;
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------- verificação em duas etapas
+
+  async mfaEnroll(accessToken: string): Promise<MfaEnrollment> {
+    // Fatores criados e nunca confirmados (a pessoa fechou a tela no meio) travam novos cadastros: limpa antes.
+    const user = await this.request<{ factors?: { id: string; status: string }[] }>("GET", "/user", { bearer: accessToken });
+    for (const f of user.factors ?? []) {
+      if (f.status !== "verified") await this.request("DELETE", `/factors/${encodeURIComponent(f.id)}`, { bearer: accessToken }).catch(() => undefined);
+    }
+    const raw = await this.request<{ id: string; totp?: { qr_code?: string; secret?: string; uri?: string } }>("POST", "/factors", {
+      bearer: accessToken,
+      body: { factor_type: "totp", issuer: "Finança", friendly_name: `Finança ${randomBytes(3).toString("hex")}` },
+    });
+    const totp = raw.totp ?? {};
+    return { factorId: String(raw.id), secret: String(totp.secret ?? ""), uri: String(totp.uri ?? ""), qrSvg: decodeSvgDataUri(String(totp.qr_code ?? "")) };
+  }
+
+  async mfaVerify(accessToken: string, factorId: string, code: string): Promise<ProviderSession> {
+    const id = encodeURIComponent(factorId);
+    const challenge = await this.request<{ id: string }>("POST", `/factors/${id}/challenge`, { bearer: accessToken, body: {} });
+    const raw = await this.request<Record<string, any>>("POST", `/factors/${id}/verify`, { bearer: accessToken, body: { challenge_id: challenge.id, code } });
+    return this.toSession(raw);
+  }
+
+  async mfaUnenroll(accessToken: string, factorId: string): Promise<void> {
+    await this.request("DELETE", `/factors/${encodeURIComponent(factorId)}`, { bearer: accessToken });
+  }
+
+  async adminRemoveMfa(userId: string): Promise<void> {
+    const auth = this.adminAuth();
+    const user = await this.request<{ factors?: { id: string }[] }>("GET", `/admin/users/${encodeURIComponent(userId)}`, auth);
+    for (const f of user.factors ?? []) {
+      await this.request("DELETE", `/admin/users/${encodeURIComponent(userId)}/factors/${encodeURIComponent(f.id)}`, auth);
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------- cadastro e login por outras contas
+
+  oauthAuthorizeUrl(input: { provider: string; redirectTo: string; codeChallenge: string }): string {
+    const url = new URL(`${this.base}/authorize`);
+    url.searchParams.set("provider", input.provider);
+    url.searchParams.set("redirect_to", input.redirectTo);
+    url.searchParams.set("code_challenge", input.codeChallenge);
+    url.searchParams.set("code_challenge_method", "s256");
+    return url.toString();
+  }
+
+  async oauthExchange(code: string, codeVerifier: string): Promise<ProviderSession> {
+    const raw = await this.request<Record<string, any>>("POST", "/token", { query: { grant_type: "pkce" }, body: { auth_code: code, code_verifier: codeVerifier } });
+    return this.toSession(raw);
+  }
+}
+
+/** O Supabase devolve o QR como `data:image/svg+xml;utf-8,<svg...>` (com o SVG codificado para URL). O app precisa do SVG puro. */
+export function decodeSvgDataUri(value: string): string {
+  const comma = value.indexOf(",");
+  const body = value.startsWith("data:") && comma >= 0 ? value.slice(comma + 1) : value;
+  try {
+    return decodeURIComponent(body);
+  } catch {
+    return body;
   }
 }

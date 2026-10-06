@@ -41,7 +41,8 @@ export const forgotPasswordBody = z.strictObject({ email });
 export const resendVerificationBody = z.strictObject({ email, platform: clientPlatform.optional() });
 export const resetPasswordBody = z.strictObject({ password });
 export const changePasswordBody = z.strictObject({
-  currentPassword: z.string().min(1).max(200),
+  /** Obrigatória em contas com senha. Quem entrou só com Google/Facebook... ainda não tem e define a primeira (com um login recente). */
+  currentPassword: z.string().min(1).max(200).optional(),
   newPassword: password,
 });
 

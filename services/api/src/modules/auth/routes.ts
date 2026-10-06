@@ -3,6 +3,14 @@ import {
   errorResponse,
   forgotPasswordBody,
   loginBody,
+  loginResponse,
+  mfaSessionResponse,
+  mfaVerifyBody,
+  oauthExchangeBody,
+  oauthProvidersDTO,
+  oauthStartBody,
+  oauthStartResponse,
+  OAUTH_PROVIDERS,
   okResponse,
   refreshBody,
   registerBody,
@@ -55,23 +63,94 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 
+  /**
+   * A conta tem verificação em duas etapas? Então o login ainda não terminou: a sessão devolvida só digitou a senha (aal1) e o app precisa
+   * pedir o código (POST /mfa/verify) antes de abrir a conta. A API também recusa qualquer rota com essa sessão (401 MFA_REQUIRED).
+   */
+  const withMfa = async <T extends { user: { id: string } }>(session: T) => {
+    const row = await app.prisma.user.findUnique({ where: { id: session.user.id }, select: { mfaFactorId: true, mfaEnabledAt: true } });
+    return { ...session, mfa: row?.mfaFactorId && row.mfaEnabledAt ? { factorId: row.mfaFactorId } : null };
+  };
+
   app.post(
     "/login",
     {
       config: STRICT(10),
-      schema: { tags: ["auth"], security: [], body: loginBody, response: { 200: sessionResponse } },
+      schema: { tags: ["auth"], security: [], body: loginBody, response: { 200: loginResponse } },
     },
     async (req) => {
       try {
         const session = await provider.signIn(req.body.email, req.body.password);
         await audit(app.prisma, config.IP_HASH_PEPPER, { actorId: session.user.id, action: "auth.login", ip: req.ip }, req.log);
-        return session;
+        return await withMfa(session);
       } catch (err) {
         if (err instanceof AppError && err.code === "INVALID_CREDENTIALS") {
           await audit(app.prisma, config.IP_HASH_PEPPER, { action: "auth.login_failed", ip: req.ip }, req.log);
         }
         throw err;
       }
+    },
+  );
+
+  // Segundo passo do login com verificação em duas etapas: troca a sessão "só senha" por uma verificada (aal2) com o código do aplicativo
+  // autenticador. Aceita a sessão aal1 de propósito (é para isso que ela existe) e trava depois de 5 códigos errados em 15 minutos.
+  app.post(
+    "/mfa/verify",
+    { config: STRICT(8), schema: { tags: ["auth"], body: mfaVerifyBody, response: { 200: mfaSessionResponse, 422: errorResponse } } },
+    async (req) => {
+      const header = req.headers.authorization;
+      if (!header?.startsWith("Bearer ")) throw Errors.unauthorized("Sessão inválida", "INVALID_TOKEN");
+      const token = header.slice(7).trim();
+      const claims = await app.tokenVerifier.verify(token);
+      const row = await app.prisma.user.findUnique({ where: { id: claims.sub }, select: { mfaFactorId: true } });
+      if (!row?.mfaFactorId || row.mfaFactorId !== req.body.factorId) {
+        throw Errors.forbidden("A verificação em duas etapas não está ligada para esta conta.", "MFA_NOT_ENABLED");
+      }
+      const since = new Date(app.clock().getTime() - 15 * 60_000);
+      const failures = await app.prisma.auditLog.count({ where: { actorId: claims.sub, action: "auth.mfa_failed", createdAt: { gte: since } } });
+      if (failures >= 5) throw new AppError(429, "MFA_LOCKED", "Muitas tentativas com código errado. Aguarde 15 minutos e tente de novo.");
+      try {
+        const session = await provider.mfaVerify(token, req.body.factorId, req.body.code);
+        await audit(app.prisma, config.IP_HASH_PEPPER, { actorId: claims.sub, action: "auth.mfa_verified", ip: req.ip }, req.log);
+        return session;
+      } catch (err) {
+        if (err instanceof AppError && err.code === "INVALID_MFA_CODE") {
+          await audit(app.prisma, config.IP_HASH_PEPPER, { actorId: claims.sub, action: "auth.mfa_failed", ip: req.ip }, req.log);
+        }
+        throw err;
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------------------------- cadastro e login por outras contas
+
+  // Quais botões o app mostra: só os provedores ligados neste servidor (vazio = só e-mail e senha).
+  app.get("/oauth/providers", { schema: { tags: ["auth"], security: [], response: { 200: oauthProvidersDTO } } }, async () => ({
+    providers: OAUTH_PROVIDERS.filter((p) => config.OAUTH_PROVIDERS.includes(p.id)).map((p) => ({ id: p.id, label: p.label })),
+  }));
+
+  // Passo 1: o aparelho gera um segredo (verifier), manda só o desafio (SHA-256 dele) e recebe o endereço do provedor para abrir.
+  // O endereço de retorno vem da configuração, nunca do cliente (sem redirecionamento aberto).
+  app.post(
+    "/oauth/start",
+    { config: STRICT(20), schema: { tags: ["auth"], security: [], body: oauthStartBody, response: { 200: oauthStartResponse } } },
+    async (req) => {
+      if (!config.OAUTH_PROVIDERS.includes(req.body.provider)) throw Errors.notFound("Provedor de login");
+      const redirectTo = req.body.platform === "web" ? config.OAUTH_WEB_REDIRECT_URL : config.OAUTH_REDIRECT_URL;
+      if (!redirectTo) throw Errors.unavailable("O login por outras contas não está disponível nesta plataforma.", "OAUTH_NOT_CONFIGURED");
+      return { url: provider.oauthAuthorizeUrl({ provider: req.body.provider, redirectTo, codeChallenge: req.body.codeChallenge }) };
+    },
+  );
+
+  // Passo 2: o provedor devolveu um código; trocamos por uma sessão com o verifier (só quem iniciou o login consegue). Conta nova é
+  // criada no primeiro acesso e cai na tela de aceite dos Termos, como no cadastro por e-mail.
+  app.post(
+    "/oauth/exchange",
+    { config: STRICT(20), schema: { tags: ["auth"], security: [], body: oauthExchangeBody, response: { 200: loginResponse } } },
+    async (req) => {
+      const session = await provider.oauthExchange(req.body.code, req.body.codeVerifier);
+      await audit(app.prisma, config.IP_HASH_PEPPER, { actorId: session.user.id, action: "auth.login_oauth", ip: req.ip }, req.log);
+      return withMfa(session);
     },
   );
 

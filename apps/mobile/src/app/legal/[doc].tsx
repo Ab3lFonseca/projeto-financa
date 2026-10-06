@@ -9,7 +9,7 @@ export default function LegalScreen() {
   const { doc } = useLocalSearchParams<{ doc: string }>();
   const content = LEGAL_DOCS[(doc === "privacy" ? "privacy" : "terms") as LegalDocKey];
   return (
-    <Screen header={<ScreenHeader title={content.title} subtitle={`Atualizado em ${content.updatedAt}`} />}>
+    <Screen header={<ScreenHeader title={content.title} subtitle={`Atualizado em ${content.updatedAt}`} backTo="/more" />}>
       {content.intro ? <Text tone="muted">{content.intro}</Text> : null}
       {content.sections.map((s) => (
         <View key={s.heading} style={{ gap: 8 }}>

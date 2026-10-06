@@ -24,6 +24,12 @@ export const Errors = {
     new AppError(402, "SUBSCRIPTION_REQUIRED", message),
   /** O recurso é um adicional que a assinatura da pessoa não inclui. */
   featureNotIncluded: (feature: string, message: string) => new AppError(402, "FEATURE_NOT_INCLUDED", message, { feature }),
+  /** A conta tem verificação em duas etapas e esta sessão ainda não digitou o código. */
+  mfaRequired: (factorId: string | null) => new AppError(401, "MFA_REQUIRED", "Digite o código do aplicativo autenticador para continuar.", { factorId }),
+  /** Operação sensível pede um login recente (contas sem senha não têm como "digitar a senha de novo"). */
+  reauthRequired: () => new AppError(401, "REAUTH_REQUIRED", "Por segurança, entre de novo para continuar."),
+  /** Limite de alterações do cadastro (por mês ou por ano) atingido. */
+  changeLimit: (message: string, details?: unknown) => new AppError(429, "CHANGE_LIMIT_REACHED", message, details),
   unprocessable: (message: string, code = "UNPROCESSABLE", details?: unknown) => new AppError(422, code, message, details),
   tooMany: (message = "Muitas requisições. Tente novamente em instantes.") => new AppError(429, "RATE_LIMITED", message),
   upstream: (message = "Serviço externo indisponível", code = "UPSTREAM_ERROR") => new AppError(502, code, message),

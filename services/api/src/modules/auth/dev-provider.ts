@@ -62,7 +62,7 @@ export class DevAuthProvider implements AuthProvider {
   private async issue(user: DevUser): Promise<ProviderSession> {
     const now = Math.floor(Date.now() / 1000);
     const expiresIn = 3600;
-    const accessToken = await new SignJWT({ email: user.email, role: "authenticated", user_metadata: user.metadata })
+    const accessToken = await new SignJWT({ email: user.email, role: "authenticated", user_metadata: user.metadata, app_metadata: { provider: "email", providers: ["email"] }, aal: "aal1" })
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
       .setSubject(user.id)
       .setAudience(DEV_AUDIENCE)
@@ -139,5 +139,41 @@ export class DevAuthProvider implements AuthProvider {
     this.sync();
     this.store.users = this.store.users.filter((u) => u.id !== userId);
     this.save();
+  }
+
+  /** Dev: troca na hora (não há e-mail de confirmação para clicar). */
+  async requestEmailChange(accessToken: string, newEmail: string): Promise<void> {
+    const { payload } = await jwtVerify(accessToken, new TextEncoder().encode(this.secret), { issuer: DEV_ISSUER, audience: DEV_AUDIENCE }).catch(() => {
+      throw Errors.unauthorized("Sessão inválida", "INVALID_TOKEN");
+    });
+    this.sync();
+    const user = this.store.users.find((u) => u.id === payload.sub);
+    if (!user) throw Errors.unauthorized("Sessão inválida", "INVALID_TOKEN");
+    if (this.store.users.some((u) => u.email === newEmail && u.id !== user.id)) return; // anti-enumeração
+    user.email = newEmail;
+    this.save();
+  }
+
+  // Verificação em duas etapas e login por outras contas dependem do Supabase: não existem no modo de desenvolvimento local.
+  private unsupported(): never {
+    throw Errors.unavailable("Indisponível no modo de desenvolvimento local (AUTH_MODE=dev). Use o Supabase.", "AUTH_FEATURE_UNAVAILABLE");
+  }
+  async mfaEnroll(): Promise<never> {
+    return this.unsupported();
+  }
+  async mfaVerify(): Promise<never> {
+    return this.unsupported();
+  }
+  async mfaUnenroll(): Promise<never> {
+    return this.unsupported();
+  }
+  async adminRemoveMfa(): Promise<never> {
+    return this.unsupported();
+  }
+  oauthAuthorizeUrl(): never {
+    return this.unsupported();
+  }
+  async oauthExchange(): Promise<never> {
+    return this.unsupported();
   }
 }

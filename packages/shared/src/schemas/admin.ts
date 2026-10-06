@@ -24,6 +24,8 @@ export const adminUserDTO = z.object({
    * Mostrado mesmo no beta, para o administrador ver o que acontece quando a cobrança começar.
    */
   access: z.object({ state: AccessState, expiresAt: timestamp.nullable(), investments: z.boolean() }),
+  /** A conta usa verificação em duas etapas (só se está ligada; nada do segredo). */
+  mfaEnabled: z.boolean(),
 });
 
 /** Detalhe de um usuário: os mesmos dados da lista mais a aparência escolhida. Nada financeiro. */
@@ -40,6 +42,25 @@ export const listAdminUsersQuery = z.object({
 
 export const setUserStatusBody = z.strictObject({ status: z.enum(["ACTIVE", "SUSPENDED"]) });
 
+/** Excluir a conta de outra pessoa é definitivo (apaga tudo, como o pedido dela pela LGPD): exige a palavra de confirmação. */
+export const deleteUserBody = z.strictObject({ confirm: z.literal("EXCLUIR") });
+export const setUserRoleBody = z.strictObject({ role: z.enum(["USER", "ADMIN"]) });
+/** Prorroga o teste grátis: soma `days` dias ao fim atual (ou a partir de hoje, se o teste já tinha acabado). */
+export const extendTrialBody = z.strictObject({ days: z.number().int().min(1).max(365) });
+
+/** Atividade dos administradores: quem fez o quê, em qual conta e quando. Sem dados financeiros nem segredos. */
+export const adminAuditEntryDTO = z.object({
+  id: z.string(),
+  action: z.string(),
+  at: timestamp,
+  actor: z.object({ id: z.string().nullable(), label: z.string().nullable() }),
+  target: z.object({ id: z.string().nullable(), label: z.string().nullable() }).nullable(),
+  /** Detalhe curto e legível (ex.: "30 dias · com Rendimentos"). */
+  detail: z.string().nullable(),
+});
+export const listAdminAuditQuery = z.object({ ...cursorQuery.shape });
+export type AdminAuditEntryDTO = z.infer<typeof adminAuditEntryDTO>;
+
 export const adminStatsDTO = z.object({
   users: z.object({
     total: z.number().int(),
@@ -51,6 +72,8 @@ export const adminStatsDTO = z.object({
     activeLast7Days: z.number().int(),
     /** Quantos já concluíram o tutorial de primeiro uso. */
     onboardingCompleted: z.number().int(),
+    /** Quantos ligaram a verificação em duas etapas. */
+    mfaEnabled: z.number().int(),
   }),
   signupsByDay: z.array(z.object({ date: isoDate, count: z.number().int() })),
   /** Quantas pessoas usam cada tema (id do tema → total). */

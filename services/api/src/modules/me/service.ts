@@ -6,6 +6,8 @@ import { Errors } from "../../lib/errors";
 import { countUsage, limitsFor } from "../../lib/plan";
 import type { Tx } from "../../lib/db";
 import type { AuthUser } from "../../types";
+import type { VerifiedToken } from "../auth/token-verifier";
+import { hasPasswordOf } from "./account";
 
 type ProfileRow = {
   displayName: string | null;
@@ -55,7 +57,7 @@ export async function buildEntitlements(tx: Tx, user: AuthUser, config: Config):
   };
 }
 
-export async function buildMe(tx: Tx, user: AuthUser, config: Config): Promise<MeDTO> {
+export async function buildMe(tx: Tx, user: AuthUser, config: Config, claims: VerifiedToken | null = null): Promise<MeDTO> {
   const profile = await tx.profile.findUnique({ where: { userId: user.id } });
   if (!profile) throw Errors.notFound("Perfil");
   return {
@@ -63,6 +65,8 @@ export async function buildMe(tx: Tx, user: AuthUser, config: Config): Promise<M
     email: user.email,
     role: user.role,
     profile: toProfileDTO(profile),
+    security: { mfaEnabled: user.mfaEnabled, promptAnswered: profile.securityPromptAnsweredAt !== null, hasPassword: hasPasswordOf(claims) },
+    notices: { trialIntroSeen: profile.trialIntroSeenAt !== null },
     consentRequired: !user.consentOk,
     legalVersions: { terms: config.LEGAL_TERMS_VERSION, privacy: config.LEGAL_PRIVACY_VERSION },
     entitlements: await buildEntitlements(tx, user, config),

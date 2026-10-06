@@ -1,8 +1,8 @@
-import { router } from "expo-router";
 import type { ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { goBack } from "@/lib/navigation";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Icon } from "../Icon";
 import { IconButton } from "./Button";
@@ -77,14 +77,14 @@ export function Divider({ inset = 0 }: { inset?: number }) {
 }
 
 /** Cabeçalho de telas internas: voltar + título + ações. */
-export function ScreenHeader({ title, subtitle, onBack, right, back = true }: { title: string; subtitle?: string; onBack?: () => void; right?: ReactNode; back?: boolean }) {
+export function ScreenHeader({ title, subtitle, onBack, right, back = true, backTo }: { title: string; subtitle?: string; onBack?: () => void; right?: ReactNode; back?: boolean; backTo?: string }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, minHeight: 56 }}>
       {back ? (
         <IconButton
           icon="chevron-left"
           label="Voltar"
-          onPress={onBack ?? (() => (router.canGoBack() ? router.back() : router.replace("/")))}
+          onPress={onBack ?? (() => goBack(backTo ?? "/"))}
         />
       ) : (
         <View style={{ width: 8 }} />

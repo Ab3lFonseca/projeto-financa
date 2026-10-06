@@ -38,7 +38,8 @@ export class UserDirectory {
   async resolve(claims: VerifiedToken): Promise<AuthUser> {
     const nowMs = this.now().getTime();
     const hit = this.cache.get(claims.sub);
-    if (hit && hit.expiresAt > nowMs) return hit.user;
+    // Token com e-mail diferente do guardado (a pessoa confirmou a troca de e-mail): relê, em vez de mostrar o antigo até o cache vencer.
+    if (hit && hit.expiresAt > nowMs && (!claims.email || hit.user.email === claims.email)) return hit.user;
 
     let row = await this.load(claims.sub);
     if (!row) {
@@ -83,6 +84,8 @@ export class UserDirectory {
       access,
       timezone: row.profile?.timezone ?? "America/Sao_Paulo",
       consentOk: accepted.has("TERMS") && accepted.has("PRIVACY"),
+      mfaEnabled: row.mfaFactorId !== null && row.mfaEnabledAt !== null,
+      mfaFactorId: row.mfaFactorId,
     };
     this.cache.set(claims.sub, { user, expiresAt: nowMs + this.ttlMs });
 
@@ -108,6 +111,8 @@ export class UserDirectory {
         status: true,
         lastSeenAt: true,
         createdAt: true,
+        mfaFactorId: true,
+        mfaEnabledAt: true,
         profile: { select: { timezone: true } },
         subscription: { select: subscriptionAccessSelect },
         consents: {
@@ -122,7 +127,9 @@ export class UserDirectory {
   private async provision(claims: VerifiedToken): Promise<void> {
     if (!claims.email) throw Errors.unauthorized("Conta sem e-mail", "EMAIL_MISSING");
     const meta = claims.userMetadata;
-    const displayName = typeof meta.display_name === "string" ? meta.display_name.slice(0, 100) : null;
+    // Cadastro por e-mail manda `display_name`; Google/Facebook mandam `full_name` ou `name`.
+    const nameSource = [meta.display_name, meta.full_name, meta.name].find((v): v is string => typeof v === "string" && v.trim().length > 0);
+    const displayName = nameSource ? nameSource.trim().slice(0, 100) : null;
     const accepted = this.acceptedAt(meta.accepted_at);
 
     try {

@@ -1,3 +1,4 @@
+import { OAUTH_PROVIDERS } from "@app/shared";
 import { z } from "zod";
 
 const bool = (def: boolean) =>
@@ -124,6 +125,17 @@ const schema = z
     /** Endereço do site (ex.: https://financa-web.onrender.com): o pagamento volta para ele. Nunca vem do cliente (sem redirecionamento aberto). */
     APP_WEB_URL: optionalText(z.url()),
 
+    // --- Cadastro e login por outras contas (Google, Facebook...) ---
+    /**
+     * Provedores de login social que aparecem no app (ids separados por vírgula: google, facebook, apple, azure...). Cada um precisa estar
+     * ligado no Supabase (Authentication → Providers). Vazio = só e-mail e senha. O Instagram não tem login próprio: entra pelo Facebook.
+     */
+    OAUTH_PROVIDERS: csv.pipe(z.array(z.enum(OAUTH_PROVIDERS.map((p) => p.id) as [string, ...string[]]))),
+    /** Para onde o provedor devolve a pessoa no celular (deep link, ex.: financa://auth/callback). Precisa estar em "Redirect URLs" no Supabase. */
+    OAUTH_REDIRECT_URL: optionalText(z.string().min(3)),
+    /** Idem na web (ex.: https://financa-web.onrender.com/auth/callback). Nunca vem do cliente (sem redirecionamento aberto). */
+    OAUTH_WEB_REDIRECT_URL: optionalText(z.url()),
+
     RATE_LIMIT_ENABLED: bool(true),
     RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(300),
     JOBS_ENABLED: bool(true),
@@ -152,6 +164,14 @@ const schema = z
     if (env.BILLING_PROVIDER === "stripe") {
       for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID", "APP_WEB_URL"] as const) {
         if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: `${key} é obrigatória com BILLING_PROVIDER=stripe` });
+      }
+    }
+    if (env.OAUTH_PROVIDERS.length > 0) {
+      if (!env.OAUTH_REDIRECT_URL && !env.OAUTH_WEB_REDIRECT_URL) {
+        ctx.addIssue({ code: "custom", path: ["OAUTH_WEB_REDIRECT_URL"], message: "OAUTH_WEB_REDIRECT_URL (ou OAUTH_REDIRECT_URL) é obrigatória com OAUTH_PROVIDERS: é para onde o provedor devolve a pessoa" });
+      }
+      if (env.AUTH_MODE === "dev") {
+        ctx.addIssue({ code: "custom", path: ["OAUTH_PROVIDERS"], message: "OAUTH_PROVIDERS exige AUTH_MODE=supabase (o login local de desenvolvimento não tem login social)" });
       }
     }
     if (env.NODE_ENV !== "production") return;

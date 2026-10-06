@@ -262,6 +262,15 @@ enum PrivacyRequestStatus {
 
 // ───────────────────────── Identidade e conta do usuário ─────────────────────
 
+/// O que a pessoa alterou no cadastro (limites por mês e por ano). Só o servidor grava; guarda o tipo e o instante, nunca o valor.
+enum AccountChangeKind {
+  NAME
+  EMAIL
+  PASSWORD
+
+  @@map("account_change_kind")
+}
+
 /// Espelho local do usuário. `id` = id do Supabase Auth (auth.users.id).
 /// Senhas NÃO existem aqui: ficam exclusivamente no provedor de autenticação.
 model User {
@@ -270,6 +279,10 @@ model User {
   role       UserRole   @default(USER)
   status     UserStatus @default(ACTIVE)
   lastSeenAt DateTime?  @map("last_seen_at") @db.Timestamptz(6)
+  /// Verificação em duas etapas (TOTP): id do fator no provedor de login e quando foi ativada. Nulo = desligada.
+  /// Com ela ligada, a API só aceita sessões que passaram pelo código (aal2). O segredo do código fica só no provedor.
+  mfaFactorId  String?   @map("mfa_factor_id") @db.VarChar(64)
+  mfaEnabledAt DateTime? @map("mfa_enabled_at") @db.Timestamptz(6)
   createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt  DateTime?  @map("deleted_at") @db.Timestamptz(6)
@@ -297,9 +310,23 @@ model User {
   pushTokens              PushToken[]
   privacyRequests         PrivacyRequest[]
   idempotencyKeys         IdempotencyKey[]
+  accountChanges          AccountChange[]
 
   @@index([status])
   @@map("users")
+}
+
+/// Alterações de nome, e-mail e senha, para limitar quantas a pessoa faz por mês e por ano. Sem o valor alterado.
+model AccountChange {
+  id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String            @map("user_id") @db.Uuid
+  kind      AccountChangeKind
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, createdAt])
+  @@map("account_changes")
 }
 
 model Profile {
@@ -314,6 +341,10 @@ model Profile {
   /// Preferências de notificação (validadas por Zod na API).
   notificationPrefs     Json            @default("{}") @map("notification_prefs")
   onboardingCompletedAt DateTime?       @map("onboarding_completed_at") @db.Timestamptz(6)
+  /// Quando a pessoa respondeu à pergunta do primeiro acesso ("ativar a verificação em duas etapas?"). Nulo = ainda vai perguntar.
+  securityPromptAnsweredAt DateTime?    @map("security_prompt_answered_at") @db.Timestamptz(6)
+  /// Quando a pessoa viu o aviso do teste grátis (30 dias, com a opção de assinar antes). Nulo = ainda vai mostrar quando a cobrança estiver ligada.
+  trialIntroSeenAt      DateTime?       @map("trial_intro_seen_at") @db.Timestamptz(6)
   createdAt             DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
 

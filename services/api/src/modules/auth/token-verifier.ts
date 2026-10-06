@@ -9,6 +9,15 @@ export type VerifiedToken = {
   userMetadata: Record<string, unknown>;
   /** Epoch em segundos. */
   expiresAt: number;
+  /** Nível de autenticação: aal2 = a sessão passou pelo código da verificação em duas etapas. */
+  aal: "aal1" | "aal2";
+  /** Formas de entrar ligadas à conta ("email", "google"...). Contas que entram só por Google/Facebook não têm "email" (sem senha). */
+  providers: string[];
+  /**
+   * Quando a pessoa se autenticou de fato (epoch em segundos), para exigir um login recente em operações sensíveis. Vem do `amr` do token
+   * (hora de cada método usado, que NÃO muda quando o token é renovado); sem `amr`, cai na emissão do token.
+   */
+  authenticatedAt: number;
 };
 
 export interface TokenVerifier {
@@ -25,6 +34,15 @@ export type JoseVerifierOptions = {
 };
 
 const ASYMMETRIC_ALGS = ["ES256", "RS256", "EdDSA"];
+
+/** Hora do login mais recente registrada no `amr` do token; sem ela, a emissão (`iat`). */
+function authTime(payload: Record<string, unknown>): number {
+  const times = Array.isArray(payload.amr)
+    ? payload.amr.map((a) => (a && typeof a === "object" ? (a as { timestamp?: unknown }).timestamp : undefined)).filter((t): t is number => typeof t === "number")
+    : [];
+  if (times.length > 0) return Math.max(...times);
+  return typeof payload.iat === "number" ? payload.iat : 0;
+}
 
 /**
  * Valida o JWT de acesso: assinatura, emissor, audiência e expiração.
@@ -62,6 +80,8 @@ export class JoseTokenVerifier implements TokenVerifier {
         payload.user_metadata && typeof payload.user_metadata === "object"
           ? (payload.user_metadata as Record<string, unknown>)
           : {};
+      const app = payload.app_metadata && typeof payload.app_metadata === "object" ? (payload.app_metadata as Record<string, unknown>) : {};
+      const providers = Array.isArray(app.providers) ? app.providers.filter((p): p is string => typeof p === "string") : typeof app.provider === "string" ? [app.provider] : [];
       return {
         sub: payload.sub,
         email: typeof payload.email === "string" ? payload.email.toLowerCase() : null,
@@ -69,6 +89,9 @@ export class JoseTokenVerifier implements TokenVerifier {
         emailVerified: metadata.email_verified !== false,
         userMetadata: metadata,
         expiresAt: typeof payload.exp === "number" ? payload.exp : 0,
+        aal: payload.aal === "aal2" ? "aal2" : "aal1",
+        providers,
+        authenticatedAt: authTime(payload),
       };
     } catch (err) {
       if (err instanceof joseErrors.JWTExpired) throw Errors.unauthorized("Sessão expirada", "TOKEN_EXPIRED");

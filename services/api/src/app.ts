@@ -80,6 +80,13 @@ class DisabledAuthProvider implements AuthProvider {
   resendVerification(): never { return this.fail(); }
   updatePassword(): never { return this.fail(); }
   deleteUser(): never { return this.fail(); }
+  requestEmailChange(): never { return this.fail(); }
+  mfaEnroll(): never { return this.fail(); }
+  mfaVerify(): never { return this.fail(); }
+  mfaUnenroll(): never { return this.fail(); }
+  adminRemoveMfa(): never { return this.fail(); }
+  oauthAuthorizeUrl(): never { return this.fail(); }
+  oauthExchange(): never { return this.fail(); }
 }
 
 class DisabledTokenVerifier implements TokenVerifier {
