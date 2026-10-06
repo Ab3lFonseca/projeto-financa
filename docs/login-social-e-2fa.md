@@ -52,11 +52,19 @@ Não tem senha. Por isso: **definir uma senha** não pede a senha atual (pede um
 
 ## 2. Verificação em duas etapas (2FA)
 
-- Aplicativo autenticador (Google Authenticator, Microsoft Authenticator, Authy, 1Password...) lendo um QR, ou digitando a chave.
+- Aplicativo autenticador (Google Authenticator, Microsoft Authenticator, Authy, 1Password...) lendo um QR, ou digitando a chave. O QR é **desenhado pelo
+  próprio app** a partir do endereço `otpauth://` (montado com a chave que a API devolve), em preto sobre branco com a margem exigida e módulos de
+  tamanho inteiro. Não depende da imagem pronta do Supabase (que não escalava direito). Testes decodificam o desenho de volta (`lib/qr.test.ts`).
 - **Primeiro acesso:** o app pergunta uma vez se a pessoa quer ativar. Quem responde "Agora não" pode ligar depois em *Configurações → Segurança*.
 - Com a 2FA ligada, a API **recusa toda rota** para uma sessão que só digitou a senha (`401 MFA_REQUIRED`); o app pede o código e troca a sessão por uma
   verificada (`POST /v1/auth/mfa/verify`). Vale também para quem entra por Google/Facebook.
-- **Trava:** 5 códigos errados em 15 minutos bloqueiam novas tentativas por 15 minutos (`429 MFA_LOCKED`).
+- **O código é pedido toda vez:** em cada login (senha, Google, Facebook...) **e** sempre que o app é aberto ou a página recarregada, mesmo havendo uma
+  sessão guardada (o app lê `me.security.mfaFactorId`). Dentro de uma mesma abertura não pede de novo. Sem rede, os dados guardados também só aparecem
+  depois do código.
+- **3 tentativas:** cada código errado diz quantas restam (`422 INVALID_MFA_CODE`, `details.attemptsLeft`). No 3º erro a API encerra **só aquela sessão**
+  (`signOut` com escopo local) e responde `429 MFA_LOCKED`; o app sai para o login com um aviso. As tentativas ficam travadas por 15 minutos, **mesmo
+  entrando de novo com a senha** (o contador é por conta, na trilha de auditoria, e só zera quando a pessoa acerta um código). Vale também para
+  *Desligar a verificação*. Só código errado conta: queda de rede ou erro do provedor não gasta tentativa.
 - **Desligar** exige um código válido na hora (prova que a pessoa tem o aparelho, não só a sessão aberta).
 - **Perdeu o celular?** O suporte desliga a 2FA da conta em *Painel do administrador → Usuários → conta → Remover verificação em duas etapas* (fica na
   auditoria). Não existem códigos de recuperação nesta versão.

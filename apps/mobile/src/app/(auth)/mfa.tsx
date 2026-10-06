@@ -61,7 +61,7 @@ export default function MfaScreen() {
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 14, backgroundColor: colors.primarySoft }}>
         <Icon name="shield-check" size={20} color={colors.primary} />
         <Text variant="bodySm" style={{ flex: 1 }}>
-          Sua conta usa verificação em duas etapas. O código muda a cada 30 segundos.
+          Sua conta usa verificação em duas etapas: pedimos o código sempre que você entra ou abre o app. Ele muda a cada 30 segundos. Depois de 3 códigos errados, você é desconectado por segurança.
         </Text>
       </View>
       <TextField

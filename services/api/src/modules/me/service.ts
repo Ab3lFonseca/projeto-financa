@@ -65,7 +65,7 @@ export async function buildMe(tx: Tx, user: AuthUser, config: Config, claims: Ve
     email: user.email,
     role: user.role,
     profile: toProfileDTO(profile),
-    security: { mfaEnabled: user.mfaEnabled, promptAnswered: profile.securityPromptAnsweredAt !== null, hasPassword: hasPasswordOf(claims) },
+    security: { mfaEnabled: user.mfaEnabled, mfaFactorId: user.mfaEnabled ? user.mfaFactorId : null, promptAnswered: profile.securityPromptAnsweredAt !== null, hasPassword: hasPasswordOf(claims) },
     notices: { trialIntroSeen: profile.trialIntroSeenAt !== null },
     consentRequired: !user.consentOk,
     legalVersions: { terms: config.LEGAL_TERMS_VERSION, privacy: config.LEGAL_PRIVACY_VERSION },

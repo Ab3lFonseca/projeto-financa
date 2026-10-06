@@ -13,10 +13,10 @@ import { errorText } from "@/components/ui/ApiErrorMessage";
 import { api } from "@/lib/api/endpoints";
 import { useAuth, useMe } from "@/lib/auth/AuthProvider";
 import { saveTextFile } from "@/lib/export-file";
-import { useApiMutation, useConsents } from "@/lib/hooks";
+import { useApiMutation, useConsents, useOpenFinanceStatus } from "@/lib/hooks";
 import { useLogStore } from "@/lib/logger";
 import { useQuery } from "@tanstack/react-query";
-import { toast } from "@/lib/ui-store";
+import { confirmDialog, toast } from "@/lib/ui-store";
 
 const go = (p: string) => router.push(p as never);
 
@@ -42,9 +42,28 @@ export default function PrivacyScreen() {
 
   const active = (type: string) => consents.data?.current.find((c) => c.type === type && !c.revokedAt);
   const marketing = !!active("MARKETING");
-  const openFinance = active("OPEN_FINANCE");
+  const openFinance = !!active("OPEN_FINANCE");
+  const ofStatus = useOpenFinanceStatus();
+  // A linha fica enquanto o recurso existir neste ambiente (ou houver autorização ativa): senão, ao desligar, ela sumia e não dava para religar.
+  const showOpenFinance = openFinance || ofStatus.data?.enabled === true;
 
   const setConsent = useApiMutation((v: { type: "MARKETING" | "OPEN_FINANCE"; granted: boolean }) => api.privacy.setConsent(v.type, me.legalVersions.privacy, v.granted), { success: "Preferência salva" });
+
+  const toggleOpenFinance = async (granted: boolean) => {
+    if (granted) {
+      // Ligar passa pela tela do Open Finance, que mostra o que será compartilhado e pede a autorização de forma clara.
+      go("/open-finance");
+      return;
+    }
+    const ok = await confirmDialog({
+      title: "Desligar o Open Finance?",
+      message: "Os bancos conectados serão desconectados e o app para de receber seus dados. Os lançamentos que você já importou continuam. Você pode religar quando quiser.",
+      confirmLabel: "Desligar",
+      cancelLabel: "Manter ligado",
+      destructive: true,
+    });
+    if (ok) setConsent.mutate({ type: "OPEN_FINANCE", granted: false });
+  };
 
   const exportData = async () => {
     setExporting(true);
@@ -92,10 +111,19 @@ export default function PrivacyScreen() {
             value={reportsEnabled}
             onChange={setReportsEnabled}
           />
-          {openFinance ? (
+          {showOpenFinance ? (
             <>
               <Divider />
-              <SwitchRow title="Open Finance" subtitle="Compartilhamento dos dados dos seus bancos. Desligar revoga o acesso." value onChange={(granted) => setConsent.mutate({ type: "OPEN_FINANCE", granted })} />
+              <SwitchRow
+                title="Open Finance"
+                subtitle={
+                  openFinance
+                    ? "Compartilhamento dos dados dos seus bancos. Desligar desconecta os bancos e revoga o acesso."
+                    : "Desligado. Ligue para conectar seus bancos: você vê o que será compartilhado antes de autorizar."
+                }
+                value={openFinance}
+                onChange={(granted) => void toggleOpenFinance(granted)}
+              />
             </>
           ) : null}
         </Card>

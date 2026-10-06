@@ -227,12 +227,12 @@ export class SupabaseAuthProvider implements AuthProvider {
     for (const f of user.factors ?? []) {
       if (f.status !== "verified") await this.request("DELETE", `/factors/${encodeURIComponent(f.id)}`, { bearer: accessToken }).catch(() => undefined);
     }
-    const raw = await this.request<{ id: string; totp?: { qr_code?: string; secret?: string; uri?: string } }>("POST", "/factors", {
+    const raw = await this.request<{ id: string; totp?: { secret?: string; uri?: string } }>("POST", "/factors", {
       bearer: accessToken,
       body: { factor_type: "totp", issuer: "Finança", friendly_name: `Finança ${randomBytes(3).toString("hex")}` },
     });
     const totp = raw.totp ?? {};
-    return { factorId: String(raw.id), secret: String(totp.secret ?? ""), uri: String(totp.uri ?? ""), qrSvg: decodeSvgDataUri(String(totp.qr_code ?? "")) };
+    return { factorId: String(raw.id), secret: String(totp.secret ?? ""), uri: String(totp.uri ?? "") };
   }
 
   async mfaVerify(accessToken: string, factorId: string, code: string): Promise<ProviderSession> {
@@ -268,16 +268,5 @@ export class SupabaseAuthProvider implements AuthProvider {
   async oauthExchange(code: string, codeVerifier: string): Promise<ProviderSession> {
     const raw = await this.request<Record<string, any>>("POST", "/token", { query: { grant_type: "pkce" }, body: { auth_code: code, code_verifier: codeVerifier } });
     return this.toSession(raw);
-  }
-}
-
-/** O Supabase devolve o QR como `data:image/svg+xml;utf-8,<svg...>` (com o SVG codificado para URL). O app precisa do SVG puro. */
-export function decodeSvgDataUri(value: string): string {
-  const comma = value.indexOf(",");
-  const body = value.startsWith("data:") && comma >= 0 ? value.slice(comma + 1) : value;
-  try {
-    return decodeURIComponent(body);
-  } catch {
-    return body;
   }
 }

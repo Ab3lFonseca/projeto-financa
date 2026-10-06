@@ -126,6 +126,9 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   consentimento no app do banco cobrir tudo o que o app mostra.
 
 ### Segurança
+- **Verificação em duas etapas mais firme.** O código passa a ser pedido **toda vez**: em cada login e também ao abrir o app ou recarregar a página (mesmo
+  com sessão guardada). **3 códigos errados** (antes eram 5) encerram a sessão e travam as tentativas por 15 minutos, inclusive ao entrar de novo com a
+  senha; cada erro mostra quantas tentativas restam e o login explica por que a pessoa foi desconectada. O mesmo limite vale para *Desligar a verificação*.
 - **Limite de tentativas contornável pelo `X-Forwarded-For`** (achado de um teste externo, severidade média): a API confiava em todo o cabeçalho,
   inclusive no que o cliente enviava, e quem o trocava ganhava um contador novo (ex.: cadastro). Novo `CLIENT_IP_HEADER` (Render:
   `cf-connecting-ip`; Fly: `fly-client-ip`) usa o IP escrito só pela borda e ignora o `X-Forwarded-For`; sem ele a API avisa ao iniciar em
@@ -134,6 +137,12 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   A CSP completa fica para depois de testar com o widget do Pluggy.
 
 ### Corrigido
+- **O QR code da verificação em duas etapas vinha quebrado.** A imagem pronta do provedor não escalava direito na tela e o código ficava ilegível. Agora o
+  app desenha o QR a partir do endereço `otpauth://`, com a margem exigida e módulos de tamanho inteiro; um teste decodifica o desenho de volta.
+- **Em Privacidade, desligar o Open Finance fazia a opção sumir** (não dava para religar). A linha agora fica sempre que o recurso existe: ligar leva à
+  tela que mostra o que será compartilhado e pede a autorização; desligar pede confirmação e desconecta os bancos.
+- **A logo do fundo agora fica centralizada** (estava no canto) e **só se mexe quando o mouse passa por cima**: os cubos perto do cursor saltam, giram e
+  acendem, e depois voltam ao lugar. Parada, não gasta processamento.
 - **O fundo do ícone da aba ativa cobria o começo do rótulo no computador.** Em telas largas (a partir de 768 px) o React Navigation põe o rótulo ao
   lado do ícone e a pílula encostava na palavra (Início, Transações...). Agora o rótulo fica sempre embaixo do ícone (`tabBarLabelPosition`), como no
   celular, que é o formato para o qual a altura da barra foi calculada. Conferido em 1280 px: 2 px de folga entre a pílula e o texto, nenhum rótulo cortado.

@@ -21,6 +21,7 @@ import {
 } from "@app/shared";
 import { audit } from "../../lib/audit";
 import { AppError, Errors } from "../../lib/errors";
+import { checkMfaCode } from "./mfa-attempts";
 
 const STRICT = (max: number) => ({ rateLimit: { max, timeWindow: "1 minute" } });
 
@@ -93,7 +94,8 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
   );
 
   // Segundo passo do login com verificação em duas etapas: troca a sessão "só senha" por uma verificada (aal2) com o código do aplicativo
-  // autenticador. Aceita a sessão aal1 de propósito (é para isso que ela existe) e trava depois de 5 códigos errados em 15 minutos.
+  // autenticador. Aceita a sessão aal1 de propósito (é para isso que ela existe). No 3º código errado a sessão é encerrada e a verificação
+  // trava por 15 minutos (o contador não zera ao entrar de novo com a senha).
   app.post(
     "/mfa/verify",
     { config: STRICT(8), schema: { tags: ["auth"], body: mfaVerifyBody, response: { 200: mfaSessionResponse, 422: errorResponse } } },
@@ -106,19 +108,9 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
       if (!row?.mfaFactorId || row.mfaFactorId !== req.body.factorId) {
         throw Errors.forbidden("A verificação em duas etapas não está ligada para esta conta.", "MFA_NOT_ENABLED");
       }
-      const since = new Date(app.clock().getTime() - 15 * 60_000);
-      const failures = await app.prisma.auditLog.count({ where: { actorId: claims.sub, action: "auth.mfa_failed", createdAt: { gte: since } } });
-      if (failures >= 5) throw new AppError(429, "MFA_LOCKED", "Muitas tentativas com código errado. Aguarde 15 minutos e tente de novo.");
-      try {
-        const session = await provider.mfaVerify(token, req.body.factorId, req.body.code);
-        await audit(app.prisma, config.IP_HASH_PEPPER, { actorId: claims.sub, action: "auth.mfa_verified", ip: req.ip }, req.log);
-        return session;
-      } catch (err) {
-        if (err instanceof AppError && err.code === "INVALID_MFA_CODE") {
-          await audit(app.prisma, config.IP_HASH_PEPPER, { actorId: claims.sub, action: "auth.mfa_failed", ip: req.ip }, req.log);
-        }
-        throw err;
-      }
+      const session = await checkMfaCode(app, { userId: claims.sub, token, ip: req.ip, log: req.log }, () => provider.mfaVerify(token, req.body.factorId, req.body.code));
+      await audit(app.prisma, config.IP_HASH_PEPPER, { actorId: claims.sub, action: "auth.mfa_verified", ip: req.ip, at: app.clock() }, req.log);
+      return session;
     },
   );
 

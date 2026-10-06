@@ -22,12 +22,11 @@ export type SignUpResult = {
   requiresEmailVerification: boolean;
 };
 
-/** Fator TOTP recém-criado: o segredo e o QR aparecem só uma vez, para a pessoa cadastrar no aplicativo autenticador. */
+/** Fator TOTP recém-criado: o segredo e o endereço do QR aparecem só uma vez, para a pessoa cadastrar no aplicativo autenticador. */
 export type MfaEnrollment = {
   factorId: string;
   secret: string;
   uri: string;
-  qrSvg: string;
 };
 
 export interface AuthProvider {

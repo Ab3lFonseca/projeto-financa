@@ -21,6 +21,7 @@ import { z } from "zod";
 import { audit } from "../../lib/audit";
 import { runAs, runMutation } from "../../lib/db";
 import { AppError, Errors } from "../../lib/errors";
+import { checkMfaCode } from "../auth/mfa-attempts";
 import { beforeEraseOf } from "../privacy/before-erase";
 import { eraseAccount } from "../privacy/service";
 import { assertCanChange, buildAccount, hasPasswordOf, recordChange, requireRecentLogin } from "./account";
@@ -199,9 +200,11 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
     { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } }, schema: { tags: ["me"], body: mfaDisableBody, response: { 200: okResponse, 422: errorResponse } } },
     async (req) => {
       const user = req.user!;
-      if (!user.mfaEnabled || !user.mfaFactorId) throw Errors.conflict("A verificação em duas etapas não está ligada.", "MFA_NOT_ENABLED");
-      const session = await app.authProvider.mfaVerify(req.accessToken!, user.mfaFactorId, req.body.code);
-      await app.authProvider.mfaUnenroll(session.accessToken, user.mfaFactorId);
+      const factorId = user.mfaFactorId;
+      if (!user.mfaEnabled || !factorId) throw Errors.conflict("A verificação em duas etapas não está ligada.", "MFA_NOT_ENABLED");
+      // Mesmo limite do login: 3 códigos errados encerram a sessão (quem só roubou o aparelho aberto não consegue adivinhar o código).
+      const session = await checkMfaCode(app, { userId: user.id, token: req.accessToken!, ip: req.ip, log: req.log }, () => app.authProvider.mfaVerify(req.accessToken!, factorId, req.body.code));
+      await app.authProvider.mfaUnenroll(session.accessToken, factorId);
       await app.prisma.user.update({ where: { id: user.id }, data: { mfaFactorId: null, mfaEnabledAt: null } });
       app.users.invalidate(user.id);
       await audit(app.prisma, config.IP_HASH_PEPPER, { actorId: user.id, action: "auth.mfa_disabled", entity: "user", entityId: user.id, ip: req.ip }, req.log);

@@ -210,7 +210,7 @@ export class FakeAuthProvider implements AuthProvider {
     const factor: FakeFactor = { id: randomUUID(), secret: randomBytes(20), verified: false };
     user.factors.push(factor);
     const secret = base32(factor.secret);
-    return { factorId: factor.id, secret, uri: `otpauth://totp/Finan%C3%A7a:${encodeURIComponent(user.email)}?secret=${secret}&issuer=Finan%C3%A7a`, qrSvg: `<svg xmlns="http://www.w3.org/2000/svg"><title>${secret}</title></svg>` };
+    return { factorId: factor.id, secret, uri: `otpauth://totp/Finan%C3%A7a:${encodeURIComponent(user.email)}?secret=${secret}&issuer=Finan%C3%A7a` };
   }
 
   async mfaVerify(accessToken: string, factorId: string, code: string): Promise<ProviderSession> {

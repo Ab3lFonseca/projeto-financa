@@ -407,7 +407,10 @@ describe("Verificação em duas etapas (TOTP)", () => {
     const enrolled = await u.post("/v1/me/mfa/enroll");
     expect(enrolled.status).toBe(200);
     expect(enrolled.body).toMatchObject({ factorId: expect.any(String), secret: expect.stringMatching(/^[A-Z2-7]{20,}$/), uri: expect.stringMatching(/^otpauth:\/\//) });
-    expect(enrolled.body.qrSvg).toContain("<svg");
+    // O QR é desenhado pelo app a partir do endereço otpauth://: o servidor não devolve mais imagem pronta.
+    expect(enrolled.body.qrSvg).toBeUndefined();
+    expect(enrolled.body.uri).toContain(`secret=${enrolled.body.secret}`);
+    expect((await u.get("/v1/me")).body.security.mfaFactorId).toBeNull();
 
     const bad = await u.post("/v1/me/mfa/enable", { factorId: enrolled.body.factorId, code: "000000" });
     expect(bad.status).toBe(422);
@@ -420,6 +423,8 @@ describe("Verificação em duas etapas (TOTP)", () => {
     const aal2 = env.asUser(ok.body);
     const me = (await aal2.get("/v1/me")).body;
     expect(me.security.mfaEnabled).toBe(true);
+    // O app usa este identificador para pedir o código toda vez que for aberto.
+    expect(me.security.mfaFactorId).toBe(enrolled.body.factorId);
     const account = (await aal2.get("/v1/me/account")).body.security.mfa;
     expect(account.enabled).toBe(true);
     expect(account.enabledAt).not.toBeNull();
@@ -472,17 +477,100 @@ describe("Verificação em duas etapas (TOTP)", () => {
     expect((await env.asUser(login.body).get("/v1/me")).status).toBe(200);
   });
 
-  it("5 códigos errados travam a conta por 15 minutos, mesmo com o código certo depois", async () => {
-    const u = await member();
-    const { factorId } = await enableMfa(u);
-    const partial = env.asUser((await env.anon.post("/v1/auth/login", { email: u.email, password: u.password })).body);
-    for (let i = 0; i < 5; i++) {
-      const r = await env.call("POST", "/v1/auth/mfa/verify", { body: { factorId, code: "000000" }, token: partial.token });
-      expect(r.status).toBe(422);
-    }
-    const locked = await env.call("POST", "/v1/auth/mfa/verify", { body: { factorId, code: env.auth.codeFor(u.id, factorId) }, token: partial.token });
-    expect(locked.status).toBe(429);
-    expect(locked.body.error.code).toBe("MFA_LOCKED");
+  describe("limite de 3 tentativas", () => {
+    const loginPartial = async (u: TestUser) => env.asUser((await env.anon.post("/v1/auth/login", { email: u.email, password: u.password })).body);
+    const verify = (u: TestUser, partial: TestUser, factorId: string, code?: string) =>
+      env.call("POST", "/v1/auth/mfa/verify", { body: { factorId, code: code ?? "000000" }, token: partial.token });
+    const localSignOuts = () => env.auth.signOuts.filter((s) => s.scope === "local").length;
+
+    it("cada código errado avisa quantas tentativas restam; no 3º a sessão é encerrada e travada por 15 minutos, mesmo com o código certo", async () => {
+      const u = await member();
+      const { factorId } = await enableMfa(u);
+      const partial = await loginPartial(u);
+      const before = localSignOuts();
+
+      const first = await verify(u, partial, factorId);
+      expect(first.status).toBe(422);
+      expect(first.body.error.code).toBe("INVALID_MFA_CODE");
+      expect(first.body.error.details).toEqual({ attemptsLeft: 2 });
+      expect(first.body.error.message).toContain("2 tentativas");
+      const second = await verify(u, partial, factorId);
+      expect(second.body.error.details).toEqual({ attemptsLeft: 1 });
+      expect(second.body.error.message).toContain("1 tentativa ");
+      expect(localSignOuts()).toBe(before); // ainda não saiu
+
+      const third = await verify(u, partial, factorId);
+      expect(third.status).toBe(429);
+      expect(third.body.error.code).toBe("MFA_LOCKED");
+      expect(third.body.error.message).toContain("desconectado");
+      expect(localSignOuts()).toBe(before + 1); // sessão encerrada no provedor (só esta: escopo local)
+      expect(env.auth.signOuts.some((s) => s.scope === "global")).toBe(false);
+
+      // Travado: nem o código certo passa.
+      const right = await verify(u, partial, factorId, env.auth.codeFor(u.id, factorId));
+      expect(right.status).toBe(429);
+      expect(right.body.error.code).toBe("MFA_LOCKED");
+      expect(await env.prisma.auditLog.count({ where: { actorId: u.id, action: "auth.mfa_failed" } })).toBe(3);
+      expect(await env.prisma.auditLog.count({ where: { actorId: u.id, action: "auth.mfa_verified" } })).toBe(0);
+    });
+
+    it("entrar de novo com a senha NÃO zera a conta: continua travado até passarem os 15 minutos", async () => {
+      const u = await member();
+      const { factorId } = await enableMfa(u);
+      for (let i = 0; i < 3; i++) await verify(u, await loginPartial(u), factorId);
+
+      const again = await loginPartial(u);
+      const locked = await verify(u, again, factorId, env.auth.codeFor(u.id, factorId));
+      expect(locked.status).toBe(429);
+      expect(locked.body.error.code).toBe("MFA_LOCKED");
+
+      env.setNow(new Date(Date.parse(DEFAULT_NOW) + 14 * 60_000).toISOString());
+      expect((await verify(u, again, factorId, env.auth.codeFor(u.id, factorId))).status).toBe(429);
+
+      env.setNow(new Date(Date.parse(DEFAULT_NOW) + 16 * 60_000).toISOString());
+      const ok = await verify(u, again, factorId, env.auth.codeFor(u.id, factorId));
+      expect(ok.status).toBe(200);
+      expect((await env.asUser(ok.body).get("/v1/me")).status).toBe(200);
+    });
+
+    it("acertar zera a conta: erros de antes não contam no próximo login", async () => {
+      const u = await member();
+      const { factorId } = await enableMfa(u);
+      const partial = await loginPartial(u);
+      await verify(u, partial, factorId);
+      await verify(u, partial, factorId);
+      expect((await verify(u, partial, factorId, env.auth.codeFor(u.id, factorId))).status).toBe(200);
+
+      const next = await loginPartial(u);
+      const wrong = await verify(u, next, factorId);
+      expect(wrong.status).toBe(422);
+      expect(wrong.body.error.details).toEqual({ attemptsLeft: 2 });
+    });
+
+    it("o limite é por conta: errar na conta de uma pessoa não trava a de outra", async () => {
+      const a = await member();
+      const b = await member();
+      const fa = await enableMfa(a);
+      const fb = await enableMfa(b);
+      for (let i = 0; i < 3; i++) await verify(a, await loginPartial(a), fa.factorId);
+      const partialB = await loginPartial(b);
+      expect((await verify(b, partialB, fb.factorId, env.auth.codeFor(b.id, fb.factorId))).status).toBe(200);
+    });
+
+    it("desligar a verificação tem o mesmo limite: 3 códigos errados encerram a sessão", async () => {
+      const u = await member();
+      const { aal2 } = await enableMfa(u);
+      const before = localSignOuts();
+      expect((await aal2.post("/v1/me/mfa/disable", { code: "000000" })).body.error.details).toEqual({ attemptsLeft: 2 });
+      expect((await aal2.post("/v1/me/mfa/disable", { code: "000000" })).body.error.details).toEqual({ attemptsLeft: 1 });
+      const third = await aal2.post("/v1/me/mfa/disable", { code: "000000" });
+      expect(third.status).toBe(429);
+      expect(third.body.error.code).toBe("MFA_LOCKED");
+      expect(localSignOuts()).toBe(before + 1);
+      // Travado: o código certo também não desliga nada agora.
+      expect((await aal2.post("/v1/me/mfa/disable", { code: env.auth.codeFor(u.id) })).status).toBe(429);
+      expect(env.auth.factorsOf(u.id)).toHaveLength(1);
+    });
   });
 
   it("não aceita o fator de outra pessoa nem sem sessão", async () => {

@@ -1,19 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { View } from "react-native";
-import { SvgXml } from "react-native-svg";
 import { HeroBanner } from "@/components/art/HeroBanner";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Controls";
 import { TextField } from "@/components/ui/Inputs";
 import { Card, Reveal, Row, Screen, ScreenHeader, Section } from "@/components/ui/Layout";
+import { QrCode } from "@/components/ui/QrCode";
 import { Sheet } from "@/components/ui/Sheet";
 import { Text } from "@/components/ui/Text";
 import { codeDigits, dateBR, providerLabel } from "@/lib/account";
 import { api, type MfaEnrollment } from "@/lib/api/endpoints";
-import { useAuth } from "@/lib/auth/AuthProvider";
+import { useAuth, useMe } from "@/lib/auth/AuthProvider";
 import { useApiMutation } from "@/lib/hooks";
+import { otpauthUri } from "@/lib/otpauth";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const STEPS = [
@@ -25,12 +26,14 @@ const STEPS = [
 /** Segurança da conta: ligar e desligar a verificação em duas etapas (aplicativo autenticador) e ver as formas de entrar. */
 export default function SecurityScreen() {
   const { adoptSession, refreshMe } = useAuth();
+  const me = useMe();
   const { colors, radius } = useTheme();
   const account = useQuery({ queryKey: ["account"], queryFn: api.me.account });
   const sec = account.data?.security;
   const enabled = sec?.mfa.enabled ?? false;
 
   const [enrollment, setEnrollment] = useState<MfaEnrollment | null>(null);
+  const qrUri = enrollment ? otpauthUri({ secret: enrollment.secret, account: me.email }) : null;
   const [code, setCode] = useState("");
   const [disabling, setDisabling] = useState(false);
   const [disableCode, setDisableCode] = useState("");
@@ -105,9 +108,15 @@ export default function SecurityScreen() {
                 </Text>
               </Row>
             ))}
-            <View style={{ alignSelf: "center", padding: 12, borderRadius: radius.md, backgroundColor: "#FFFFFF" }}>
-              <SvgXml xml={enrollment.qrSvg} width={190} height={190} />
-            </View>
+            {qrUri ? (
+              <View style={{ alignSelf: "center", padding: 6, borderRadius: radius.md, backgroundColor: "#FFFFFF" }}>
+                <QrCode value={qrUri} size={240} label="QR code para cadastrar no aplicativo autenticador" />
+              </View>
+            ) : (
+              <Text variant="bodySm" tone="negative">
+                Não foi possível desenhar o QR. Use a chave abaixo no aplicativo autenticador.
+              </Text>
+            )}
             <View style={{ gap: 4 }}>
               <Text variant="caption" tone="muted" weight="600">
                 Não consegue ler o QR? Digite esta chave no aplicativo:

@@ -1,66 +1,68 @@
-import { useEffect, useMemo } from "react";
-import { Platform, useWindowDimensions, View, type ViewStyle } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
+import { useMemo } from "react";
+import { Platform, useWindowDimensions, View } from "react-native";
 import Svg, { Rect } from "react-native-svg";
 import { mix } from "@/theme/color";
 import { useTheme } from "@/theme/ThemeProvider";
+import { InteractivePixelLogo, type CellPaint } from "./InteractivePixelLogo";
 import { logoCells, type PixelCell } from "./pixelShapes";
 
 const web = Platform.OS === "web";
-/** `filter` só existe na web; no celular o desenho fica sem desfoque (continua suave, de tão apagado). */
-const blur = (px: number) => (web ? ({ filter: `blur(${px}px)` } as ViewStyle) : null);
 
 const BAR_ALPHA = { 1: 0.55, 2: 0.8, 3: 1 } as const;
 
-function Cells({ cells, bg, bar }: { cells: PixelCell[]; bg: (gradient: number) => string; bar: string }) {
+/** Parada (celular): a logo desenhada em SVG, sem movimento. */
+function StaticCells({ cells, paint, box }: { cells: PixelCell[]; paint: CellPaint[]; box: number }) {
   return (
-    <Svg width="100%" height="100%" viewBox="0 0 1 1">
-      {cells.map((c, i) => {
-        const fill = c.tone === 0 ? bg(c.gradient) : bar;
-        const opacity = c.alpha * (c.tone === 0 ? 0.8 : BAR_ALPHA[c.tone]);
-        // `rotation`/`origin` geram um atributo DOM inválido na web; o `transform` em texto vale igual nas duas plataformas.
-        const transform = c.rotate === 0 ? undefined : `rotate(${c.rotate.toFixed(1)} ${(c.x + c.size / 2).toFixed(4)} ${(c.y + c.size / 2).toFixed(4)})`;
-        return <Rect key={i} x={c.x} y={c.y} width={c.size} height={c.size} fill={fill} opacity={opacity} transform={transform} />;
-      })}
-    </Svg>
+    <View pointerEvents="none" style={{ position: "absolute", width: box, height: box, left: "50%", top: "50%", marginLeft: -box / 2, marginTop: -box / 2 }}>
+      <Svg width="100%" height="100%" viewBox="0 0 1 1">
+        {cells.map((c, i) => {
+          // `rotation`/`origin` geram um atributo DOM inválido na web; o `transform` em texto vale igual nas duas plataformas.
+          const transform = c.rotate === 0 ? undefined : `rotate(${c.rotate.toFixed(1)} ${(c.x + c.size / 2).toFixed(4)} ${(c.y + c.size / 2).toFixed(4)})`;
+          return <Rect key={i} x={c.x} y={c.y} width={c.size} height={c.size} fill={paint[i]!.fill} opacity={paint[i]!.alpha} transform={transform} />;
+        })}
+      </Svg>
+    </View>
   );
 }
 
 /**
- * A logo do Finança no fundo do app: desfocada e se desfazendo em pixels (os da direita se soltam, giram e somem), com os estilhaços
- * derivando devagar. Só decoração (não recebe toques) e bem apagada, para nunca atrapalhar a leitura. `intensity` multiplica a opacidade.
+ * A logo do Finança no fundo do app, CENTRALIZADA na tela: desfocada e se desfazendo em pixels (os da direita se soltam, giram e somem). Fica
+ * parada; na web, quando o mouse passa por cima da imagem, os cubos perto do cursor saltam, giram e acendem, e depois voltam ao lugar.
+ * Só decoração (não recebe toques) e bem apagada, para nunca atrapalhar a leitura. `intensity` multiplica a opacidade.
  */
 export function PixelLogoBackdrop({ intensity = 1 }: { intensity?: number }) {
   const { colors, scheme } = useTheme();
   const { width, height } = useWindowDimensions();
-  const reduce = useReducedMotion();
-  const { solid, shards } = useMemo(() => {
-    const all = logoCells(24, 11, 0.34);
-    return { solid: all.filter((c) => !c.shard), shards: all.filter((c) => c.shard) };
-  }, []);
+  // Os que passam da borda direita da logo ficavam cortados (invisíveis): nem entram na conta.
+  const cells = useMemo(() => logoCells(24, 11, 0.34).filter((c) => c.x < 1), []);
 
-  const size = Math.min(Math.max(width, height) * 0.95, 780);
+  // Do tamanho da menor medida da tela (a logo aparece inteira, de celular a monitor), com limites.
+  const box = Math.round(Math.min(Math.max(Math.min(width, height) * 1.1, 360), 760));
   const second = colors.accent === colors.primary ? mix(colors.primary, "#7C3AED", 0.6) : colors.accent;
-  const bg = (g: number) => mix(colors.primary, second, g);
   const bar = scheme === "dark" ? "#FFFFFF" : mix(colors.primary, "#FFFFFF", 0.55);
+  const paint = useMemo<CellPaint[]>(
+    () =>
+      cells.map((c) => ({
+        fill: c.tone === 0 ? mix(colors.primary, second, c.gradient) : bar,
+        alpha: c.alpha * (c.tone === 0 ? 0.8 : BAR_ALPHA[c.tone]),
+      })),
+    [cells, colors.primary, second, bar],
+  );
 
-  const t = useSharedValue(0);
-  useEffect(() => {
-    if (reduce) return;
-    t.value = withRepeat(withTiming(1, { duration: 9000, easing: Easing.inOut(Easing.sin) }), -1, true);
-  }, [reduce, t]);
-  const drift = useAnimatedStyle(() => ({ transform: [{ translateX: size * 0.018 * t.value }, { translateY: -size * 0.012 * t.value }, { rotate: `${1.2 * t.value}deg` }] }));
-
-  const frame = { position: "absolute" as const, width: size, height: size, right: -size * 0.2, bottom: -size * 0.16 };
   const base = (scheme === "dark" ? 0.15 : 0.1) * intensity;
+  // Onde o mouse passa, a opacidade sobe até aqui (para a reação aparecer), sem nunca ficar forte a ponto de competir com o texto.
+  const peak = Math.min(0.75, Math.max(base * 3.5, 0.45));
+
+  if (web) {
+    return (
+      <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, overflow: "hidden" }}>
+        <InteractivePixelLogo cells={cells} paint={paint} box={box} base={base} peak={peak} />
+      </View>
+    );
+  }
   return (
     <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, overflow: "hidden", opacity: base }}>
-      <View style={[frame, blur(web ? 3.2 : 0)]}>
-        <Cells cells={solid} bg={bg} bar={bar} />
-      </View>
-      <Animated.View style={[frame, blur(web ? 1 : 0), drift]}>
-        <Cells cells={shards} bg={bg} bar={bar} />
-      </Animated.View>
+      <StaticCells cells={cells} paint={paint} box={box} />
     </View>
   );
 }

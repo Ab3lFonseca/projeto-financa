@@ -17,10 +17,8 @@ export const mfaEnrollDTO = z.object({
   factorId: z.string(),
   /** Chave para digitar à mão no aplicativo autenticador (quando não dá para ler o QR). */
   secret: z.string(),
-  /** Endereço otpauth:// (o que o QR contém). */
+  /** Endereço otpauth:// (o que o QR contém). O app desenha o QR a partir dele, sem depender de imagem pronta do provedor. */
   uri: z.string(),
-  /** QR em SVG, pronto para desenhar. */
-  qrSvg: z.string(),
 });
 
 export const mfaVerifyBody = z.strictObject({ factorId: z.string().min(1).max(64), code: mfaCode });

@@ -54,6 +54,15 @@ function mfaFactorOf(err: unknown): { factorId: string } | null | undefined {
   return factorId ? { factorId } : null;
 }
 
+/**
+ * Conta com verificação em duas etapas? Então o código é pedido TODA vez que o app abre (o login com senha ou Google/Facebook já pede sempre),
+ * mesmo havendo uma sessão guardada. Dentro de uma mesma abertura ele não volta a pedir.
+ */
+function factorToConfirmOnOpen(me: Me): { factorId: string } | null {
+  const factorId = me.security?.mfaEnabled ? me.security.mfaFactorId : null;
+  return factorId ? { factorId } : null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>("loading");
   const [me, setMe] = useState<Me | null>(null);
@@ -111,7 +120,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       try {
         const next = await api.me.get();
-        if (alive) adoptMe(next);
+        if (!alive) return;
+        const factor = factorToConfirmOnOpen(next);
+        if (factor) {
+          // Guarda o perfil só para saber, sem rede, que a conta pede o código (nada é mostrado antes de digitá-lo).
+          void AsyncStorage.setItem(ME_CACHE_KEY, JSON.stringify(next));
+          needCode(factor);
+          return;
+        }
+        adoptMe(next);
       } catch (err) {
         if (!alive) return;
         const factor = mfaFactorOf(err);
@@ -128,7 +145,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const cached = await AsyncStorage.getItem(ME_CACHE_KEY);
         if (cached) {
-          setMe(JSON.parse(cached) as Me);
+          const last = JSON.parse(cached) as Me;
+          // Sem rede também: quem usa verificação em duas etapas não vê os dados guardados antes de digitar o código.
+          const factor = factorToConfirmOnOpen(last);
+          if (factor) {
+            needCode(factor);
+            return;
+          }
+          setMe(last);
           setStatus("signedIn");
         } else {
           setStatus("signedOut");

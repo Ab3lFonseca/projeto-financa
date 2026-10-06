@@ -82,6 +82,8 @@ export const meDTO = z.object({
   /** Segurança da conta: o que o app precisa saber para decidir o que mostrar (pergunta do primeiro acesso, atalhos). */
   security: z.object({
     mfaEnabled: z.boolean(),
+    /** Identificador do fator da verificação em duas etapas (para o app pedir o código ao abrir). `null` = desligada. */
+    mfaFactorId: z.string().nullable(),
     /** Já respondeu à pergunta "ativar a verificação em duas etapas?" (ela sai uma vez só). */
     promptAnswered: z.boolean(),
     hasPassword: z.boolean(),

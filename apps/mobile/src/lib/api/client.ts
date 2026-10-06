@@ -1,4 +1,5 @@
 import { API_URL } from "../config";
+import { useLoginNotice } from "../auth/notice";
 import { tokenStore } from "../auth/tokens";
 import { log } from "../logger";
 import { usePaywall } from "../paywall";
@@ -174,6 +175,12 @@ async function requestInner<T>(method: string, path: string, opts: RequestOption
     if (err.status === 402 && err.code === "SUBSCRIPTION_REQUIRED") usePaywall.getState().show();
     // A conta passou a exigir o código da verificação em duas etapas (ligada em outro aparelho): a tela de código assume.
     if (err.status === 401 && err.code === "MFA_REQUIRED") tokenStore.notifyMfaRequired((err.details as { factorId?: string | null } | undefined)?.factorId ?? null);
+    // 3 códigos errados: o servidor já encerrou esta sessão. Sai agora, sem esperar o próximo erro, e a tela de login explica o motivo.
+    if (err.status === 429 && err.code === "MFA_LOCKED") {
+      useLoginNotice.getState().show(err.message);
+      await tokenStore.clear();
+      tokenStore.notifyExpired();
+    }
     throw err;
   }
   if (res.status === 204) return undefined as T;

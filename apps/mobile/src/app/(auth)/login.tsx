@@ -4,14 +4,18 @@ import { View } from "react-native";
 import { AuthScaffold } from "@/components/AuthScaffold";
 import { SocialButtons } from "@/components/auth/SocialButtons";
 import { Button } from "@/components/ui/Button";
+import { Banner } from "@/components/ui/Feedback";
 import { TextField } from "@/components/ui/Inputs";
 import { Text } from "@/components/ui/Text";
 import { errorText } from "@/components/ui/ApiErrorMessage";
 import { ApiError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { useLoginNotice } from "@/lib/auth/notice";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
+  const notice = useLoginNotice((s) => s.message);
+  const clearNotice = useLoginNotice((s) => s.clear);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,6 +28,7 @@ export default function LoginScreen() {
     }
     setBusy(true);
     setError(null);
+    clearNotice();
     try {
       const { mfaRequired } = await signIn(email, password);
       router.replace(mfaRequired ? "/mfa" : "/");
@@ -53,6 +58,11 @@ export default function LoginScreen() {
         </View>
       }
     >
+      {notice ? (
+        <Banner tone="warning" icon="shield-alert">
+          {notice}
+        </Banner>
+      ) : null}
       <TextField label="E-mail" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" textContentType="emailAddress" placeholder="voce@email.com" returnKeyType="next" />
       <TextField label="Senha" value={password} onChangeText={setPassword} secure autoCapitalize="none" autoComplete="current-password" textContentType="password" placeholder="Sua senha" returnKeyType="go" onSubmitEditing={submit} />
       {error ? (

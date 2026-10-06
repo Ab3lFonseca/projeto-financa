@@ -72,6 +72,45 @@ export function toneAt(px: number, py: number): PixelTone | null {
   return inBackground(px, py) ? 0 : null;
 }
 
+/** Onde está o mouse, em coordenadas da logo (0..1 dentro do quadrado; pode passar disso para fora). */
+export type Pointer = { x: number; y: number };
+
+/** Quanto um cubo foi movido pelo mouse: deslocamento (em unidades da logo), giro extra (graus) e brilho (0..1). */
+export type HoverShift = { readonly dx: number; readonly dy: number; readonly rotate: number; readonly glow: number };
+
+const AT_REST: HoverShift = Object.freeze({ dx: 0, dy: 0, rotate: 0, glow: 0 });
+
+/** Distância (em unidades da logo) a partir do mouse em que os cubos reagem. */
+export const HOVER_RADIUS = 0.22;
+
+/**
+ * Como um cubo reage ao mouse passando por perto: é empurrado para longe do cursor, gira e brilha, mais forte quanto mais perto (e nada além do
+ * raio). `noise` (0..1, fixo por cubo) varia a força e o sentido do giro, para o efeito parecer algo se quebrando e não uma onda certinha.
+ */
+export function hoverShift(cell: PixelCell, noise: number, pointer: Pointer | null, radius = HOVER_RADIUS): HoverShift {
+  if (!pointer) return AT_REST;
+  const vx = cell.x + cell.size / 2 - pointer.x;
+  const vy = cell.y + cell.size / 2 - pointer.y;
+  const d = Math.hypot(vx, vy);
+  if (d >= radius) return AT_REST;
+  const k = 1 - d / radius;
+  const strength = k * k * (3 - 2 * k); // forte no centro, some devagar na borda
+  // Bem embaixo do cursor não existe "para longe": o sentido vem do sorteio do cubo.
+  const angle = d < 1e-6 ? noise * Math.PI * 2 : Math.atan2(vy, vx);
+  const push = radius * strength * (0.5 + noise);
+  return { dx: Math.cos(angle) * push, dy: Math.sin(angle) * push - strength * 0.02 * noise, rotate: (noise - 0.5) * 300 * strength, glow: strength };
+}
+
+/**
+ * Aproxima `current` de `target` suavemente, no mesmo ritmo em qualquer taxa de quadros. Vai rápido quando o valor se afasta do repouso (o cubo
+ * salta quando o mouse chega) e devagar quando volta a ele (assenta quando o mouse sai).
+ */
+export function approach(current: number, target: number, dtSeconds: number, upRate = 14, downRate = 4.5): number {
+  const rate = Math.abs(target) >= Math.abs(current) ? upRate : downRate;
+  const dt = Math.max(0, Math.min(dtSeconds, 0.05));
+  return current + (target - current) * (1 - Math.exp(-rate * dt));
+}
+
 /**
  * Células da logo. `grid` é quantos pixels por lado. A partir de `breakFrom` (0..1, da esquerda para a direita) os pixels começam a se soltar,
  * cada vez mais, e alguns somem de vez (buracos). Os que ficam à esquerda continuam inteiros.
