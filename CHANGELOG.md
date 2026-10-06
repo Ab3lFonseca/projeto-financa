@@ -112,6 +112,10 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   A CSP completa fica para depois de testar com o widget do Pluggy.
 
 ### Corrigido
+- **Rótulos da barra de abas cortados no celular (de novo).** O fundo arredondado do hover tirou 4 px de altura de cada aba sem que a barra
+  crescesse, e o rótulo (Início, Transações...) era espremido e cortado em qualquer largura. Agora as medidas ficam num lugar só
+  (`tabBarMetrics.ts`: a altura é a soma de ícone, rótulo, preenchimentos, folga do hover e borda, conferida por teste), o rótulo tem linha fixa e
+  não cresce com a fonte do sistema, e os botões usam toda a largura para "Transações" caber inteiro até em telas de 320 px.
 - **Destaque de hover "quebrado" nas linhas de lista:** o fundo ao passar o mouse colava no ícone e na seta (sem respiro) e encostava nos
   divisores e nos cantos arredondados do cartão. Agora o destaque é arredondado, passa 8 px do conteúdo para os lados e deixa 8 px de ar em volta
   dentro do cartão (`PressableRow`), igual em Mais, Configurações, Transações, Orçamentos, fatura e folhas de opções. Cartões tocáveis usam borda

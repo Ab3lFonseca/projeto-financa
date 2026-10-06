@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { AnimatedPressable, useSpringPress } from "@/components/ui/Interactive";
 import { smooth, useHover } from "@/components/ui/hover";
+import { TAB_METRICS } from "@/components/ui/tabBarMetrics";
 import { useTourTarget } from "@/lib/tour/registry";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -29,7 +30,8 @@ export function TourTabButton({ id, children, style, accessibilityState, accessi
   const press = useSpringPress(0.94);
   const selected = !!accessibilityState?.selected;
   return (
-    <View ref={ref} collapsable={false} style={{ flex: 1, padding: 2 }}>
+    // Folga só em cima e embaixo (conta da altura da barra) e 1 px nas laterais: celulares estreitos (320 px) precisam de toda a largura para "Transações".
+    <View ref={ref} collapsable={false} style={{ flex: 1, paddingVertical: TAB_METRICS.hoverInset, paddingHorizontal: 1 }}>
       <AnimatedPressable
         accessibilityRole="tab"
         accessibilityState={accessibilityState}
@@ -41,7 +43,7 @@ export function TourTabButton({ id, children, style, accessibilityState, accessi
         {...hoverProps}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        style={[{ flex: 1 }, style, { borderRadius: 16, backgroundColor: hovered && !selected ? colors.surfaceAlt : "transparent" }, smooth, press.style]}
+        style={[{ flex: 1 }, style, { paddingHorizontal: 0, borderRadius: 16, backgroundColor: hovered && !selected ? colors.surfaceAlt : "transparent" }, smooth, press.style]}
       >
         {children}
       </AnimatedPressable>

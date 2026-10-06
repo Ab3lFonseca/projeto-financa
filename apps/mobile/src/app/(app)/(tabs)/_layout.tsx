@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TourTabButton } from "@/components/tour/TourTabButton";
 import { TabIcon } from "@/components/ui/TabIcon";
+import { TAB_METRICS, tabBarHeight } from "@/components/ui/tabBarMetrics";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const TABS = [
@@ -17,7 +18,7 @@ const TABS = [
 export default function TabsLayout() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  // Ícone (28) + rótulo (12 + 2 de margem) + padding do item (10) + padding de cima (6) + borda (1) = 59 antes do respiro de baixo.
+  // A altura da barra é a soma de tudo o que há dentro dela (ver tabBarMetrics.ts); o respiro de baixo é a área segura (celular) ou 6 px (web).
   const bottomInset = Platform.OS === "web" ? 6 : insets.bottom;
   return (
     <Tabs
@@ -27,13 +28,15 @@ export default function TabsLayout() {
         animation: "fade",
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textFaint,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: "600", marginTop: 2 },
+        // Rótulo com linha fixa e sem escala da fonte do sistema: a barra tem altura fixa, então o texto não pode crescer nem ser espremido.
+        tabBarAllowFontScaling: false,
+        tabBarLabelStyle: { fontSize: 10, lineHeight: TAB_METRICS.labelLine, fontWeight: "600", marginTop: TAB_METRICS.labelGap, flexShrink: 0 },
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          borderTopWidth: 1,
-          height: 59 + bottomInset,
-          paddingTop: 6,
+          borderTopWidth: TAB_METRICS.border,
+          height: tabBarHeight(bottomInset),
+          paddingTop: TAB_METRICS.barPaddingTop,
           paddingBottom: bottomInset,
         },
         sceneStyle: { backgroundColor: colors.bg },

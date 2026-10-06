@@ -4,9 +4,10 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-na
 import { useTheme } from "@/theme/ThemeProvider";
 import { Icon } from "../Icon";
 import { motion } from "./motion";
+import { TAB_METRICS } from "./tabBarMetrics";
 
 const W = 54;
-const H = 28;
+const H = TAB_METRICS.icon;
 
 /**
  * Ícone da barra de abas. A aba ativa ganha uma "pílula" na cor de destaque que cresce com uma mola e o ícone sobe um
