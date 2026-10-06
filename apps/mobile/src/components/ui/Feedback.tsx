@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { Pressable, View, type DimensionValue, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { FadeInDown, FadeOutUp, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
+import Animated, { Easing, FadeInDown, FadeOutUp, LinearTransition, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUiStore } from "@/lib/ui-store";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -8,15 +8,16 @@ import { Icon } from "../Icon";
 import { ApiErrorMessage } from "./ApiErrorMessage";
 import { Button } from "./Button";
 import { Card } from "./Layout";
+import { motion } from "./motion";
 import { Sheet } from "./Sheet";
 import { Text } from "./Text";
 
 /** Bloco "carregando" com pulsar suave. */
 export function Skeleton({ width = "100%", height = 16, radius = 8, style }: { width?: DimensionValue; height?: number; radius?: number; style?: StyleProp<ViewStyle> }) {
   const { colors } = useTheme();
-  const opacity = useSharedValue(0.5);
+  const opacity = useSharedValue(0.45);
   useEffect(() => {
-    opacity.value = withRepeat(withTiming(1, { duration: 800 }), -1, true);
+    opacity.value = withRepeat(withTiming(1, { duration: 950, easing: Easing.inOut(Easing.quad) }), -1, true);
   }, [opacity]);
   const animated = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return <Animated.View style={[{ width, height, borderRadius: radius, backgroundColor: colors.surfaceAlt }, animated, style]} />;
@@ -38,11 +39,17 @@ export function SkeletonCard({ lines = 3 }: { lines?: number }) {
 
 export function EmptyState({ icon = "layers", title, message, action, onAction }: { icon?: string; title: string; message?: string; action?: string; onAction?: () => void }) {
   const { colors } = useTheme();
+  // O ícone flutua devagar (3 px, ~3 s por ciclo): dá vida à tela vazia sem chamar atenção demais.
+  const lift = useSharedValue(0);
+  useEffect(() => {
+    lift.value = withRepeat(withTiming(-3, { duration: 1500, easing: Easing.inOut(Easing.sin) }), -1, true);
+  }, [lift]);
+  const float = useAnimatedStyle(() => ({ transform: [{ translateY: lift.value }] }));
   return (
-    <View style={{ alignItems: "center", gap: 12, paddingVertical: 32, paddingHorizontal: 24 }}>
-      <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
+    <Animated.View entering={FadeInDown.duration(motion.slow).easing(motion.easing)} style={{ alignItems: "center", gap: 12, paddingVertical: 32, paddingHorizontal: 24 }}>
+      <Animated.View style={[{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }, float]}>
         <Icon name={icon} size={28} color={colors.primary} />
-      </View>
+      </Animated.View>
       <Text variant="heading" align="center">
         {title}
       </Text>
@@ -52,7 +59,7 @@ export function EmptyState({ icon = "layers", title, message, action, onAction }
         </Text>
       ) : null}
       {action ? <Button label={action} onPress={onAction} fullWidth={false} size="md" /> : null}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -96,7 +103,13 @@ export function ToastHost() {
       {toasts.map((t) => {
         const tint = t.tone === "success" ? colors.positive : t.tone === "error" ? colors.negative : colors.primary;
         return (
-          <Animated.View key={t.id} entering={FadeInDown.duration(220)} exiting={FadeOutUp.duration(180)} style={{ maxWidth: 520, width: "100%" }}>
+          <Animated.View
+            key={t.id}
+            entering={FadeInDown.springify().damping(18).stiffness(220)}
+            exiting={FadeOutUp.duration(motion.fast + 40)}
+            layout={LinearTransition.springify().damping(20)}
+            style={{ maxWidth: 520, width: "100%" }}
+          >
             <Pressable
               onPress={() => dismiss(t.id)}
               accessibilityRole="alert"

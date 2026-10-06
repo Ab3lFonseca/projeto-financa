@@ -57,7 +57,7 @@ export default function ReviewScreen() {
         </Card>
       ) : (
         <>
-          <Card style={{ paddingVertical: 4 }}>
+          <Card style={{ paddingVertical: 6 }}>
             {items.map((t, i) => (
               <View key={t.id}>
                 {i > 0 ? <Divider inset={52} /> : null}

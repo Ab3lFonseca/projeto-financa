@@ -1,7 +1,9 @@
 import { PAYMENT_METHOD_LABEL_PT } from "@app/shared";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { Icon } from "@/components/Icon";
 import { Badge, ProgressBar } from "@/components/ui/Controls";
+import { brighten, useHover } from "@/components/ui/hover";
+import { AnimatedPressable, PressableRow, useSpringPress } from "@/components/ui/Interactive";
 import { Card, IconBadge, Row } from "@/components/ui/Layout";
 import { Money } from "@/components/ui/Money";
 import { Text } from "@/components/ui/Text";
@@ -23,29 +25,28 @@ export function TransactionRow({ tx, onPress, showDate }: { tx: Transaction; onP
     showDate ? formatDateShort(tx.occurredOn) : null,
   ].filter(Boolean);
 
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11 }}>
-        <IconBadge
-          icon={isTransfer ? "arrow-left-right" : (tx.category?.icon ?? "circle-help")}
-          color={isTransfer ? colors.primary : (tx.category?.color ?? colors.textFaint)}
-        />
-        <View style={{ flex: 1, gap: 3 }}>
-          <Row gap={6}>
-            <Text weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
-              {tx.description}
-            </Text>
-            {tx.installment ? <Badge label={`${tx.installment.number}/${tx.installment.total}`} /> : null}
-            {tx.status === "PENDING" ? <Badge label="Pendente" tone="warning" /> : null}
-          </Row>
-          <Text variant="caption" tone="muted" numberOfLines={1}>
-            {parts.join(" · ")}
+  const body = (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: onPress ? 9 : 11 }}>
+      <IconBadge
+        icon={isTransfer ? "arrow-left-right" : (tx.category?.icon ?? "circle-help")}
+        color={isTransfer ? colors.primary : (tx.category?.color ?? colors.textFaint)}
+      />
+      <View style={{ flex: 1, gap: 3 }}>
+        <Row gap={6}>
+          <Text weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
+            {tx.description}
           </Text>
-        </View>
-        <Money cents={signed} colorize={!isTransfer} signed={!isTransfer} tone={isTransfer ? "muted" : undefined} />
+          {tx.installment ? <Badge label={`${tx.installment.number}/${tx.installment.total}`} /> : null}
+          {tx.status === "PENDING" ? <Badge label="Pendente" tone="warning" /> : null}
+        </Row>
+        <Text variant="caption" tone="muted" numberOfLines={1}>
+          {parts.join(" · ")}
+        </Text>
       </View>
-    </Pressable>
+      <Money cents={signed} colorize={!isTransfer} signed={!isTransfer} tone={isTransfer ? "muted" : undefined} />
+    </View>
   );
+  return onPress ? <PressableRow onPress={onPress}>{() => body}</PressableRow> : body;
 }
 
 /** Resumo de conta (lista horizontal na Início e na Carteira). */
@@ -66,7 +67,7 @@ export function AccountTile({ account, onPress, width, bank }: { account: Accoun
           </Text>
         </View>
       </Row>
-      <Money cents={account.balanceCents} variant="heading" weight="700" tone={account.balanceCents < 0 ? "negative" : undefined} />
+      <Money cents={account.balanceCents} variant="heading" weight="700" tone={account.balanceCents < 0 ? "negative" : undefined} animate />
       {bank && bank.balanceCents !== null ? (
         <Row gap={6}>
           <Icon name="link" size={12} color={colors.textFaint} />
@@ -91,6 +92,8 @@ const ACCOUNT_LABEL: Record<Account["type"], string> = {
 /** `bank` = limite, fatura e vencimento como o banco informou pelo Open Finance (atualizam sozinhos). */
 export function CreditCardView({ card, onPress, bank }: { card: CardModel; onPress?: () => void; bank?: BankOverview["cards"][number] }) {
   const { colors, radius } = useTheme();
+  const { hovered, hoverProps } = useHover();
+  const press = useSpringPress(0.985);
   const tint = card.color ?? colors.primary;
   // Texto sobre o cartão: branco nas cores escolhidas pelo usuário (como sempre foi); com a cor principal do tema, o texto próprio dela.
   const fg = card.color ? "#FFFFFF" : colors.onPrimary;
@@ -102,8 +105,8 @@ export function CreditCardView({ card, onPress, bank }: { card: CardModel; onPre
   const invoiceTotal = bank?.billCents ?? inv?.totalCents ?? 0;
   const invoiceDue = bank?.dueDate ?? inv?.dueDate ?? null;
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
-      <View style={{ borderRadius: radius.lg, backgroundColor: tint, padding: 18, gap: 18 }}>
+    <AnimatedPressable accessibilityRole="button" onPress={onPress} {...hoverProps} onPressIn={press.onPressIn} onPressOut={press.onPressOut} style={press.style}>
+      <View style={[{ borderRadius: radius.lg, backgroundColor: tint, padding: 18, gap: 18 }, onPress ? brighten(hovered) : null]}>
         <Row style={{ justifyContent: "space-between" }}>
           <View style={{ flex: 1 }}>
             <Text weight="700" style={{ color: fg }} numberOfLines={1}>
@@ -139,7 +142,7 @@ export function CreditCardView({ card, onPress, bank }: { card: CardModel; onPre
           </Row>
         ) : null}
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -150,30 +153,29 @@ const STATUS_LABEL = { OK: "Dentro do limite", WARNING: "Atenção", EXCEEDED: "
 export function BudgetRow({ budget, onPress }: { budget: Budget; onPress?: () => void }) {
   const { colors } = useTheme();
   const color = budget.status === "EXCEEDED" ? colors.negative : budget.status === "WARNING" ? colors.warning : colors.positive;
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
-      <View style={{ gap: 10, paddingVertical: 12 }}>
-        <Row>
-          <IconBadge icon={budget.category.icon} color={budget.category.color} size={36} />
-          <View style={{ flex: 1 }}>
-            <Text weight="600" numberOfLines={1}>
-              {budget.category.name}
-            </Text>
-            <Text variant="caption" tone="muted">
-              <Money cents={budget.spentCents} variant="caption" weight="600" tone="muted" /> de <Money cents={budget.amountCents} variant="caption" tone="muted" weight="400" hideZeroCents />
-            </Text>
-          </View>
-          <View style={{ alignItems: "flex-end", gap: 4 }}>
-            <Text weight="700" style={{ color }} tabular>
-              {formatPct(budget.usedPct)}
-            </Text>
-            <Badge label={STATUS_LABEL[budget.status]} tone={STATUS_TONE[budget.status]} />
-          </View>
-        </Row>
-        <ProgressBar value={budget.usedPct} color={color} />
-      </View>
-    </Pressable>
+  const body = (
+    <View style={{ gap: 10, paddingVertical: onPress ? 10 : 12 }}>
+      <Row>
+        <IconBadge icon={budget.category.icon} color={budget.category.color} size={36} />
+        <View style={{ flex: 1 }}>
+          <Text weight="600" numberOfLines={1}>
+            {budget.category.name}
+          </Text>
+          <Text variant="caption" tone="muted">
+            <Money cents={budget.spentCents} variant="caption" weight="600" tone="muted" /> de <Money cents={budget.amountCents} variant="caption" tone="muted" weight="400" hideZeroCents />
+          </Text>
+        </View>
+        <View style={{ alignItems: "flex-end", gap: 4 }}>
+          <Text weight="700" style={{ color }} tabular>
+            {formatPct(budget.usedPct)}
+          </Text>
+          <Badge label={STATUS_LABEL[budget.status]} tone={STATUS_TONE[budget.status]} />
+        </View>
+      </Row>
+      <ProgressBar value={budget.usedPct} color={color} />
+    </View>
   );
+  return onPress ? <PressableRow onPress={onPress}>{() => body}</PressableRow> : body;
 }
 
 /** Meta com progresso, valores e quanto guardar por mês. */
@@ -236,7 +238,7 @@ export function SummaryTile({ label, cents, change, tone, goodWhenDown }: { labe
           {label}
         </Text>
       </Row>
-      <Money cents={cents} variant="bodySm" weight="700" hideZeroCents style={{ fontSize: 17 }} />
+      <Money cents={cents} variant="bodySm" weight="700" hideZeroCents style={{ fontSize: 17 }} animate />
       {change !== null && change !== undefined ? (
         <Text variant="caption" tone={good ? "positive" : "negative"} weight="600">
           {formatPct(change, { signed: true })} <Text variant="caption" tone="faint">vs mês anterior</Text>

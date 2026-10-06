@@ -1,10 +1,27 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, View, type LayoutChangeEvent } from "react-native";
+import Animated, { useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withTiming, type SharedValue } from "react-native-reanimated";
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from "react-native-svg";
 import { formatBRL, formatCompactBRL } from "@/lib/format";
 import { useTheme } from "@/theme/ThemeProvider";
+import { motion } from "../ui/motion";
 import { Text } from "../ui/Text";
 import { niceScale, smoothPath } from "./scale";
+
+/**
+ * Progresso 0→1 que reinicia sempre que os dados mudam (`signature`). Os gráficos entram com ele:
+ * barras crescem, rosca gira para o lugar, linha é revelada. "Reduzir movimento" pula direto para 1.
+ */
+function useDrawIn(signature: string, delay = 0): SharedValue<number> {
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = 0;
+    progress.value = withDelay(delay, withTiming(1, { duration: motion.slow + 380, easing: motion.easing }));
+  }, [signature, delay, progress]);
+  return progress;
+}
+
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 // ---------------------------------------------------------------------------- rosca
 
@@ -18,10 +35,16 @@ export function DonutChart({ data, size = 168, thickness = 22, children }: { dat
   const c = 2 * Math.PI * r;
   const gap = data.filter((d) => d.value > 0).length > 1 ? 2.5 : 0;
   let acc = 0;
+  const progress = useDrawIn(data.map((d) => `${d.value}:${d.color}`).join("|"));
+  // A rosca "gira para o lugar": começa um pouco menor, transparente e adiantada em meia volta.
+  const swirl = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ rotate: `${-90 - 140 * (1 - progress.value)}deg` }, { scale: 0.82 + 0.18 * progress.value }],
+  }));
   return (
     <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
       {/* A rotação é feita no View (RN) e não no SVG: `origin` do react-native-svg não existe na web. */}
-      <View style={{ transform: [{ rotate: "-90deg" }] }}>
+      <Animated.View style={swirl}>
       <Svg width={size} height={size} accessibilityLabel="Gráfico de rosca">
         <G>
           <Circle cx={size / 2} cy={size / 2} r={r} stroke={colors.surfaceAlt} strokeWidth={thickness} fill="none" />
@@ -49,7 +72,7 @@ export function DonutChart({ data, size = 168, thickness = 22, children }: { dat
             : null}
         </G>
       </Svg>
-      </View>
+      </Animated.View>
       <View style={{ position: "absolute", alignItems: "center", justifyContent: "center", width: size - thickness * 2 - 8 }}>{children}</View>
     </View>
   );
@@ -58,6 +81,40 @@ export function DonutChart({ data, size = 168, thickness = 22, children }: { dat
 // ---------------------------------------------------------------------------- barras
 
 export type BarDatum = { key: string; label: string; values: number[] };
+
+/** Barra que cresce a partir da linha do zero (para cima se positiva, para baixo se negativa). */
+function GrowBar({
+  x,
+  width,
+  top,
+  bottom,
+  positive,
+  minHeight,
+  rx,
+  fill,
+  progress,
+  delay,
+}: {
+  x: number;
+  width: number;
+  top: number;
+  bottom: number;
+  positive: boolean;
+  minHeight: number;
+  rx: number;
+  fill: string;
+  progress: SharedValue<number>;
+  delay: number;
+}) {
+  const full = Math.max(bottom - top, minHeight);
+  const animatedProps = useAnimatedProps(() => {
+    const local = Math.min(1, Math.max(0, (progress.value - delay) / (1 - delay)));
+    const h = full * local;
+    return { height: h, y: positive ? bottom - h : top };
+  });
+  // Os valores finais ficam como base: se o componente renderizar de novo depois da animação, a barra continua inteira.
+  return <AnimatedRect x={x} y={positive ? bottom - full : top} width={width} height={full} rx={rx} fill={fill} animatedProps={animatedProps} />;
+}
 
 /**
  * Barras agrupadas (uma barra por série, ex.: receitas × despesas). Aceita valores negativos
@@ -80,6 +137,7 @@ export function BarChart({
   const [width, setWidth] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
+  const progress = useDrawIn(data.map((d) => `${d.key}:${d.values.join(",")}`).join("|"));
 
   const all = data.flatMap((d) => d.values);
   const hasData = all.some((v) => v !== 0);
@@ -115,7 +173,22 @@ export function BarChart({
                   const bx = gx - totalW / 2 + s * (barW + 3);
                   const top = y(Math.max(v, 0));
                   const bottom = y(Math.min(v, 0));
-                  return <Rect key={s} x={bx} y={top} width={barW} height={Math.max(bottom - top, v === 0 ? 0 : 1.5)} rx={Math.min(6, barW / 2.5)} fill={seriesColors[s] ?? colors.primary} />;
+                  return (
+                    <GrowBar
+                      key={s}
+                      x={bx}
+                      width={barW}
+                      top={top}
+                      bottom={bottom}
+                      positive={v >= 0}
+                      minHeight={v === 0 ? 0 : 1.5}
+                      rx={Math.min(6, barW / 2.5)}
+                      fill={seriesColors[s] ?? colors.primary}
+                      progress={progress}
+                      // Cada grupo começa um pouco depois do anterior: as barras "ondulam" da esquerda para a direita.
+                      delay={data.length > 1 ? (i / (data.length - 1)) * 0.4 : 0}
+                    />
+                  );
                 })}
                 <SvgText x={gx} y={height - 6} fontSize={10} fill={selected === i ? colors.text : colors.textMuted} textAnchor="middle" fontWeight={selected === i ? "700" : "400"}>
                   {d.label}
@@ -188,6 +261,9 @@ export function LineChart({
   const tint = color ?? colors.primary;
   const [width, setWidth] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
+  const progress = useDrawIn(points.map((p) => `${p.label}:${p.value}`).join("|"));
+  // A linha é "revelada" da esquerda para a direita: o SVG tem largura fixa e a janela por onde ele aparece é que cresce.
+  const wipe = useAnimatedStyle(() => ({ width: Math.max(1, width * progress.value) }));
 
   const values = points.map((p) => p.value);
   const lo = Math.min(...values);
@@ -210,6 +286,7 @@ export function LineChart({
   return (
     <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ width: "100%" }}>
       {width > 0 ? (
+        <Animated.View style={[{ overflow: "hidden", height, alignSelf: "flex-start" }, wipe]}>
         <Svg width={width} height={height}>
           <Defs>
             <LinearGradient id="area" x1="0" y1="0" x2="0" y2="1">
@@ -242,6 +319,7 @@ export function LineChart({
             ) : null,
           )}
         </Svg>
+        </Animated.View>
       ) : (
         <View style={{ height }} />
       )}

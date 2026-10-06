@@ -55,7 +55,7 @@ export default function AccountDetailScreen() {
       </Card>
 
       <Section title="Últimas movimentações" action="Ver todas" onAction={() => router.push("/transactions" as never)}>
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           {account.recentTransactions.length === 0 ? (
             <EmptyState icon="receipt" title="Sem movimentações" message="Os lançamentos desta conta aparecem aqui." />
           ) : (

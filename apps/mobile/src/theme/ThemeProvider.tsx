@@ -6,6 +6,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { resolveTheme, type Scheme } from "./presets";
 import { radius, spacing, typography, type Palette } from "./tokens";
+import { buildGlobalCss } from "./web-global";
 
 type ProfileTheme = { theme: "SYSTEM" | "LIGHT" | "DARK"; appearance: Appearance | null };
 
@@ -63,8 +64,9 @@ const ThemeContext = createContext<Theme | null>(null);
 
 const TRANSITION_STYLE_ID = "theme-transition-style";
 const TRANSITION_CLASS = "theme-transition";
+const GLOBAL_STYLE_ID = "app-global-style";
 
-/** Só na web: pinta o fundo da página (sem "flash" ao rolar além do fim), informa o esquema ao navegador e suaviza a troca de tema. */
+/** Só na web: pinta o fundo da página (sem "flash" ao rolar além do fim), informa o esquema ao navegador, aplica o CSS global do tema e suaviza a troca. */
 function useWebThemeEffects(palette: Palette, scheme: Scheme) {
   const first = useRef(true);
   useEffect(() => {
@@ -72,6 +74,13 @@ function useWebThemeEffects(palette: Palette, scheme: Scheme) {
     const root = document.documentElement;
     root.style.backgroundColor = palette.bg;
     root.style.colorScheme = scheme;
+    let global = document.getElementById(GLOBAL_STYLE_ID);
+    if (!global) {
+      global = document.createElement("style");
+      global.id = GLOBAL_STYLE_ID;
+      document.head.appendChild(global);
+    }
+    global.textContent = buildGlobalCss(palette);
     if (first.current) {
       first.current = false;
       return;

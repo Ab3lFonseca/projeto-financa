@@ -80,7 +80,7 @@ export default function InvoiceScreen() {
       </Card>
 
       <Section title={`Compras (${inv.transactions.length})`}>
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           {inv.transactions.length === 0 ? (
             <EmptyState icon="receipt" title="Sem compras nesta fatura" />
           ) : (
@@ -96,7 +96,7 @@ export default function InvoiceScreen() {
 
       {inv.payments.length > 0 ? (
         <Section title="Pagamentos">
-          <Card style={{ paddingVertical: 4 }}>
+          <Card style={{ paddingVertical: 6 }}>
             {inv.payments.map((p, i) => (
               <View key={p.id}>
                 {i > 0 ? <Divider inset={52} /> : null}

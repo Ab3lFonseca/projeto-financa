@@ -102,7 +102,7 @@ export default function BudgetsScreen() {
             </Card>
           ) : (
             <Section title="Por categoria">
-              <Card style={{ paddingVertical: 4 }}>
+              <Card style={{ paddingVertical: 6 }}>
                 {data.budgets.map((b, i) => (
                   <View key={b.id}>
                     {i > 0 ? <Divider inset={48} /> : null}

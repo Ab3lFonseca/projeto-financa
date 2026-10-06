@@ -30,7 +30,7 @@ export default function CategoriesScreen() {
           <EmptyState icon="tag" title="Nenhuma categoria" action="Criar categoria" onAction={() => router.push(`/categories/new?type=${tab}` as never)} />
         </Card>
       ) : (
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           {list.map((c, i) => (
             <View key={c.id}>
               {i > 0 ? <Divider inset={52} /> : null}

@@ -55,7 +55,7 @@ export default function GoalDetailScreen() {
     >
       <GoalCard goal={goal} />
       <Section title="Histórico de aportes e resgates">
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           {goal.contributions.length === 0 ? (
             <EmptyState icon="piggy-bank" title="Nenhum aporte ainda" message="Registre quanto você já guardou para acompanhar a evolução." />
           ) : (

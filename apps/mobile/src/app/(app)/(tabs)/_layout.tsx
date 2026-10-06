@@ -1,8 +1,8 @@
 import { Tabs } from "expo-router";
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Icon } from "@/components/Icon";
 import { TourTabButton } from "@/components/tour/TourTabButton";
+import { TabIcon } from "@/components/ui/TabIcon";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const TABS = [
@@ -23,6 +23,8 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        // Troca de aba com fade (em vez de corte seco).
+        animation: "fade",
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textFaint,
         tabBarLabelStyle: { fontSize: 10, fontWeight: "600", marginTop: 2 },
@@ -41,7 +43,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           key={t.name}
           name={t.name}
-          options={{ title: t.title, tabBarButton: (props) => <TourTabButton id={`tab-${t.name}`} {...(props as object)} />, tabBarIcon: ({ color, focused }) => <Icon name={t.icon} size={23} color={String(color)} strokeWidth={focused ? 2.4 : 2} /> }}
+          options={{ title: t.title, tabBarButton: (props) => <TourTabButton id={`tab-${t.name}`} {...(props as object)} />, tabBarIcon: ({ color, focused }) => <TabIcon name={t.icon} color={String(color)} focused={focused} /> }}
         />
       ))}
     </Tabs>

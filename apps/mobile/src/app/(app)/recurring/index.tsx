@@ -56,7 +56,7 @@ export default function RecurringScreen() {
             <EmptyState icon="calendar-clock" title="Nada previsto nos próximos 45 dias" message="Cadastre aluguel, salário e assinaturas como recorrências para ver o que vem por aí." action="Nova recorrência" onAction={() => router.push("/recurring/new" as never)} />
           </Card>
         ) : (
-          <Card style={{ paddingVertical: 4 }}>
+          <Card style={{ paddingVertical: 6 }}>
             {upcomingList.map((u, i) => (
               <View key={`${u.ruleId}-${u.date}`}>
                 {i > 0 ? <Divider inset={52} /> : null}
@@ -75,7 +75,7 @@ export default function RecurringScreen() {
           <EmptyState icon="repeat" title="Nenhuma recorrência" message="Automatize o que se repete todo mês." action="Nova recorrência" onAction={() => router.push("/recurring/new" as never)} />
         </Card>
       ) : (
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           {ruleList.map((r, i) => (
             <View key={r.id}>
               {i > 0 ? <Divider inset={52} /> : null}

@@ -1,15 +1,17 @@
 import { router } from "expo-router";
 import type { ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Icon } from "../Icon";
 import { IconButton } from "./Button";
 import { smooth, useHover } from "./hover";
+import { AnimatedPressable, GoChevron, PressableRow, useSpringPress } from "./Interactive";
+import { motion } from "./motion";
 import { Text } from "./Text";
 
-/** Card de superfície com cantos arredondados e sombra discreta. */
+/** Card de superfície com cantos arredondados e sombra discreta. Se tiver `onPress`: borda de destaque no hover e mola ao tocar. */
 export function Card({
   children,
   onPress,
@@ -25,6 +27,7 @@ export function Card({
 }) {
   const { colors, radius, scheme } = useTheme();
   const { hovered, hoverProps } = useHover();
+  const press = useSpringPress(0.985);
   const bg = { surface: colors.surface, alt: colors.surfaceAlt, primarySoft: colors.primarySoft, warning: colors.warningSoft, negative: colors.negativeSoft, positive: colors.positiveSoft }[tone];
   const base: ViewStyle = {
     backgroundColor: bg,
@@ -36,9 +39,17 @@ export function Card({
   };
   if (!onPress) return <View style={[base, style]}>{children}</View>;
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} {...hoverProps} style={({ pressed }) => [base, smooth, hovered ? { borderColor: colors.accent } : null, pressed ? { opacity: 0.85 } : null, style]}>
+    <AnimatedPressable
+      accessibilityRole="button"
+      onPress={onPress}
+      {...hoverProps}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
+      // Sem brilho externo: listas horizontais recortariam a sombra. Borda de destaque + fundo um tom mais claro bastam e nunca são cortados.
+      style={[base, smooth, hovered ? { borderColor: colors.accent, backgroundColor: tone === "surface" ? colors.surfaceAlt : bg } : null, press.style, style]}
+    >
       {children}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -106,10 +117,12 @@ type ScreenProps = {
   tabs?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
   keyboard?: boolean;
+  /** Camada decorativa atrás do conteúdo (ex.: fundo animado das telas de entrada). Não recebe toques. */
+  background?: ReactNode;
 };
 
-/** Esqueleto de tela: área segura, fundo do tema, rolagem com "puxar para atualizar" e teclado. */
-export function Screen({ children, scroll = true, refreshing, onRefresh, header, footer, padded = true, tabs = false, contentStyle, keyboard = false }: ScreenProps) {
+/** Esqueleto de tela: área segura, fundo do tema, rolagem com "puxar para atualizar" e teclado. A tela entra com um fade curto. */
+export function Screen({ children, scroll = true, refreshing, onRefresh, header, footer, padded = true, tabs = false, contentStyle, keyboard = false, background }: ScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const body = scroll ? (
@@ -126,11 +139,16 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, header,
     <View style={[{ flex: 1, padding: padded ? 16 : 0 }, contentStyle]}>{children}</View>
   );
   const content = (
-    <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
+    <Animated.View entering={FadeIn.duration(motion.base)} style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top, overflow: background ? "hidden" : "visible" }}>
+      {background ? (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          {background}
+        </View>
+      ) : null}
       {header}
       {body}
       {footer ? <View style={{ padding: 16, paddingBottom: 16 + (tabs ? 0 : insets.bottom), backgroundColor: colors.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>{footer}</View> : null}
-    </View>
+    </Animated.View>
   );
   if (!keyboard) return content;
   return (
@@ -140,10 +158,10 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, header,
   );
 }
 
-/** Entrada suave (fade + subida) para blocos de conteúdo. Respeita ordem pelo `index`. */
+/** Entrada suave (fade + subida curta) para blocos de conteúdo. Vários `Reveal` entram em cascata, na ordem do `index`. */
 export function Reveal({ children, index = 0, style }: { children: ReactNode; index?: number; style?: StyleProp<ViewStyle> }) {
   return (
-    <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 50).duration(320)} style={style}>
+    <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * motion.stagger).duration(motion.slow)} style={style}>
       {children}
     </Animated.View>
   );
@@ -171,10 +189,10 @@ export function ListRow({
   chevron?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { colors } = useTheme();
-  const { hovered, hoverProps } = useHover();
-  const content = (
-    <View style={[{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 }, style]}>
+  // Tocável: o destaque do hover ocupa 2 px de cada lado (ver `PressableRow`), então o conteúdo tem 2 px a menos de preenchimento.
+  const vertical = onPress ? 10 : 12;
+  const body = (hovered?: boolean) => (
+    <View style={[{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: vertical }, style]}>
       {left}
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="body" weight="500" numberOfLines={1}>
@@ -187,15 +205,11 @@ export function ListRow({
         ) : null}
       </View>
       {right}
-      {chevron ? <Icon name="chevron-right" size={18} color={colors.textFaint} /> : null}
+      {chevron ? <GoChevron hovered={hovered} /> : null}
     </View>
   );
-  if (!onPress) return content;
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} {...hoverProps} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, backgroundColor: hovered ? colors.surfaceAlt : "transparent", borderRadius: 12, ...smooth })}>
-      {content}
-    </Pressable>
-  );
+  if (!onPress) return body();
+  return <PressableRow onPress={onPress}>{({ hovered }) => body(hovered)}</PressableRow>;
 }
 
 /** Ícone de categoria/conta em círculo com a cor em tom suave. */

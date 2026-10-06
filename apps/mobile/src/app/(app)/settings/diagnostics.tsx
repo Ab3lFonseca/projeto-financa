@@ -57,7 +57,7 @@ export default function DiagnosticsScreen() {
         </Text>
       </Card>
 
-      <Card style={{ paddingVertical: 4 }}>
+      <Card style={{ paddingVertical: 6 }}>
         <SwitchRow
           title="Enviar relatórios de erro"
           subtitle="Manda ao servidor só erros técnicos, sem dados pessoais, para podermos corrigi-los"
@@ -108,7 +108,7 @@ export default function DiagnosticsScreen() {
             <EmptyState icon="circle-check" title="Nenhum evento registrado" message="Quando algo der errado, aparece aqui." />
           </Card>
         ) : (
-          <Card style={{ paddingVertical: 4 }}>
+          <Card style={{ paddingVertical: 6 }}>
             {shown.map((e, i) => (
               <View key={e.id}>
                 {i > 0 ? <Divider inset={52} /> : null}

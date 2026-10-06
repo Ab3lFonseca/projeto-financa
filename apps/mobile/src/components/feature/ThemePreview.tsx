@@ -78,7 +78,7 @@ function PreviewScreen() {
           <Badge label="Novo" tone="primary" />
         </Row>
 
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           <Row style={{ paddingVertical: 10 }}>
             <IconBadge icon="utensils" color={colors.accent} size={36} />
             <View style={{ flex: 1 }}>

@@ -1,44 +1,66 @@
 import { router } from "expo-router";
-import type { ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { useState, type ReactNode } from "react";
+import { View } from "react-native";
+import Animated, { ZoomIn } from "react-native-reanimated";
 import { Icon } from "@/components/Icon";
-import { smooth, useHover } from "@/components/ui/hover";
+import { glow, smooth, smoothMove, useHover } from "@/components/ui/hover";
+import { AnimatedPressable, GoChevron, PressableRow, useSpringPress } from "@/components/ui/Interactive";
 import { useTourTarget } from "@/lib/tour/registry";
 import { Card, IconBadge, Row } from "@/components/ui/Layout";
 import { Text } from "@/components/ui/Text";
 import type { Dashboard } from "@/lib/api/endpoints";
 import { useOutbox } from "@/lib/offline/outbox";
+import { withAlpha } from "@/theme/color";
 import { useTheme } from "@/theme/ThemeProvider";
 
 /** Botão flutuante "+" para lançar. */
 export function Fab({ onPress, label = "Novo lançamento", tourId }: { onPress?: () => void; label?: string; tourId?: string }) {
   const { colors } = useTheme();
   const tourRef = useTourTarget(tourId);
+  const { hovered, hoverProps } = useHover();
+  const [pressed, setPressed] = useState(false);
+  const press = useSpringPress(0.9);
   return (
-    <Pressable
-      ref={tourRef}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress ?? (() => router.push("/transaction/new"))}
-      style={({ pressed }) => ({
-        position: "absolute",
-        right: 20,
-        bottom: 20,
-        width: 58,
-        height: 58,
-        borderRadius: 29,
-        backgroundColor: pressed ? colors.primaryPressed : colors.primary,
-        alignItems: "center",
-        justifyContent: "center",
-        shadowColor: colors.primary,
-        shadowOpacity: 0.35,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 6 },
-        elevation: 8,
-      })}
-    >
-      <Icon name="plus" size={28} color={colors.onPrimary} strokeWidth={2.5} />
-    </Pressable>
+    // Nasce com uma mola curta (cresce do centro) logo depois da tela aparecer.
+    <Animated.View entering={ZoomIn.delay(320).springify().damping(14)} style={{ position: "absolute", right: 20, bottom: 20 }}>
+      <AnimatedPressable
+        ref={tourRef as never}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={onPress ?? (() => router.push("/transaction/new"))}
+        {...hoverProps}
+        onPressIn={() => {
+          setPressed(true);
+          press.onPressIn();
+        }}
+        onPressOut={() => {
+          setPressed(false);
+          press.onPressOut();
+        }}
+        style={[
+          {
+            width: 58,
+            height: 58,
+            borderRadius: 29,
+            backgroundColor: pressed || hovered ? colors.primaryPressed : colors.primary,
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: colors.primary,
+            shadowOpacity: 0.35,
+            shadowRadius: 14,
+            shadowOffset: { width: 0, height: 6 },
+            elevation: 8,
+          },
+          smooth,
+          hovered ? glow(withAlpha(colors.primary, 0.55)) : null,
+          press.style,
+        ]}
+      >
+        <View style={[{ transform: [{ rotate: hovered ? "90deg" : "0deg" }] }, smoothMove]}>
+          <Icon name="plus" size={28} color={colors.onPrimary} strokeWidth={2.5} />
+        </View>
+      </AnimatedPressable>
+    </Animated.View>
   );
 }
 
@@ -112,23 +134,24 @@ export function PendingSyncBanner() {
 /** Cartão de ação rápida (grade de atalhos da aba Mais). */
 export function ShortcutRow({ icon, title, subtitle, onPress, badge, color }: { icon: string; title: string; subtitle?: string; onPress: () => void; badge?: ReactNode; color?: string }) {
   const { colors } = useTheme();
-  const { hovered, hoverProps } = useHover();
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} {...hoverProps} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, backgroundColor: hovered ? colors.surfaceAlt : "transparent", borderRadius: 12, ...smooth })}>
-      <Row style={{ paddingVertical: 12 }}>
-        <IconBadge icon={icon} color={color ?? colors.primary} />
-        <View style={{ flex: 1 }}>
-          <Text weight="500">{title}</Text>
-          {subtitle ? (
-            <Text variant="caption" tone="muted">
-              {subtitle}
-            </Text>
-          ) : null}
-        </View>
-        {badge}
-        <Icon name="chevron-right" size={18} color={colors.textFaint} />
-      </Row>
-    </Pressable>
+    <PressableRow onPress={onPress}>
+      {({ hovered }) => (
+        <Row style={{ paddingVertical: 10 }}>
+          <IconBadge icon={icon} color={color ?? colors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text weight="500">{title}</Text>
+            {subtitle ? (
+              <Text variant="caption" tone="muted">
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          {badge}
+          <GoChevron hovered={hovered} />
+        </Row>
+      )}
+    </PressableRow>
   );
 }
 

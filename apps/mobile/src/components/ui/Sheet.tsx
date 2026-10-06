@@ -1,11 +1,16 @@
 import type { ReactNode } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View, type ViewStyle } from "react-native";
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Icon } from "../Icon";
+import { PressableRow } from "./Interactive";
 import { IconBadge } from "./Layout";
+import { motion } from "./motion";
 import { Text } from "./Text";
+
+/** Na web, o fundo atrás da folha fica levemente desfocado (dá profundidade); no celular não existe e é ignorado. */
+const blurBackdrop = (Platform.OS === "web" ? { backdropFilter: "blur(3px)" } : {}) as ViewStyle;
 
 /** Folha que sobe de baixo (seletores, filtros, calendário). Fecha ao tocar fora. */
 export function Sheet({ visible, onClose, title, children, scroll = true }: { visible: boolean; onClose: () => void; title?: string; children: ReactNode; scroll?: boolean }) {
@@ -22,12 +27,17 @@ export function Sheet({ visible, onClose, title, children, scroll = true }: { vi
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.overlay }}>
+        <Animated.View
+          entering={FadeIn.duration(motion.base)}
+          exiting={FadeOut.duration(motion.fast + 40)}
+          style={[{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.overlay }, blurBackdrop]}
+        >
           <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="Fechar" />
         </Animated.View>
         <Animated.View
-          entering={SlideInDown.duration(260)}
-          exiting={SlideOutDown.duration(200)}
+          // Sobe com uma mola amortecida (pousa sem quicar) e desce com a curva padrão do app.
+          entering={SlideInDown.springify().damping(24).stiffness(240).mass(0.9)}
+          exiting={SlideOutDown.duration(motion.base).easing(motion.easing)}
           style={{
             backgroundColor: colors.surface,
             borderTopLeftRadius: radius.xl,
@@ -85,27 +95,29 @@ export function OptionSheet<T extends string>({
         </Text>
       ) : (
         options.map((o) => (
-          <Pressable
+          <PressableRow
             key={o.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected: o.value === selected }}
+            label={o.label}
             onPress={() => {
               onSelect(o.value);
               onClose();
             }}
-            style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, opacity: pressed ? 0.6 : 1 })}
           >
-            {o.icon ? <IconBadge icon={o.icon} color={o.color} size={36} /> : null}
-            <View style={{ flex: 1 }}>
-              <Text weight="500">{o.label}</Text>
-              {o.subtitle ? (
-                <Text variant="caption" tone="muted">
-                  {o.subtitle}
-                </Text>
-              ) : null}
-            </View>
-            {o.value === selected ? <Icon name="check" size={20} color={colors.primary} /> : null}
-          </Pressable>
+            {() => (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 }} aria-selected={o.value === selected}>
+                {o.icon ? <IconBadge icon={o.icon} color={o.color} size={36} /> : null}
+                <View style={{ flex: 1 }}>
+                  <Text weight="500">{o.label}</Text>
+                  {o.subtitle ? (
+                    <Text variant="caption" tone="muted">
+                      {o.subtitle}
+                    </Text>
+                  ) : null}
+                </View>
+                {o.value === selected ? <Icon name="check" size={20} color={colors.primary} /> : null}
+              </View>
+            )}
+          </PressableRow>
         ))
       )}
       {footer}

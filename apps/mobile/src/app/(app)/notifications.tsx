@@ -83,7 +83,7 @@ export default function NotificationsScreen() {
         </Card>
       ) : (
         <>
-          <Card style={{ paddingVertical: 4 }}>
+          <Card style={{ paddingVertical: 6 }}>
             {items.map((n, i) => {
               const meta = ICON[n.type] ?? ICON.SYSTEM;
               const target = routeFor(n);

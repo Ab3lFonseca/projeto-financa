@@ -34,7 +34,7 @@ export default function SyncScreen() {
           <Banner tone="info" icon="cloud-off">
             Estes lançamentos foram salvos no aparelho e serão enviados automaticamente quando houver internet. Reenviar nunca duplica um lançamento.
           </Banner>
-          <Card style={{ paddingVertical: 4 }}>
+          <Card style={{ paddingVertical: 6 }}>
             {items.map((it, i) => {
               const body = it.body as { description?: string; amountCents?: number; type?: string; occurredOn?: string; date?: string };
               const amount = Number(body.amountCents ?? 0);

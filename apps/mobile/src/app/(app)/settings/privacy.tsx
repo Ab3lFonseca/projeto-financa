@@ -74,7 +74,7 @@ export default function PrivacyScreen() {
       </Text>
 
       <Section title="Consentimentos">
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           <ListRow title="Termos de Uso" subtitle={`Versão ${me.legalVersions.terms} · aceito`} right={<Badge label="Obrigatório" />} chevron onPress={() => go("/legal/terms")} />
           <Divider />
           <ListRow title="Política de Privacidade" subtitle={`Versão ${me.legalVersions.privacy} · aceito`} right={<Badge label="Obrigatório" />} chevron onPress={() => go("/legal/privacy")} />
@@ -98,7 +98,7 @@ export default function PrivacyScreen() {
           <Button label="Exportar meus dados" icon="download" variant="secondary" loading={exporting} onPress={() => void exportData()} />
         </Card>
         {requests.data && requests.data.data.length > 0 ? (
-          <Card style={{ paddingVertical: 4 }}>
+          <Card style={{ paddingVertical: 6 }}>
             {requests.data.data.slice(0, 5).map((r, i) => (
               <View key={r.id}>
                 {i > 0 ? <Divider /> : null}
@@ -116,7 +116,7 @@ export default function PrivacyScreen() {
         </Card>
       </Section>
 
-      <Card style={{ paddingVertical: 4 }}>
+      <Card style={{ paddingVertical: 6 }}>
         <ShortcutRow icon="file-text" title="Termos de Uso" onPress={() => go("/legal/terms")} color="#94A3B8" />
         <Divider inset={52} />
         <ShortcutRow icon="file-text" title="Política de Privacidade" onPress={() => go("/legal/privacy")} color="#94A3B8" />

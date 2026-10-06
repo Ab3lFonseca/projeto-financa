@@ -2,6 +2,7 @@ import { formatBRL } from "@app/shared";
 import type { StyleProp, TextStyle } from "react-native";
 import { usePrivacyStore } from "@/lib/privacy-store";
 import { Text, type Tone } from "./Text";
+import { useCountUp } from "./useCountUp";
 import type { TextVariant } from "@/theme/tokens";
 
 /**
@@ -19,6 +20,7 @@ export function Money({
   hideZeroCents,
   style,
   prefix,
+  animate,
 }: {
   cents: number;
   variant?: TextVariant;
@@ -30,10 +32,13 @@ export function Money({
   hideZeroCents?: boolean;
   style?: StyleProp<TextStyle>;
   prefix?: string;
+  /** Conta até o valor ao aparecer e quando ele muda (saldos e totais em destaque). A cor e o sinal seguem sempre o valor final. */
+  animate?: boolean;
 }) {
   const hidden = usePrivacyStore((s) => s.hideAmounts) && sensitive;
   const resolved: Tone = tone ?? (colorize ? (cents > 0 ? "positive" : cents < 0 ? "negative" : "default") : "default");
-  const text = hidden ? "R$ ••••" : formatBRL(cents, { signed, hideZeroCents });
+  const counted = useCountUp(cents, !!animate && !hidden);
+  const text = hidden ? "R$ ••••" : formatBRL(animate ? counted : cents, { signed, hideZeroCents });
   return (
     <Text variant={variant} tone={resolved} weight={weight} tabular style={style} accessibilityLabel={hidden ? "valor oculto" : undefined}>
       {prefix}

@@ -11,6 +11,13 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Movimento e acabamento em todo o app.** Tempos e curvas únicos (`components/ui/motion.ts`) e o "reduzir movimento" do sistema é respeitado.
+  Linhas de lista e cartões ganham mola ao tocar e destaque ao passar o mouse; a seta das linhas anda um pouco; a aba ativa tem uma pílula
+  animada e troca de aba tem fade; o seletor segmentado tem um marcador que desliza; saldos e totais em destaque **contam até o valor**
+  (o número final sempre aparece, mesmo se a animação for interrompida); gráficos entram animados (barras crescem da linha do zero, rosca gira
+  para o lugar, linha é revelada); folhas inferiores sobem com mola e desfocam o fundo na web; avisos entram com mola; campos de texto ganham anel
+  de foco; botão **+** nasce com mola e gira no hover; telas de entrada têm fundo de luz animado e entrada em cascata; foco por teclado visível,
+  barras de rolagem e seleção de texto no tema (CSS global gerado da paleta).
 - **Tutorial de primeiro uso (10 etapas).** Abre sozinho na primeira vez (depois de aceitar os termos), escurece a tela e destaca o elemento real
   de cada assunto: saldo, botão **+**, busca e filtros das transações, período dos gráficos, abas Contas/Cartões, aba Investir, Orçamentos/Metas/
   Recorrências, Open Finance e Configurações. Cada etapa diz o que é e **para que serve**, com "Etapa N de 10", **Próximo**, **Voltar**,
@@ -95,6 +102,10 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   A CSP completa fica para depois de testar com o widget do Pluggy.
 
 ### Corrigido
+- **Destaque de hover "quebrado" nas linhas de lista:** o fundo ao passar o mouse colava no ícone e na seta (sem respiro) e encostava nos
+  divisores e nos cantos arredondados do cartão. Agora o destaque é arredondado, passa 8 px do conteúdo para os lados e deixa 8 px de ar em volta
+  dentro do cartão (`PressableRow`), igual em Mais, Configurações, Transações, Orçamentos, fatura e folhas de opções. Cartões tocáveis usam borda
+  de destaque no hover, sem sombra externa (que listas horizontais recortariam).
 - Rótulos da barra de abas (Início, Transações...) ficavam cortados pela metade: a barra tinha 58 px e o ícone, o rótulo e os espaços pedem 59 px
   (na web havia ainda 6 px de respiro embaixo tirados do conteúdo). Agora têm altura suficiente.
 - Aviso do *Supabase Advisor* "Function Search Path Mutable" em `app_current_user_id()` e `set_updated_at()`: a migration

@@ -41,7 +41,7 @@ export default function MoreScreen() {
       </Card>
 
       <TourTarget id="more-planning">
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           <ShortcutRow icon="target" title="Orçamentos" subtitle="Limite por categoria no mês" onPress={() => go("/budgets")} color="#F59E0B" />
           <Divider inset={52} />
           <ShortcutRow icon="trophy" title="Metas" subtitle="Acompanhe seus objetivos" onPress={() => go("/goals")} color="#22C55E" />
@@ -53,7 +53,7 @@ export default function MoreScreen() {
       </TourTarget>
 
       <TourTarget id="more-bank">
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           <ShortcutRow icon="bell" title="Notificações" subtitle="Vencimentos, orçamentos e metas" onPress={() => go("/notifications")} badge={unread ? <Badge label={String(unread)} tone="negative" /> : undefined} color="#EF4444" />
           {pending > 0 ? (
             <>
@@ -66,7 +66,7 @@ export default function MoreScreen() {
         </Card>
       </TourTarget>
 
-      <Card style={{ paddingVertical: 4 }}>
+      <Card style={{ paddingVertical: 6 }}>
         <TourTarget id="more-settings">
           <ShortcutRow icon="settings" title="Configurações" subtitle="Perfil, aparência e segurança" onPress={() => go("/settings")} color="#64748B" />
           <Divider inset={52} />
@@ -80,7 +80,7 @@ export default function MoreScreen() {
         <ShortcutRow icon="file-text" title="Política de Privacidade" onPress={() => go("/legal/privacy")} color="#94A3B8" />
       </Card>
 
-      <Card style={{ paddingVertical: 4 }}>
+      <Card style={{ paddingVertical: 6 }}>
         <ShortcutRow
           icon="log-out"
           title="Sair"

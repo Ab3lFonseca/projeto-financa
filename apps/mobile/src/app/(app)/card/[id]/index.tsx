@@ -81,7 +81,7 @@ export default function CardDetailScreen() {
 
       {tab === "installments" ? (
         <Section title="Compras parceladas em andamento">
-          <Card style={{ paddingVertical: 4 }}>
+          <Card style={{ paddingVertical: 6 }}>
             {(installments.data?.data ?? []).length === 0 ? (
               <EmptyState icon="credit-card" title="Nenhuma compra parcelada" message="Ao parcelar uma compra no cartão, ela aparece aqui." />
             ) : (
@@ -108,7 +108,7 @@ export default function CardDetailScreen() {
         </Section>
       ) : (
         <Section title={tab === "upcoming" ? "Faturas atuais e próximas" : "Faturas anteriores"}>
-          <Card style={{ paddingVertical: 4 }}>
+          <Card style={{ paddingVertical: 6 }}>
             {!invoiceRows || invoiceRows.length === 0 ? (
               <EmptyState icon="receipt" title="Nenhuma fatura" message="As faturas aparecem conforme você registra compras no cartão." />
             ) : (

@@ -68,13 +68,13 @@ export default function SettingsScreen() {
       </Section>
 
       <Section title="Aparência">
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           <ShortcutRow icon="palette" title="Tema do app" subtitle={`${themeMeta.emoji} ${themeMeta.label} · cores, modo escuro e personalização`} onPress={() => go("/settings/appearance")} color={colors.accent} />
         </Card>
       </Section>
 
       <Section title="Ajuda">
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           <ShortcutRow
             icon="graduation-cap"
             title="Tutorial do app"
@@ -90,7 +90,7 @@ export default function SettingsScreen() {
       </Section>
 
       <Section title="Notificações">
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           {PREFS.map((p, i) => (
             <View key={p.key}>
               {i > 0 ? <Divider /> : null}
@@ -102,7 +102,7 @@ export default function SettingsScreen() {
       </Section>
 
       <Section title="Segurança">
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           <SwitchRow
             title="Bloqueio por biometria"
             subtitle={bioAvailable ? "Peça digital, rosto ou senha do aparelho ao abrir o app" : "Disponível apenas em aparelhos com biometria cadastrada"}
@@ -116,7 +116,7 @@ export default function SettingsScreen() {
       </Section>
 
       <Section title="Dados e privacidade">
-        <Card style={{ paddingVertical: 4 }}>
+        <Card style={{ paddingVertical: 6 }}>
           <ShortcutRow icon="shield-check" title="Privacidade e dados" subtitle="Consentimentos, exportar e excluir conta" onPress={() => go("/settings/privacy")} color="#14B8A6" />
           <Divider inset={52} />
           <ShortcutRow icon="refresh-cw" title="Sincronização" subtitle="Lançamentos feitos sem internet" onPress={() => go("/settings/sync")} color="#F59E0B" />

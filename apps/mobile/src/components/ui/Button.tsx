@@ -1,12 +1,12 @@
 import * as Haptics from "expo-haptics";
-import { ActivityIndicator, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import { useState } from "react";
+import { ActivityIndicator, Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "@/theme/ThemeProvider";
+import { withAlpha } from "@/theme/color";
 import { Icon } from "../Icon";
-import { smooth, useHover } from "./hover";
+import { glow, smooth, useHover } from "./hover";
+import { AnimatedPressable, useSpringPress } from "./Interactive";
 import { Text } from "./Text";
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "dangerSolid";
 type Size = "sm" | "md" | "lg";
@@ -28,9 +28,8 @@ const HEIGHT: Record<Size, number> = { sm: 38, md: 48, lg: 56 };
 
 export function Button({ label, onPress, variant = "primary", size = "md", loading, disabled, icon, fullWidth = true, style, testID }: ButtonProps) {
   const { colors, radius } = useTheme();
-  const scale = useSharedValue(1);
   const { hovered, hoverProps } = useHover();
-  const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const press = useSpringPress();
 
   // Com o mouse por cima (web/desktop) cada variante ganha um tom um pouco mais forte; no celular nada muda.
   const palette = {
@@ -50,8 +49,8 @@ export function Button({ label, onPress, variant = "primary", size = "md", loadi
       accessibilityState={{ disabled: !!inactive, busy: !!loading }}
       disabled={inactive}
       {...hoverProps}
-      onPressIn={() => (scale.value = withSpring(0.97, { damping: 18, stiffness: 300 }))}
-      onPressOut={() => (scale.value = withSpring(1, { damping: 18, stiffness: 300 }))}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
       onPress={() => {
         if (Platform.OS !== "web") void Haptics.selectionAsync();
         onPress?.();
@@ -67,7 +66,8 @@ export function Button({ label, onPress, variant = "primary", size = "md", loadi
           alignSelf: fullWidth ? "stretch" : "flex-start",
           paddingHorizontal: size === "sm" ? 14 : 20,
         },
-        animated,
+        hovered && !inactive && (variant === "primary" || variant === "dangerSolid") ? glow(withAlpha(variant === "primary" ? colors.primary : colors.negative, 0.4)) : null,
+        press.style,
         style,
       ]}
     >
@@ -107,23 +107,36 @@ export function IconButton({
 }) {
   const { colors, radius } = useTheme();
   const { hovered, hoverProps } = useHover();
+  const [pressed, setPressed] = useState(false);
+  const press = useSpringPress(0.88);
   const fg = tone === "primary" ? colors.primary : tone === "danger" ? colors.negative : colors.text;
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={8}
       onPress={onPress}
       {...hoverProps}
-      style={({ pressed }) => ({
-        width: size,
-        height: size,
-        borderRadius: radius.pill,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: pressed || hovered ? colors.surfaceAlt : "transparent",
-        ...smooth,
-      })}
+      onPressIn={() => {
+        setPressed(true);
+        press.onPressIn();
+      }}
+      onPressOut={() => {
+        setPressed(false);
+        press.onPressOut();
+      }}
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: radius.pill,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: pressed || hovered ? colors.surfaceAlt : "transparent",
+        },
+        smooth,
+        press.style,
+      ]}
     >
       <Icon name={icon} size={22} color={fg} />
       {badge ? (
@@ -133,6 +146,6 @@ export function IconButton({
           </Text>
         </View>
       ) : null}
-    </Pressable>
+    </AnimatedPressable>
   );
 }

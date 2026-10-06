@@ -80,7 +80,7 @@ export default function HomeScreen() {
             <Text variant="bodySm" style={{ color: withAlpha(colors.onPrimary, 0.8) }} weight="500">
               Saldo total
             </Text>
-            <Money cents={data.totalBalanceCents} variant="display" weight="700" style={{ color: colors.onPrimary }} />
+            <Money cents={data.totalBalanceCents} variant="display" weight="700" style={{ color: colors.onPrimary }} animate />
             <Text variant="caption" style={{ color: withAlpha(colors.onPrimary, 0.8) }}>
               {capitalize(monthName)}
               {m.savingsRatePct !== null ? ` · você guardou ${formatPct(m.savingsRatePct)} do que recebeu` : ""}
@@ -219,7 +219,7 @@ export default function HomeScreen() {
         {data.budgetAlerts.length > 0 ? (
           <Reveal index={7}>
             <Section title="Orçamentos em alerta" action="Ver orçamentos" onAction={() => go("/budgets")}>
-              <Card style={{ paddingVertical: 4 }}>
+              <Card style={{ paddingVertical: 6 }}>
                 {data.budgetAlerts.map((b, i) => (
                   <View key={b.id}>
                     {i > 0 ? <Divider /> : null}
@@ -247,7 +247,7 @@ export default function HomeScreen() {
         {/* Próximas contas */}
         {data.upcoming.bills.length + data.upcoming.invoices.length > 0 ? (
           <Section title="Próximos vencimentos">
-            <Card style={{ paddingVertical: 4 }}>
+            <Card style={{ paddingVertical: 6 }}>
               {data.upcoming.invoices.map((i, idx) => (
                 <View key={i.invoiceId}>
                   {idx > 0 ? <Divider /> : null}
@@ -278,7 +278,7 @@ export default function HomeScreen() {
         {/* Últimas transações */}
         <Reveal index={9}>
           <Section title="Últimas transações" action="Ver todas" onAction={() => go("/transactions")}>
-            <Card style={{ paddingVertical: 4 }}>
+            <Card style={{ paddingVertical: 6 }}>
               {data.recentTransactions.length === 0 ? (
                 <EmptyState icon="receipt" title="Nenhuma transação ainda" message="Toque no + para registrar sua primeira receita ou despesa." />
               ) : (

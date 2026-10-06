@@ -2,7 +2,10 @@ import { formatBRL } from "@app/shared";
 import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from "react-native";
 import { useTheme } from "@/theme/ThemeProvider";
+import { withAlpha } from "@/theme/color";
 import { Icon } from "../Icon";
+import { focusRing, smooth, useHover } from "./hover";
+import { AnimatedPressable, useSpringPress } from "./Interactive";
 import { Text } from "./Text";
 
 type FieldChrome = { label?: string; error?: string | null; helper?: string; style?: StyleProp<ViewStyle> };
@@ -39,18 +42,22 @@ export function TextField({ label, error, helper, style, secure, left, right, mu
   return (
     <FieldShell label={label} error={error} helper={helper} style={style}>
       <View
-        style={{
-          flexDirection: "row",
-          alignItems: multiline ? "flex-start" : "center",
-          gap: 8,
-          minHeight: multiline ? 96 : 52,
-          paddingHorizontal: 14,
-          paddingVertical: multiline ? 12 : 0,
-          borderRadius: radius.md,
-          backgroundColor: colors.surface,
-          borderWidth: 1.5,
-          borderColor: error ? colors.negative : focused ? colors.accent : colors.border,
-        }}
+        style={[
+          {
+            flexDirection: "row",
+            alignItems: multiline ? "flex-start" : "center",
+            gap: 8,
+            minHeight: multiline ? 96 : 52,
+            paddingHorizontal: 14,
+            paddingVertical: multiline ? 12 : 0,
+            borderRadius: radius.md,
+            backgroundColor: colors.surface,
+            borderWidth: 1.5,
+            borderColor: error ? colors.negative : focused ? colors.accent : colors.border,
+          },
+          smooth,
+          focused ? focusRing(withAlpha(error ? colors.negative : colors.accent, 0.2)) : null,
+        ]}
       >
         {left}
         <TextInput
@@ -118,17 +125,21 @@ export function MoneyField({
   return (
     <FieldShell label={label} error={error} helper={helper} style={style}>
       <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          minHeight: large ? 72 : 52,
-          paddingHorizontal: 14,
-          borderRadius: radius.md,
-          backgroundColor: large ? "transparent" : colors.surface,
-          borderWidth: large ? 0 : 1.5,
-          borderColor: error ? colors.negative : focused ? colors.accent : colors.border,
-        }}
+        style={[
+          {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            minHeight: large ? 72 : 52,
+            paddingHorizontal: 14,
+            borderRadius: radius.md,
+            backgroundColor: large ? "transparent" : colors.surface,
+            borderWidth: large ? 0 : 1.5,
+            borderColor: error ? colors.negative : focused ? colors.accent : colors.border,
+          },
+          smooth,
+          focused && !large ? focusRing(withAlpha(error ? colors.negative : colors.accent, 0.2)) : null,
+        ]}
       >
         {allowNegative ? (
           <Pressable
@@ -192,31 +203,39 @@ export function SelectField({
   style,
 }: FieldChrome & { value?: string | null; placeholder?: string; onPress: () => void; left?: ReactNode }) {
   const { colors, radius } = useTheme();
+  const { hovered, hoverProps } = useHover();
+  const press = useSpringPress(0.99);
   return (
     <FieldShell label={label} error={error} style={style}>
-      <Pressable
+      <AnimatedPressable
         accessibilityRole="button"
         accessibilityLabel={label ?? placeholder}
         onPress={onPress}
-        style={({ pressed }) => ({
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-          minHeight: 52,
-          paddingHorizontal: 14,
-          borderRadius: radius.md,
-          backgroundColor: colors.surface,
-          borderWidth: 1.5,
-          borderColor: error ? colors.negative : colors.border,
-          opacity: pressed ? 0.8 : 1,
-        })}
+        {...hoverProps}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        style={[
+          {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            minHeight: 52,
+            paddingHorizontal: 14,
+            borderRadius: radius.md,
+            backgroundColor: colors.surface,
+            borderWidth: 1.5,
+            borderColor: error ? colors.negative : hovered ? colors.accent : colors.border,
+          },
+          smooth,
+          press.style,
+        ]}
       >
         {left}
         <Text style={{ flex: 1 }} tone={value ? "default" : "faint"} numberOfLines={1}>
           {value || placeholder}
         </Text>
         <Icon name="chevron-down" size={18} color={colors.textMuted} />
-      </Pressable>
+      </AnimatedPressable>
     </FieldShell>
   );
 }
