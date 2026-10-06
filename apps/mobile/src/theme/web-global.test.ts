@@ -25,7 +25,7 @@ describe("CSS global da web", () => {
   });
 
   it("é CSS bem formado (chaves balanceadas) em todos os temas", () => {
-    for (const id of ["light", "dark", "blue", "purple", "green", "red"] as const) {
+    for (const id of ["light", "dark", "blue", "purple", "green", "red", "opaque-ocean", "opaque-ember", "matte-graphite", "matte-sage", "pastel-pink", "pastel-sky"] as const) {
       const text = buildGlobalCss(resolveTheme(id, null, "light").palette);
       expect(text.split("{").length).toBe(text.split("}").length);
     }

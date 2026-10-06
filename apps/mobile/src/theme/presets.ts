@@ -3,26 +3,74 @@ import { contrast, ensureContrast, mix, readableOn, type Hex } from "./color";
 import { darkPalette, lightPalette, type Palette } from "./tokens";
 
 export type Scheme = "light" | "dark";
-export type ThemeMeta = { id: ThemePresetId; label: string; emoji: string; hint: string };
+export type ThemeGroupId = "basic" | "colorful" | "opaque" | "matte" | "pastel" | "custom";
+export type ThemeMeta = { id: ThemePresetId; label: string; emoji: string; hint: string; group: ThemeGroupId };
+
+/** Famílias de temas, na ordem em que aparecem na tela Aparência. */
+export const THEME_GROUPS: readonly { id: ThemeGroupId; title: string; hint: string }[] = [
+  { id: "basic", title: "Básicos", hint: "O visual padrão, claro ou escuro" },
+  { id: "colorful", title: "Coloridos", hint: "Escuros, com destaque vivo" },
+  { id: "opaque", title: "Opacos", hint: "Cores cheias e chapadas, sem brilho" },
+  { id: "matte", title: "Foscos", hint: "Tons suaves e acinzentados, que descansam a vista" },
+  { id: "pastel", title: "Pastéis", hint: "Claros, delicados e bem suaves" },
+  { id: "custom", title: "Do seu jeito", hint: "Você escolhe as cores" },
+];
 
 /** Lista exibida na tela Aparência, na ordem em que aparece. */
 export const THEME_META: readonly ThemeMeta[] = [
-  { id: "system", label: "Automático", emoji: "📱", hint: "Segue o claro ou escuro do aparelho" },
-  { id: "dark", label: "Escuro", emoji: "🌙", hint: "Fundo escuro e confortável à noite" },
-  { id: "light", label: "Claro", emoji: "☀️", hint: "Fundo claro, o visual padrão" },
-  { id: "blue", label: "Azul", emoji: "🌌", hint: "Azul profundo com destaque ciano" },
-  { id: "purple", label: "Roxo", emoji: "🟣", hint: "Roxo noturno com destaque rosa" },
-  { id: "green", label: "Verde", emoji: "🟢", hint: "Verde escuro com destaque lima" },
-  { id: "red", label: "Vermelho", emoji: "🔴", hint: "Vinho escuro com destaque laranja" },
-  { id: "custom", label: "Personalizado", emoji: "🎨", hint: "Você escolhe as cores" },
+  { id: "system", label: "Automático", emoji: "📱", hint: "Segue o claro ou escuro do aparelho", group: "basic" },
+  { id: "dark", label: "Escuro", emoji: "🌙", hint: "Fundo escuro e confortável à noite", group: "basic" },
+  { id: "light", label: "Claro", emoji: "☀️", hint: "Fundo claro, o visual padrão", group: "basic" },
+  { id: "blue", label: "Azul", emoji: "🌌", hint: "Azul profundo com destaque ciano", group: "colorful" },
+  { id: "purple", label: "Roxo", emoji: "🟣", hint: "Roxo noturno com destaque rosa", group: "colorful" },
+  { id: "green", label: "Verde", emoji: "🟢", hint: "Verde escuro com destaque lima", group: "colorful" },
+  { id: "red", label: "Vermelho", emoji: "🔴", hint: "Vinho escuro com destaque laranja", group: "colorful" },
+  { id: "opaque-ocean", label: "Oceano", emoji: "🌊", hint: "Azul cheio e chapado, com destaque âmbar", group: "opaque" },
+  { id: "opaque-forest", label: "Floresta", emoji: "🌲", hint: "Verde esmeralda cheio, com destaque amarelo", group: "opaque" },
+  { id: "opaque-wine", label: "Vinho", emoji: "🍷", hint: "Bordô cheio, com destaque salmão", group: "opaque" },
+  { id: "opaque-grape", label: "Uva", emoji: "🍇", hint: "Roxo cheio, com destaque rosa", group: "opaque" },
+  { id: "opaque-ember", label: "Brasa", emoji: "🔥", hint: "Marrom alaranjado cheio, com destaque dourado", group: "opaque" },
+  { id: "matte-graphite", label: "Grafite", emoji: "⚫", hint: "Cinza escuro fosco, com destaque azul acinzentado", group: "matte" },
+  { id: "matte-slate", label: "Ardósia", emoji: "🌫️", hint: "Azul acinzentado escuro e fosco", group: "matte" },
+  { id: "matte-sage", label: "Sálvia", emoji: "🌿", hint: "Verde acinzentado claro e fosco", group: "matte" },
+  { id: "matte-sand", label: "Areia", emoji: "🏜️", hint: "Bege quente, claro e fosco", group: "matte" },
+  { id: "matte-mauve", label: "Malva", emoji: "🔮", hint: "Lilás acinzentado claro e fosco", group: "matte" },
+  { id: "pastel-pink", label: "Rosa", emoji: "🌸", hint: "Rosa pastel, claro e delicado", group: "pastel" },
+  { id: "pastel-mint", label: "Menta", emoji: "🍃", hint: "Verde menta pastel, fresco e suave", group: "pastel" },
+  { id: "pastel-lavender", label: "Lavanda", emoji: "💜", hint: "Lavanda pastel, calmo e suave", group: "pastel" },
+  { id: "pastel-peach", label: "Pêssego", emoji: "🍑", hint: "Pêssego pastel, quente e acolhedor", group: "pastel" },
+  { id: "pastel-sky", label: "Céu", emoji: "☁️", hint: "Azul céu pastel, leve e limpo", group: "pastel" },
+  { id: "custom", label: "Personalizado", emoji: "🎨", hint: "Você escolhe as cores", group: "custom" },
 ];
 
-/** As 4 cores de partida dos temas coloridos; o resto da paleta é derivado delas por `derivePalette`. */
-export const PRESET_BASES: Record<"blue" | "purple" | "green" | "red", CustomColors> = {
+/** Temas prontos que partem de 4 cores (todos menos Automático, Claro, Escuro e Personalizado). */
+export type BasedPresetId = Exclude<ThemePresetId, "system" | "light" | "dark" | "custom">;
+
+/**
+ * As 4 cores de partida (fundo, cartões, principal, destaque) dos temas prontos; o resto da paleta é derivado delas por `derivePalette`, que
+ * ainda ajusta texto e cores para manter o contraste. Opacos: escuros, cheios e chapados. Foscos: pouca saturação. Pastéis: claros e suaves
+ * (a cor principal escurece um pouco, o necessário para o botão e o texto colorido continuarem legíveis).
+ */
+export const PRESET_BASES: Record<BasedPresetId, CustomColors> = {
   blue: { background: "#0A1020", surface: "#111A30", primary: "#3B82F6", accent: "#38BDF8" },
   purple: { background: "#0F0A1F", surface: "#181230", primary: "#8B5CF6", accent: "#E879F9" },
   green: { background: "#06130E", surface: "#0D1F17", primary: "#22C55E", accent: "#A3E635" },
   red: { background: "#150A0C", surface: "#201114", primary: "#EF4444", accent: "#FB923C" },
+  "opaque-ocean": { background: "#0B3B66", surface: "#11507F", primary: "#FFD166", accent: "#7DD3FC" },
+  "opaque-forest": { background: "#0F3D2E", surface: "#165240", primary: "#FDE68A", accent: "#6EE7B7" },
+  "opaque-wine": { background: "#4A0F24", surface: "#62192F", primary: "#FFB4A2", accent: "#FFD6A5" },
+  "opaque-grape": { background: "#3B1D6E", surface: "#4C2A87", primary: "#F9A8D4", accent: "#A5B4FC" },
+  "opaque-ember": { background: "#5A2209", surface: "#74300F", primary: "#FCD34D", accent: "#FDBA74" },
+  "matte-graphite": { background: "#1E1F22", surface: "#2A2B2F", primary: "#9DB4D0", accent: "#C9B79C" },
+  "matte-slate": { background: "#1F2933", surface: "#2B3844", primary: "#8FB3C9", accent: "#CDB9A6" },
+  "matte-sage": { background: "#E6EAE2", surface: "#F3F5F0", primary: "#5F7D63", accent: "#A88B6B" },
+  "matte-sand": { background: "#ECE6DC", surface: "#F6F2EA", primary: "#8C6A4F", accent: "#5E7C86" },
+  "matte-mauve": { background: "#E9E1E6", surface: "#F5F0F3", primary: "#85607A", accent: "#5B7A8C" },
+  "pastel-pink": { background: "#FDE8EF", surface: "#FFF5F8", primary: "#E0709A", accent: "#9B7FD1" },
+  "pastel-mint": { background: "#E3F6EC", surface: "#F4FCF8", primary: "#4FB38A", accent: "#5B9BD5" },
+  "pastel-lavender": { background: "#ECE6FA", surface: "#F7F4FE", primary: "#8A6FD6", accent: "#E58AB8" },
+  "pastel-peach": { background: "#FFEBDD", surface: "#FFF7F1", primary: "#E8875A", accent: "#6FB1A0" },
+  "pastel-sky": { background: "#E1F1FB", surface: "#F3FAFE", primary: "#4A9AD4", accent: "#F29E8E" },
 };
 
 /** Ponto de partida do editor do tema personalizado (o visual claro padrão com destaque ciano). */
@@ -99,7 +147,9 @@ export function resolveTheme(preset: ThemePresetId, custom: CustomColors | null 
   if (preset === "system") return resolveTheme(system, custom, system);
   if (preset === "light") return { palette: lightPalette, scheme: "light" };
   if (preset === "dark") return { palette: darkPalette, scheme: "dark" };
-  const base = preset === "custom" ? (custom ?? DEFAULT_CUSTOM) : PRESET_BASES[preset];
+  // Um tema que esta versão do app não conhece (ex.: criado numa versão mais nova) volta ao do aparelho em vez de quebrar a tela.
+  const base = preset === "custom" ? (custom ?? DEFAULT_CUSTOM) : PRESET_BASES[preset as BasedPresetId];
+  if (!base) return resolveTheme(system, custom, system);
   const key = `${preset}:${base.background}${base.surface}${base.primary}${base.accent}`;
   let hit = cache.get(key);
   if (!hit) {
@@ -114,8 +164,8 @@ export function resolveTheme(preset: ThemePresetId, custom: CustomColors | null 
 export function legacyThemeFor(a: Appearance): "SYSTEM" | "LIGHT" | "DARK" {
   if (a.preset === "system") return "SYSTEM";
   if (a.preset === "light") return "LIGHT";
-  if (a.preset === "custom") return resolveTheme("custom", a.custom, "light").scheme === "dark" ? "DARK" : "LIGHT";
-  return "DARK";
+  // Coloridos e opacos são escuros; foscos e pastéis podem ser claros: o esquema vem da paleta derivada.
+  return resolveTheme(a.preset, a.custom, "light").scheme === "dark" ? "DARK" : "LIGHT";
 }
 
 /**

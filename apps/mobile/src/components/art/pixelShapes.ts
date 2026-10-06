@@ -101,6 +101,46 @@ export function hoverShift(cell: PixelCell, noise: number, pointer: Pointer | nu
   return { dx: Math.cos(angle) * push, dy: Math.sin(angle) * push - strength * 0.02 * noise, rotate: (noise - 0.5) * 300 * strength, glow: strength };
 }
 
+/** Pixels por lado da logo de fundo: grade fina, com bem mais cubos do que a primeira versão (24). */
+export const LOGO_GRID = 40;
+
+/** Quantos grupos de cubos se mexem em oposição no celular, e quanto dura uma subida e descida completa. */
+export const AMBIENT_LAYERS = 6;
+export const AMBIENT_PERIOD = 4.2;
+/** Quanto os cubos sobem e descem, em fração do tamanho da logo. */
+export const AMBIENT_AMPLITUDE = 0.016;
+
+/**
+ * Em qual dos 6 grupos o cubo está: a paridade da posição (xadrez) separa vizinhos em lados opostos do movimento, e faixas diagonais atrasam
+ * cada grupo um pouco, o que faz uma onda lenta atravessar a imagem. No celular nativo cada grupo é uma camada que sobe e desce inteira.
+ */
+export function ambientLayerOf(cell: Pick<PixelCell, "x" | "y">, grid = LOGO_GRID): number {
+  const ix = Math.round(cell.x * grid);
+  const iy = Math.round(cell.y * grid);
+  const parity = (ix + iy) & 1; // vale também para somas negativas (estilhaços que subiram acima da borda)
+  const band = Math.abs(Math.floor((ix + iy) / 8)) % 3;
+  return parity * 3 + band;
+}
+
+/** Atraso (em radianos) de cada grupo: quem tem paridade oposta fica meio ciclo defasado, e cada faixa, um terço de ciclo. */
+export const AMBIENT_PHASES: readonly number[] = Array.from({ length: AMBIENT_LAYERS }, (_, layer) => (layer >= 3 ? Math.PI : 0) + (layer % 3) * ((2 * Math.PI) / 3));
+
+/**
+ * Movimento próprio dos cubos, para telas sem mouse (celular): cada um sobe e desce, e vizinhos fazem o contrário (enquanto um sobe, o do lado
+ * desce) e acendem e apagam em alternância. `noise` dá a cada cubo um pequeno atraso, para não parecer uma máquina. Repete a cada `AMBIENT_PERIOD`.
+ */
+export function ambientShift(cell: PixelCell, noise: number, seconds: number, grid = LOGO_GRID): HoverShift {
+  const phase = AMBIENT_PHASES[ambientLayerOf(cell, grid)]! + noise * 0.9;
+  const w = (seconds / AMBIENT_PERIOD) * 2 * Math.PI + phase;
+  const s = Math.sin(w);
+  return {
+    dx: 0,
+    dy: s * AMBIENT_AMPLITUDE * (0.6 + 0.8 * noise),
+    rotate: Math.sin(w * 0.7) * (cell.shard ? 7 : 2),
+    glow: (0.5 + 0.5 * Math.sin(w + Math.PI / 2)) * 0.45,
+  };
+}
+
 /**
  * Aproxima `current` de `target` suavemente, no mesmo ritmo em qualquer taxa de quadros. Vai rápido quando o valor se afasta do repouso (o cubo
  * salta quando o mouse chega) e devagar quando volta a ele (assenta quando o mouse sai).
@@ -115,7 +155,7 @@ export function approach(current: number, target: number, dtSeconds: number, upR
  * Células da logo. `grid` é quantos pixels por lado. A partir de `breakFrom` (0..1, da esquerda para a direita) os pixels começam a se soltar,
  * cada vez mais, e alguns somem de vez (buracos). Os que ficam à esquerda continuam inteiros.
  */
-export function logoCells(grid = 24, seed = 11, breakFrom = 0.34): PixelCell[] {
+export function logoCells(grid = LOGO_GRID, seed = 11, breakFrom = 0.34): PixelCell[] {
   const rand = seeded(seed);
   const cell = 1 / grid;
   const out: PixelCell[] = [];

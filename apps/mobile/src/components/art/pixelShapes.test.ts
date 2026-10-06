@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { approach, HOVER_RADIUS, hoverShift, logoCells, seeded, toneAt, type PixelCell } from "./pixelShapes";
+import {
+  AMBIENT_AMPLITUDE,
+  AMBIENT_LAYERS,
+  AMBIENT_PERIOD,
+  AMBIENT_PHASES,
+  ambientLayerOf,
+  ambientShift,
+  approach,
+  HOVER_RADIUS,
+  hoverShift,
+  LOGO_GRID,
+  logoCells,
+  seeded,
+  toneAt,
+  type PixelCell,
+} from "./pixelShapes";
 
 const cube = (x: number, y: number, over: Partial<PixelCell> = {}): PixelCell => ({ x, y, size: 0.04, rotate: 0, tone: 0, gradient: 0.5, alpha: 1, shard: false, ...over });
 const center = (c: PixelCell) => ({ x: c.x + c.size / 2, y: c.y + c.size / 2 });
@@ -56,6 +71,80 @@ describe("logo em pixels", () => {
 
   it("o número de células cabe numa tela sem pesar (centenas, não milhares)", () => {
     expect(logoCells(24, 11).length).toBeLessThan(600);
+  });
+
+  it("a logo de fundo usa uma grade fina: bem mais cubos que a primeira versão (24 por lado), ainda sem chegar a milhares", () => {
+    const first = logoCells(24, 11).length;
+    const now = logoCells(LOGO_GRID, 11).length;
+    expect(LOGO_GRID).toBeGreaterThanOrEqual(36);
+    expect(now).toBeGreaterThan(first * 2);
+    expect(now).toBeLessThan(1600);
+    // continua se desfazendo à direita e inteira à esquerda
+    const cells = logoCells(LOGO_GRID, 11);
+    expect(cells.filter((c) => c.x < 0.25).every((c) => !c.shard)).toBe(true);
+    expect(cells.filter((c) => c.shard).length).toBeGreaterThan(100);
+  });
+});
+
+describe("cubos que se mexem sozinhos (celular)", () => {
+  const at = (ix: number, iy: number, over: Partial<PixelCell> = {}) => cube(ix / LOGO_GRID, iy / LOGO_GRID, over);
+
+  it("cada cubo cai em um dos 6 grupos, e os dois lados do xadrez ficam em grupos diferentes", () => {
+    expect(AMBIENT_PHASES).toHaveLength(AMBIENT_LAYERS);
+    const used = new Set(logoCells(LOGO_GRID, 11).map((c) => ambientLayerOf(c)));
+    expect([...used].sort()).toEqual([0, 1, 2, 3, 4, 5]);
+    // vizinhos (lado a lado e acima/abaixo) nunca ficam no mesmo grupo
+    for (const [ix, iy] of [[3, 3], [10, 20], [17, 5], [30, 31]] as const) {
+      const here = ambientLayerOf(at(ix, iy));
+      expect(ambientLayerOf(at(ix + 1, iy))).not.toBe(here);
+      expect(ambientLayerOf(at(ix, iy + 1))).not.toBe(here);
+      expect(Math.floor(ambientLayerOf(at(ix + 1, iy)) / 3)).not.toBe(Math.floor(here / 3)); // outra paridade
+    }
+  });
+
+  it("vizinhos fazem o contrário: enquanto um sobe, o do lado desce, e acendem em alternância", () => {
+    const a = at(10, 10);
+    const b = at(11, 10); // mesma faixa diagonal, paridade oposta
+    expect(ambientLayerOf(a) % 3).toBe(ambientLayerOf(b) % 3);
+    let opposite = 0;
+    for (let t = 0; t < AMBIENT_PERIOD; t += 0.1) {
+      const sa = ambientShift(a, 0.5, t);
+      const sb = ambientShift(b, 0.5, t);
+      expect(sa.dy + sb.dy).toBeCloseTo(0, 10);
+      if (Math.abs(sa.dy) > 0.002) opposite += Math.sign(sa.dy) === -Math.sign(sb.dy) ? 1 : 0;
+      // quando um está mais aceso, o outro está mais apagado
+      expect(sa.glow + sb.glow).toBeCloseTo(0.45, 10);
+    }
+    expect(opposite).toBeGreaterThan(20);
+  });
+
+  it("sobe E desce (passa dos dois lados do repouso) e repete a cada ciclo", () => {
+    const c = at(12, 7, { shard: true });
+    const dys: number[] = [];
+    for (let t = 0; t < AMBIENT_PERIOD; t += 0.05) dys.push(ambientShift(c, 0.3, t).dy);
+    expect(Math.max(...dys)).toBeGreaterThan(0.004);
+    expect(Math.min(...dys)).toBeLessThan(-0.004);
+    for (const t of [0.3, 1.7, 3.9]) {
+      const first = ambientShift(c, 0.3, t);
+      const next = ambientShift(c, 0.3, t + AMBIENT_PERIOD);
+      expect(next.dy).toBeCloseTo(first.dy, 9);
+      expect(next.glow).toBeCloseTo(first.glow, 9);
+    }
+  });
+
+  it("o movimento é pequeno e válido: nunca passa da amplitude, o brilho fica entre 0 e 0,45 e não há deslocamento lateral", () => {
+    for (const c of logoCells(LOGO_GRID, 11).slice(0, 200)) {
+      for (const noise of [0, 0.5, 1]) {
+        for (const t of [0, 0.9, 2.1, 3.3]) {
+          const s = ambientShift(c, noise, t);
+          expect(Math.abs(s.dy)).toBeLessThanOrEqual(AMBIENT_AMPLITUDE * 1.4 + 1e-12);
+          expect(s.glow).toBeGreaterThanOrEqual(0);
+          expect(s.glow).toBeLessThanOrEqual(0.45 + 1e-12);
+          expect(s.dx).toBe(0);
+          expect(Number.isFinite(s.rotate)).toBe(true);
+        }
+      }
+    }
   });
 });
 

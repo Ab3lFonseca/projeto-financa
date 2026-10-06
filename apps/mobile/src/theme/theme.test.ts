@@ -1,7 +1,7 @@
-import { appearanceSchema, type CustomColors } from "@app/shared";
+import { appearanceSchema, THEME_PRESET_IDS, type CustomColors } from "@app/shared";
 import { describe, expect, it } from "vitest";
 import { contrast, ensureContrast, luminance, mix, normalizeHex, readableOn, withAlpha } from "./color";
-import { contrastWarnings, DEFAULT_CUSTOM, derivePalette, legacyThemeFor, PRESET_BASES, resolveTheme, THEME_META } from "./presets";
+import { contrastWarnings, DEFAULT_CUSTOM, derivePalette, legacyThemeFor, PRESET_BASES, resolveTheme, THEME_GROUPS, THEME_META, type BasedPresetId } from "./presets";
 import { darkPalette, lightPalette, type Palette } from "./tokens";
 
 describe("cores", () => {
@@ -56,13 +56,26 @@ function expectReadable(p: Palette, label: string, strictFaint: boolean, onColor
 }
 
 describe("temas prontos", () => {
-  it("todos os 8 temas existem na lista da tela e têm nome, emoji e descrição", () => {
-    expect(THEME_META.map((t) => t.id)).toEqual(["system", "dark", "light", "blue", "purple", "green", "red", "custom"]);
+  it("todos os temas existem na lista da tela, em famílias, e têm nome, emoji e descrição", () => {
+    expect(THEME_META.map((t) => t.id)).toEqual([
+      "system", "dark", "light",
+      "blue", "purple", "green", "red",
+      "opaque-ocean", "opaque-forest", "opaque-wine", "opaque-grape", "opaque-ember",
+      "matte-graphite", "matte-slate", "matte-sage", "matte-sand", "matte-mauve",
+      "pastel-pink", "pastel-mint", "pastel-lavender", "pastel-peach", "pastel-sky",
+      "custom",
+    ]);
+    // a lista da tela e a lista aceita pela API são a mesma (nenhum tema fica de fora nem sobra)
+    expect([...THEME_META.map((t) => t.id)].sort()).toEqual([...THEME_PRESET_IDS].sort());
     for (const t of THEME_META) {
-      expect(t.label.length).toBeGreaterThan(2);
-      expect(t.emoji.length).toBeGreaterThan(0);
-      expect(t.hint.length).toBeGreaterThan(5);
+      expect(t.label.length, t.id).toBeGreaterThan(2);
+      expect(t.emoji.length, t.id).toBeGreaterThan(0);
+      expect(t.hint.length, t.id).toBeGreaterThan(5);
+      expect(THEME_GROUPS.some((g) => g.id === t.group), `${t.id}: família`).toBe(true);
     }
+    // cada família da tela tem temas e os nomes não se repetem
+    for (const g of THEME_GROUPS) expect(THEME_META.some((t) => t.group === g.id), g.id).toBe(true);
+    expect(new Set(THEME_META.map((t) => t.label)).size).toBe(THEME_META.length);
   });
 
   it("claro e escuro continuam exatamente como eram, com o destaque igual à cor principal", () => {
@@ -99,6 +112,114 @@ describe("temas prontos", () => {
     }
   });
 });
+
+/** Saturação e luminosidade (HSL, 0 a 1) de um #RRGGBB, para descrever o "jeito" de cada família de temas. */
+function hsl(hex: string) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) as [number, number, number];
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  return { s: d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1)), l };
+}
+
+/** Croma (0 a 1): diferença entre o maior e o menor canal. Perto de 0 = cinza; o HSL exagera a saturação de cores muito claras ou muito escuras. */
+function chroma(hex: string): number {
+  const channels = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  return Math.max(...channels) - Math.min(...channels);
+}
+
+const FAMILY = (group: string) => THEME_META.filter((t) => t.group === group).map((t) => t.id as BasedPresetId);
+
+describe("famílias de temas: opacos, foscos e pastéis", () => {
+  const families = { opaque: FAMILY("opaque"), matte: FAMILY("matte"), pastel: FAMILY("pastel") };
+
+  it("cada família tem 5 temas", () => {
+    for (const [name, ids] of Object.entries(families)) expect(ids, name).toHaveLength(5);
+  });
+
+  it.each([...families.opaque, ...families.matte, ...families.pastel])("%s: legível (texto, texto secundário, discreto, botões e realces) sobre o fundo e os cartões", (id) => {
+    const { palette } = resolveTheme(id, null, "light");
+    expectReadable(palette, id, true);
+    expect(palette.accent).not.toBe(palette.primary);
+    expect(palette.bg).toBe(PRESET_BASES[id].background);
+    for (const [k, v] of Object.entries(palette)) expect(v, `${id}.${k}`).toMatch(/^(#[0-9A-F]{6}|rgba\(.+\))$/);
+  });
+
+  it("opacos: escuros, de cor cheia e chapada (fundo e cartões bem saturados, sem ser quase pretos)", () => {
+    for (const id of families.opaque) {
+      const { palette, scheme } = resolveTheme(id, null, "light");
+      expect(scheme, id).toBe("dark");
+      for (const color of [palette.bg, palette.surface]) {
+        expect(hsl(color).s, `${id} ${color}: saturação`).toBeGreaterThanOrEqual(0.5);
+        expect(hsl(color).l, `${id} ${color}: não é quase preto`).toBeGreaterThanOrEqual(0.13);
+      }
+      expect(luminance(palette.surface), `${id}: cartões mais claros que o fundo`).toBeGreaterThan(luminance(palette.bg));
+    }
+  });
+
+  it("foscos: acinzentados (croma baixa em todas as cores: fundo e cartões quase neutros, realces apagados), em versões escuras e claras", () => {
+    const schemes = new Set<string>();
+    for (const id of families.matte) {
+      const { palette, scheme } = resolveTheme(id, null, "light");
+      schemes.add(scheme);
+      for (const color of [palette.bg, palette.surface]) expect(chroma(color), `${id} ${color}`).toBeLessThanOrEqual(0.12);
+      expect(chroma(PRESET_BASES[id].primary), `${id}: cor principal`).toBeLessThanOrEqual(0.3);
+      expect(chroma(PRESET_BASES[id].accent), `${id}: destaque`).toBeLessThanOrEqual(0.3);
+    }
+    expect([...schemes].sort()).toEqual(["dark", "light"]);
+    // e são bem mais "apagados" que os opacos
+    const mean = (ids: BasedPresetId[]) => ids.reduce((s, id) => s + chroma(PRESET_BASES[id].background), 0) / ids.length;
+    expect(mean(families.matte)).toBeLessThan(mean(families.opaque) / 3);
+  });
+
+  it("pastéis: claros e delicados (fundo e cartões bem claros, a cor principal ajustada só o necessário para ler)", () => {
+    for (const id of families.pastel) {
+      const { palette, scheme } = resolveTheme(id, null, "dark");
+      expect(scheme, id).toBe("light");
+      expect(hsl(palette.bg).l, `${id}: fundo`).toBeGreaterThanOrEqual(0.88);
+      expect(hsl(palette.surface).l, `${id}: cartões`).toBeGreaterThanOrEqual(0.93);
+      expect(hsl(palette.bg).s, `${id}: fundo suave`).toBeGreaterThan(0.2); // tem cor (não é só branco)...
+      // ...e a cor principal continua o mesmo matiz da escolhida (ajuste de contraste não troca a cor por outra)
+      expect(Math.abs(hue(palette.primary) - hue(PRESET_BASES[id].primary)), id).toBeLessThan(25);
+    }
+  });
+
+  it("todos os temas das três famílias são diferentes entre si (fundo, principal e destaque)", () => {
+    const all = [...families.opaque, ...families.matte, ...families.pastel];
+    const signatures = all.map((id) => {
+      const { palette } = resolveTheme(id, null, "light");
+      return [palette.bg, palette.surface, palette.primary, palette.accent].join("|");
+    });
+    expect(new Set(signatures).size).toBe(all.length);
+  });
+
+  it("o tema escolhido é guardado na conta: a API aceita todos e o valor antigo (claro/escuro) acompanha o esquema", () => {
+    for (const id of [...families.opaque, ...families.matte, ...families.pastel]) expect(appearanceSchema.safeParse({ preset: id }).success, id).toBe(true);
+    for (const id of families.opaque) expect(legacyThemeFor({ preset: id }), id).toBe("DARK");
+    for (const id of families.pastel) expect(legacyThemeFor({ preset: id }), id).toBe("LIGHT");
+    expect(legacyThemeFor({ preset: "matte-graphite" })).toBe("DARK");
+    expect(legacyThemeFor({ preset: "matte-slate" })).toBe("DARK");
+    expect(legacyThemeFor({ preset: "matte-sage" })).toBe("LIGHT");
+    expect(legacyThemeFor({ preset: "matte-sand" })).toBe("LIGHT");
+  });
+
+  it("um tema que esta versão não conhece (de uma versão mais nova do app) volta ao do aparelho, sem quebrar", () => {
+    const unknown = "tema-do-futuro" as never;
+    expect(resolveTheme(unknown, null, "dark")).toMatchObject({ scheme: "dark", palette: darkPalette });
+    expect(resolveTheme(unknown, null, "light")).toMatchObject({ scheme: "light", palette: lightPalette });
+  });
+});
+
+/** Matiz (0 a 360) de um #RRGGBB. */
+function hue(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) as [number, number, number];
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  if (d === 0) return 0;
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
 
 describe("tema personalizado", () => {
   it("o ponto de partida é válido, legível e sem avisos", () => {

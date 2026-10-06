@@ -11,7 +11,7 @@ import { Card, Screen, ScreenHeader, Section } from "@/components/ui/Layout";
 import { Text } from "@/components/ui/Text";
 import { useAppearance } from "@/lib/appearance";
 import { toast } from "@/lib/ui-store";
-import { contrastWarnings, DEFAULT_CUSTOM, derivePalette, resolveTheme, THEME_META, type ThemeMeta } from "@/theme/presets";
+import { contrastWarnings, DEFAULT_CUSTOM, derivePalette, resolveTheme, THEME_GROUPS, THEME_META, type ThemeMeta } from "@/theme/presets";
 import type { Palette } from "@/theme/tokens";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -68,13 +68,18 @@ export default function AppearanceScreen() {
         </Text>
       </Section>
 
-      <Section title="Tema">
-        <View accessibilityRole="radiogroup" accessibilityLabel="Temas disponíveis" style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-          {THEME_META.map((t) => (
-            <ThemeCard key={t.id} meta={t} {...paletteFor(t.id)} selected={shown === t.id} onPress={() => pick(t.id)} />
-          ))}
-        </View>
-      </Section>
+      {THEME_GROUPS.map((g) => (
+        <Section key={g.id} title={g.title}>
+          <Text variant="caption" tone="muted">
+            {g.hint}
+          </Text>
+          <View accessibilityRole="radiogroup" accessibilityLabel={`Temas: ${g.title}`} style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+            {THEME_META.filter((t) => t.group === g.id).map((t) => (
+              <ThemeCard key={t.id} meta={t} {...paletteFor(t.id)} selected={shown === t.id} onPress={() => pick(t.id)} />
+            ))}
+          </View>
+        </Section>
+      ))}
 
       {editing ? (
         <Section title="Cores personalizadas">

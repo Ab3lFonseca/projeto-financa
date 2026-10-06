@@ -11,6 +11,10 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Temas prontos em três famílias novas** (*Configurações → Aparência*, que agora agrupa os temas): **Opacos** (cores cheias e chapadas: Oceano, Floresta,
+  Vinho, Uva e Brasa), **Foscos** (tons acinzentados, escuros e claros: Grafite, Ardósia, Sálvia, Areia e Malva) e **Pastéis** (claros e delicados: Rosa,
+  Menta, Lavanda, Pêssego e Céu). Todos passam pelas mesmas regras de legibilidade dos demais (texto e realces com contraste mínimo, conferidos por teste).
+  O tema escolhido continua salvo na conta; um tema que uma versão antiga do app não conhece volta ao do aparelho em vez de quebrar a tela.
 - **Segurança e conta (servidor; as telas vêm na sequência).** Verificação em duas etapas (TOTP) com trava de tentativas e perguntada uma vez no primeiro
   acesso; **cadastro e login por Google, Facebook e outras contas** (PKCE, endereço de retorno só da configuração; o Instagram entra pelo Facebook);
   **Minha conta** (dados de cadastro, aceites, trocar nome, e-mail e senha com limites por mês e por ano, link de redefinição por e-mail); contas sem
@@ -141,8 +145,10 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   app desenha o QR a partir do endereço `otpauth://`, com a margem exigida e módulos de tamanho inteiro; um teste decodifica o desenho de volta.
 - **Em Privacidade, desligar o Open Finance fazia a opção sumir** (não dava para religar). A linha agora fica sempre que o recurso existe: ligar leva à
   tela que mostra o que será compartilhado e pede a autorização; desligar pede confirmação e desconecta os bancos.
-- **A logo do fundo agora fica centralizada** (estava no canto) e **só se mexe quando o mouse passa por cima**: os cubos perto do cursor saltam, giram e
-  acendem, e depois voltam ao lugar. Parada, não gasta processamento.
+- **A logo do fundo agora fica centralizada** (estava no canto), **maior e com bem mais cubos** (grade de 40 por lado, antes 24). No computador **só se
+  mexe quando o mouse passa por cima**: os cubos perto do cursor saltam, giram e acendem, e depois voltam ao lugar; parada, não gasta processamento. **No
+  celular**, onde não há mouse, os cubos **alternam sozinhos, subindo e descendo** (vizinhos em sentidos opostos, com uma onda lenta atravessando a imagem);
+  telas escondidas atrás de outra não animam, para poupar bateria. Quem pediu "reduzir movimento" no aparelho vê a imagem parada.
 - **O fundo do ícone da aba ativa cobria o começo do rótulo no computador.** Em telas largas (a partir de 768 px) o React Navigation põe o rótulo ao
   lado do ícone e a pílula encostava na palavra (Início, Transações...). Agora o rótulo fica sempre embaixo do ícone (`tabBarLabelPosition`), como no
   celular, que é o formato para o qual a altura da barra foi calculada. Conferido em 1280 px: 2 px de folga entre a pílula e o texto, nenhum rótulo cortado.
