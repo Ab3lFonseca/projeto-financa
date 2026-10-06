@@ -3,6 +3,7 @@ import { usePathname } from "expo-router";
 import { useEffect, useRef } from "react";
 import { api } from "@/lib/api/endpoints";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { nextFirstRunStep } from "@/lib/firstRun";
 import { log } from "@/lib/logger";
 import { isMainPath } from "@/lib/tour/steps";
 import { useTourStore } from "@/lib/tour/store";
@@ -24,6 +25,8 @@ export function TourController() {
 
   useEffect(() => {
     if (status !== "signedIn" || !me || active || me.consentRequired || me.profile.onboardingCompleted) return;
+    // Os avisos de primeiro acesso (verificação em duas etapas, teste grátis) vêm antes do tutorial: não escurecemos a tela por cima deles.
+    if (nextFirstRunStep(me) !== null) return;
     if (startedFor.current === me.id || !isMainPath(pathname)) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | undefined;

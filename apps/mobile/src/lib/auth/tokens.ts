@@ -5,6 +5,7 @@ export type Tokens = { accessToken: string; refreshToken: string; /** epoch em s
 const KEY = "session-v1";
 let cache: Tokens | null | undefined;
 const listeners = new Set<() => void>();
+const mfaListeners = new Set<(factorId: string | null) => void>();
 
 /** Tokens de sessão: guardados no Keychain/Keystore (SecureStore), com cópia em memória. */
 export const tokenStore = {
@@ -33,5 +34,13 @@ export const tokenStore = {
   },
   notifyExpired(): void {
     listeners.forEach((l) => l());
+  },
+  /** Avisado quando o servidor diz que esta sessão ainda precisa do código da verificação em duas etapas (ex.: ligada em outro aparelho). */
+  onMfaRequired(listener: (factorId: string | null) => void): () => void {
+    mfaListeners.add(listener);
+    return () => mfaListeners.delete(listener);
+  },
+  notifyMfaRequired(factorId: string | null): void {
+    mfaListeners.forEach((l) => l(factorId));
   },
 };

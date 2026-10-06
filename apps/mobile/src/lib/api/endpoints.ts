@@ -40,6 +40,11 @@ export type MonthComparison = S.MonthComparisonDTO;
 export type TransactionSummary = Out<typeof S.transactionSummaryDTO>;
 export type InvoicePayment = Out<typeof S.invoicePaymentDTO>;
 export type GoalContribution = Out<typeof S.goalContributionDTO>;
+export type MyAccount = S.MyAccountDTO;
+export type LoginResult = S.LoginResponse;
+export type MfaEnrollment = Out<typeof S.mfaEnrollDTO>;
+export type OAuthProvider = S.OAuthProviderInfo;
+export type AdminAuditEntry = S.AdminAuditEntryDTO;
 export type Billing = S.BillingDTO;
 export type Checkout = Out<typeof S.checkoutDTO>;
 export type AdminUser = S.AdminUserDTO;
@@ -83,7 +88,14 @@ const v1 = "/v1";
 
 export const api = {
   auth: {
-    login: (email: string, password: string) => http.post<Session>(`${v1}/auth/login`, { email, password }, { auth: false }),
+    /** Com a verificação em duas etapas ligada, `mfa` vem preenchido: a sessão ainda precisa do código (`mfaVerify`). */
+    login: (email: string, password: string) => http.post<LoginResult>(`${v1}/auth/login`, { email, password }, { auth: false }),
+    /** Segundo passo do login: usa a sessão "só senha" já guardada e devolve uma sessão verificada. */
+    mfaVerify: (factorId: string, code: string) => http.post<Session>(`${v1}/auth/mfa/verify`, { factorId, code }),
+    oauthProviders: () => http.get<{ providers: OAuthProvider[] }>(`${v1}/auth/oauth/providers`, { auth: false }),
+    oauthStart: (provider: string, codeChallenge: string) =>
+      http.post<{ url: string }>(`${v1}/auth/oauth/start`, { provider, codeChallenge, platform: Platform.OS === "web" ? "web" : "native" }, { auth: false }),
+    oauthExchange: (code: string, codeVerifier: string) => http.post<LoginResult>(`${v1}/auth/oauth/exchange`, { code, codeVerifier }, { auth: false }),
     // `platform` diz à API para onde o link do e-mail de confirmação deve levar (a tela /confirm-email do app ou do site).
     register: (body: In<typeof S.registerBody>) =>
       http.post<Out<typeof S.registerResponse>>(`${v1}/auth/register`, { ...body, platform: Platform.OS === "web" ? "web" : "native" }, { auth: false }),
@@ -96,9 +108,21 @@ export const api = {
   me: {
     get: () => http.get<Me>(`${v1}/me`),
     update: (body: In<typeof S.updateProfileBody>) => http.patch<Me>(`${v1}/me`, body),
-    changePassword: (currentPassword: string, newPassword: string) =>
+    /** Sem `currentPassword` só vale para quem ainda não tem senha (entrou por Google/Facebook) e fez login há pouco. */
+    changePassword: (currentPassword: string | undefined, newPassword: string) =>
       http.post<{ ok: true }>(`${v1}/me/change-password`, { currentPassword, newPassword }),
-    deleteAccount: (password: string) => http.delete<{ ok: true }>(`${v1}/me`, { body: { password, confirm: "EXCLUIR" } }),
+    /** Sem `password`, só para contas sem senha, com login recente. */
+    deleteAccount: (password?: string) => http.delete<{ ok: true }>(`${v1}/me`, { body: { password, confirm: "EXCLUIR" } }),
+    account: () => http.get<MyAccount>(`${v1}/me/account`),
+    changeEmail: (newEmail: string, password: string) =>
+      http.post<{ ok: true; pendingEmail: string }>(`${v1}/me/change-email`, { newEmail, password, platform: Platform.OS === "web" ? "web" : "native" }),
+    resetLink: () => http.post<{ ok: true }>(`${v1}/me/reset-link`),
+    securityPromptAnswered: () => http.post<{ ok: true }>(`${v1}/me/security-prompt`),
+    trialIntroSeen: () => http.post<{ ok: true }>(`${v1}/me/trial-intro-seen`),
+    mfaEnroll: () => http.post<MfaEnrollment>(`${v1}/me/mfa/enroll`),
+    /** Confirma com o primeiro código. Devolve a sessão nova (já verificada), que precisa substituir a atual. */
+    mfaEnable: (factorId: string, code: string) => http.post<Session>(`${v1}/me/mfa/enable`, { factorId, code }),
+    mfaDisable: (code: string) => http.post<{ ok: true }>(`${v1}/me/mfa/disable`, { code }),
     registerPushToken: (expoToken: string, platform: "IOS" | "ANDROID", deviceName?: string) =>
       http.post<{ ok: true }>(`${v1}/me/push-tokens`, { expoToken, platform, deviceName }),
     removePushToken: (token: string) => http.delete<{ ok: true }>(`${v1}/me/push-tokens`, { query: { token } }),
@@ -215,6 +239,14 @@ export const api = {
     /** Cortesia: `days: null` = sem prazo. */
     grantAccess: (id: string, body: { days: number | null; investments: boolean }) => http.post<AdminUser>(`${v1}/admin/users/${id}/access`, body),
     revokeAccess: (id: string) => http.delete<AdminUser>(`${v1}/admin/users/${id}/access`),
+    /** Exclusão definitiva da conta de outra pessoa (como o pedido LGPD). */
+    deleteUser: (id: string) => http.delete<{ ok: true }>(`${v1}/admin/users/${id}`, { body: { confirm: "EXCLUIR" } }),
+    setStatus: (id: string, status: "ACTIVE" | "SUSPENDED") => http.patch<AdminUser>(`${v1}/admin/users/${id}`, { status }),
+    setRole: (id: string, role: "USER" | "ADMIN") => http.post<AdminUser>(`${v1}/admin/users/${id}/role`, { role }),
+    sendPasswordReset: (id: string) => http.post<{ ok: true }>(`${v1}/admin/users/${id}/password-reset`),
+    extendTrial: (id: string, days: number) => http.post<AdminUser>(`${v1}/admin/users/${id}/trial`, { days }),
+    removeMfa: (id: string) => http.delete<AdminUser>(`${v1}/admin/users/${id}/mfa`),
+    audit: (params: { cursor?: string; limit?: number } = {}) => http.get<Page<AdminAuditEntry>>(`${v1}/admin/audit`, { query: params }),
   },
 
   diagnostics: {

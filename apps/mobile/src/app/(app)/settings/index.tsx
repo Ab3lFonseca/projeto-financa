@@ -3,8 +3,7 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { ShortcutRow } from "@/components/feature/Common";
 import { Button } from "@/components/ui/Button";
-import { SwitchRow } from "@/components/ui/Controls";
-import { TextField } from "@/components/ui/Inputs";
+import { Badge, SwitchRow } from "@/components/ui/Controls";
 import { Card, Divider, Screen, ScreenHeader, Section } from "@/components/ui/Layout";
 import { Text } from "@/components/ui/Text";
 import { api } from "@/lib/api/endpoints";
@@ -36,7 +35,6 @@ export default function SettingsScreen() {
   const themeMeta = THEME_META.find((t) => t.id === preset) ?? THEME_META[0]!;
   const lock = useLockSettings();
   const [bioAvailable, setBioAvailable] = useState(false);
-  const [name, setName] = useState(me.profile.displayName ?? "");
 
   useEffect(() => {
     void biometricsAvailable().then(setBioAvailable);
@@ -46,26 +44,23 @@ export default function SettingsScreen() {
     silent: true,
     onSuccess: () => void refreshMe(),
   });
-  const saveName = useApiMutation(() => api.me.update({ displayName: name.trim() || null }), {
-    success: "Nome atualizado",
-    onSuccess: () => void refreshMe(),
-  });
 
   const prefs = me.profile.notificationPrefs;
-  const nameChanged = name.trim() !== (me.profile.displayName ?? "");
 
   return (
     <Screen header={<ScreenHeader title="Configurações" />}>
-      <Section title="Perfil">
-        <Card style={{ gap: 12 }}>
-          <TextField label="Como quer ser chamado" value={name} onChangeText={setName} placeholder="Seu nome" maxLength={100} autoCapitalize="words" />
-          <View style={{ gap: 2 }}>
-            <Text variant="caption" tone="muted" weight="600">
-              E-mail
-            </Text>
-            <Text>{me.email}</Text>
-          </View>
-          {nameChanged ? <Button label="Salvar nome" size="sm" loading={saveName.isPending} onPress={() => saveName.mutate(undefined)} /> : null}
+      <Section title="Conta">
+        <Card style={{ paddingVertical: 6 }}>
+          <ShortcutRow icon="user" title="Minha conta" subtitle={`${me.profile.displayName || me.email.split("@")[0]} · dados, nome, e-mail e senha`} onPress={() => go("/settings/account")} color={colors.primary} />
+          <Divider inset={52} />
+          <ShortcutRow
+            icon="shield-check"
+            title="Segurança"
+            subtitle={me.security?.mfaEnabled ? "Verificação em duas etapas ligada" : "Ligue a verificação em duas etapas"}
+            badge={<Badge label={me.security?.mfaEnabled ? "Ligada" : "Desligada"} tone={me.security?.mfaEnabled ? "positive" : "warning"} />}
+            onPress={() => go("/settings/security")}
+            color="#14B8A6"
+          />
         </Card>
       </Section>
 

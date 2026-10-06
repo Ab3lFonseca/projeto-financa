@@ -2,6 +2,7 @@ import { Link, router } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 import { AuthScaffold } from "@/components/AuthScaffold";
+import { SocialButtons } from "@/components/auth/SocialButtons";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Inputs";
 import { Text } from "@/components/ui/Text";
@@ -24,8 +25,8 @@ export default function LoginScreen() {
     setBusy(true);
     setError(null);
     try {
-      await signIn(email, password);
-      router.replace("/");
+      const { mfaRequired } = await signIn(email, password);
+      router.replace(mfaRequired ? "/mfa" : "/");
     } catch (err) {
       if (err instanceof ApiError && err.code === "EMAIL_NOT_VERIFIED") {
         router.push({ pathname: "/verify-email", params: { email: email.trim() } });
@@ -65,6 +66,7 @@ export default function LoginScreen() {
           Esqueci minha senha
         </Text>
       </Link>
+      <SocialButtons verb="Entrar" separator="ou entre com" />
     </AuthScaffold>
   );
 }

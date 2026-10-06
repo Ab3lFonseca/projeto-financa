@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@app/database";
-import { ACCOUNT_CHANGE_LIMITS, accountChangeKinds, evaluateChangeLimit, type AccountChangeKindName, type myAccountDTO, type ChangeLimitState, type SecurityDTO } from "@app/shared";
+import { ACCOUNT_CHANGE_LIMITS, accountChangeKinds, evaluateChangeLimit, type AccountChangeKindName, type MyAccountDTO, type ChangeLimitState, type SecurityDTO } from "@app/shared";
 import type { Tx } from "../../lib/db";
 import { Errors } from "../../lib/errors";
 import type { AuthUser } from "../../types";
@@ -63,7 +63,7 @@ export function toSecurityDTO(user: AuthUser, mfaEnabledAt: Date | null, claims:
 }
 
 /** Dados de cadastro da própria pessoa (a tela "Minha conta"). Roda sob RLS: só enxerga o que é dela. */
-export async function buildAccount(prisma: PrismaClient, tx: Tx, user: AuthUser, claims: VerifiedToken | null, now: Date): Promise<myAccountDTO> {
+export async function buildAccount(prisma: PrismaClient, tx: Tx, user: AuthUser, claims: VerifiedToken | null, now: Date): Promise<MyAccountDTO> {
   const row = await tx.user.findUnique({ where: { id: user.id }, select: { email: true, createdAt: true, lastSeenAt: true, mfaEnabledAt: true } });
   const profile = await tx.profile.findUnique({ where: { userId: user.id }, select: { displayName: true, locale: true, timezone: true, currency: true } });
   if (!row || !profile) throw Errors.notFound("Conta");

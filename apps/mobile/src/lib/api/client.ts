@@ -172,6 +172,8 @@ async function requestInner<T>(method: string, path: string, opts: RequestOption
     const err = await toError(res);
     // Teste grátis acabou e a pessoa tentou criar/editar: convida a assinar (o aviso de erro da tela continua valendo).
     if (err.status === 402 && err.code === "SUBSCRIPTION_REQUIRED") usePaywall.getState().show();
+    // A conta passou a exigir o código da verificação em duas etapas (ligada em outro aparelho): a tela de código assume.
+    if (err.status === 401 && err.code === "MFA_REQUIRED") tokenStore.notifyMfaRequired((err.details as { factorId?: string | null } | undefined)?.factorId ?? null);
     throw err;
   }
   if (res.status === 204) return undefined as T;

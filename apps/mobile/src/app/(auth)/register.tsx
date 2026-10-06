@@ -2,6 +2,7 @@ import { Link, router } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 import { AuthScaffold } from "@/components/AuthScaffold";
+import { SocialButtons } from "@/components/auth/SocialButtons";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { TextField } from "@/components/ui/Inputs";
@@ -118,6 +119,8 @@ export default function RegisterScreen() {
         </Text>
       ) : null}
       <Button label="Criar conta" onPress={submit} loading={busy} size="lg" />
+      {/* Cadastro por Google/Facebook/...: os Termos e a Política são aceitos na tela seguinte, antes de usar o app. */}
+      <SocialButtons verb="Cadastrar" separator="ou cadastre-se com" />
     </AuthScaffold>
   );
 }

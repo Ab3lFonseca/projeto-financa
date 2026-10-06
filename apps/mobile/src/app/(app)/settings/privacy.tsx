@@ -62,7 +62,9 @@ export default function PrivacyScreen() {
     }
   };
 
-  const deleteAccount = useApiMutation(() => api.me.deleteAccount(password), {
+  // Conta sem senha (entra só por Google/Facebook): confirma com a palavra EXCLUIR e um login recente.
+  const hasPassword = me.security?.hasPassword !== false;
+  const deleteAccount = useApiMutation(() => api.me.deleteAccount(hasPassword ? password : undefined), {
     silent: false,
     onSuccess: async () => {
       setDeleting(false);
@@ -134,10 +136,17 @@ export default function PrivacyScreen() {
 
       <Sheet visible={deleting} onClose={() => setDeleting(false)} title="Excluir conta definitivamente">
         <View style={{ gap: 14 }}>
-          <Text tone="muted">Para confirmar, digite sua senha e a palavra EXCLUIR. Seus dados serão apagados e não poderão ser recuperados.</Text>
-          <TextField label="Senha" value={password} onChangeText={setPassword} secure autoCapitalize="none" autoComplete="current-password" />
+          <Text tone="muted">
+            {hasPassword
+              ? "Para confirmar, digite sua senha e a palavra EXCLUIR. Seus dados serão apagados e não poderão ser recuperados."
+              : "Para confirmar, digite a palavra EXCLUIR. Como você entra com Google/Facebook, o seu login precisa ter sido feito há poucos minutos: se der erro, saia e entre de novo. Seus dados serão apagados e não poderão ser recuperados."}
+          </Text>
+          {hasPassword ? <TextField label="Senha" value={password} onChangeText={setPassword} secure autoCapitalize="none" autoComplete="current-password" /> : null}
           <TextField label='Digite "EXCLUIR"' value={confirmText} onChangeText={setConfirmText} autoCapitalize="characters" />
-          <Button label="Excluir tudo e sair" variant="danger" loading={deleteAccount.isPending} disabled={!password || confirmText.trim().toUpperCase() !== "EXCLUIR"} onPress={() => deleteAccount.mutate(undefined)} />
+          <Text variant="caption" tone="faint">
+            Isso também cancela a assinatura, se houver, e apaga os dados nos nossos provedores.
+          </Text>
+          <Button label="Excluir tudo e sair" variant="danger" loading={deleteAccount.isPending} disabled={(hasPassword && !password) || confirmText.trim().toUpperCase() !== "EXCLUIR"} onPress={() => deleteAccount.mutate(undefined)} />
           <Button label="Cancelar" variant="ghost" onPress={() => setDeleting(false)} />
         </View>
       </Sheet>

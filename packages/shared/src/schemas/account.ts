@@ -85,7 +85,7 @@ export const myAccountDTO = z.object({
   /** O que a pessoa já registrou (só contagens dos próprios dados). */
   summary: z.object({ accounts: z.number().int(), cards: z.number().int(), transactions: z.number().int(), goals: z.number().int() }),
 });
-export type myAccountDTO = z.infer<typeof myAccountDTO>;
+export type MyAccountDTO = z.infer<typeof myAccountDTO>;
 export type SecurityDTO = z.infer<typeof securityDTO>;
 
 export const changeEmailBody = z.strictObject({
