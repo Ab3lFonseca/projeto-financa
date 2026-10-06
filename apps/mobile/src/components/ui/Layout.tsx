@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { PixelLogoBackdrop } from "@/components/art/PixelLogo";
 import { goBack } from "@/lib/navigation";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Icon } from "../Icon";
@@ -140,11 +141,14 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, header,
   );
   const content = (
     <Animated.View entering={FadeIn.duration(motion.base)} style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top, overflow: background ? "hidden" : "visible" }}>
+      {/* Fundo: o da tela, se houver; senão, a logo do app desfocada e se desfazendo em pixels (bem apagada). */}
       {background ? (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
           {background}
         </View>
-      ) : null}
+      ) : (
+        <PixelLogoBackdrop />
+      )}
       {header}
       {body}
       {footer ? <View style={{ padding: 16, paddingBottom: 16 + (tabs ? 0 : insets.bottom), backgroundColor: colors.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>{footer}</View> : null}

@@ -64,7 +64,7 @@ describe("Minha conta: dados de cadastro", () => {
     const a = res.body;
     expect(a).toMatchObject({ id: u.id, email: u.email, displayName: null, locale: "pt-BR", timezone: "America/Sao_Paulo", currency: "BRL" });
     expect(a.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(a.legal).toMatchObject({ termsVersion: "2026-10-01", privacyVersion: "2026-10-01", marketingOptIn: false });
+    expect(a.legal).toMatchObject({ termsVersion: "2026-10-07", privacyVersion: "2026-10-07", marketingOptIn: false });
     expect(a.legal.termsAcceptedAt).not.toBeNull();
     expect(a.security).toEqual({ mfa: { enabled: false, enabledAt: null }, hasPassword: true, providers: ["email"], canChangeEmail: true });
     expect(a.summary.accounts).toBe(1);

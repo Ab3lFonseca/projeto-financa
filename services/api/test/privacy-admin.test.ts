@@ -6,7 +6,7 @@ import { createWorld } from "./helpers/factories";
 
 let env: TestEnv;
 beforeAll(async () => {
-  env = await createTestEnv(); // "hoje" = 2026-10-04; termos vigentes = 2026-10-01
+  env = await createTestEnv(); // "hoje" = 2026-10-04; termos vigentes = 2026-10-07
 });
 afterAll(async () => {
   await env.close();
@@ -31,13 +31,13 @@ describe("consentimento (LGPD)", () => {
     expect((await u.get("/v1/dashboard")).status).toBe(403);
 
     const before = (await u.get("/v1/privacy/consents")).body;
-    expect(before.legalVersions).toEqual({ terms: "2026-10-01", privacy: "2026-10-01" });
+    expect(before.legalVersions).toEqual({ terms: "2026-10-07", privacy: "2026-10-07" });
     expect(before.current).toEqual([]);
 
-    expect((await u.post("/v1/privacy/consents", { type: "TERMS", version: "2026-10-01", granted: true })).status).toBe(200);
+    expect((await u.post("/v1/privacy/consents", { type: "TERMS", version: "2026-10-07", granted: true })).status).toBe(200);
     // ainda falta a Política de Privacidade
     expect((await u.get("/v1/accounts")).status).toBe(403);
-    await u.post("/v1/privacy/consents", { type: "PRIVACY", version: "2026-10-01", granted: true });
+    await u.post("/v1/privacy/consents", { type: "PRIVACY", version: "2026-10-07", granted: true });
     expect((await u.get("/v1/accounts")).status).toBe(200);
     expect((await u.get("/v1/me")).body.consentRequired).toBe(false);
   });
@@ -48,17 +48,17 @@ describe("consentimento (LGPD)", () => {
     const old = await u.post("/v1/privacy/consents", { type: "TERMS", version: "2020-01-01", granted: true });
     expect(old.status).toBe(422);
     expect(old.body.error.code).toBe("OUTDATED_VERSION");
-    expect(old.body.error.details.expectedVersion).toBe("2026-10-01");
-    const revoke = await u.post("/v1/privacy/consents", { type: "PRIVACY", version: "2026-10-01", granted: false });
+    expect(old.body.error.details.expectedVersion).toBe("2026-10-07");
+    const revoke = await u.post("/v1/privacy/consents", { type: "PRIVACY", version: "2026-10-07", granted: false });
     expect(revoke.body.error.code).toBe("CANNOT_REVOKE_REQUIRED");
   });
 
   it("marketing e Open Finance: concede e revoga a qualquer momento", async () => {
     const u = await env.newUser();
     await u.get("/v1/me");
-    const granted = await u.post("/v1/privacy/consents", { type: "MARKETING", version: "2026-10-01", granted: true });
+    const granted = await u.post("/v1/privacy/consents", { type: "MARKETING", version: "2026-10-07", granted: true });
     expect(granted.body.current.find((c: any) => c.type === "MARKETING").revokedAt).toBeNull();
-    const revoked = await u.post("/v1/privacy/consents", { type: "MARKETING", version: "2026-10-01", granted: false });
+    const revoked = await u.post("/v1/privacy/consents", { type: "MARKETING", version: "2026-10-07", granted: false });
     expect(revoked.body.current.find((c: any) => c.type === "MARKETING").revokedAt).toBeTruthy();
     expect((await u.get("/v1/accounts")).status).toBe(200);
   });
@@ -66,11 +66,11 @@ describe("consentimento (LGPD)", () => {
   it("nova versão dos termos exige novo aceite", async () => {
     const v2 = await createTestEnv({ LEGAL_TERMS_VERSION: "2027-01-01" });
     try {
-      // usuário aceitou a versão antiga (2026-10-01) no cadastro
+      // usuário aceitou a versão antiga (2026-10-07) no cadastro
       const u = await v2.newUser();
       await v2.prisma.consent.deleteMany({ where: { userId: u.id } });
       await u.get("/v1/me");
-      await v2.prisma.consent.updateMany({ where: { userId: u.id, type: "TERMS" }, data: { version: "2026-10-01" } });
+      await v2.prisma.consent.updateMany({ where: { userId: u.id, type: "TERMS" }, data: { version: "2026-10-07" } });
       v2.app.users.invalidate(u.id);
       const gate = await u.get("/v1/accounts");
       expect(gate.status).toBe(403);
@@ -85,7 +85,7 @@ describe("consentimento (LGPD)", () => {
   it("registra o aceite feito no cadastro como consentimento", async () => {
     const res = await env.anon.post("/v1/auth/register", {
       email: "cadastro-lgpd@teste.dev", password: "senhaForte123", acceptTerms: true, acceptPrivacy: true,
-      termsVersion: "2026-10-01", privacyVersion: "2026-10-01", marketingOptIn: true,
+      termsVersion: "2026-10-07", privacyVersion: "2026-10-07", marketingOptIn: true,
     });
     const token = res.body.session.accessToken;
     const consents = (await env.anon.get("/v1/privacy/consents", { token })).body.current.map((c: any) => c.type).sort();

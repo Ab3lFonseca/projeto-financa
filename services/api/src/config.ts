@@ -78,8 +78,8 @@ const schema = z
     /** Segredo para HMAC de IPs (consentimentos/auditoria). Nunca armazenamos IP em claro. */
     IP_HASH_PEPPER: z.string().min(16, "IP_HASH_PEPPER precisa de ao menos 16 caracteres").default("dev-only-pepper-change-me"),
 
-    LEGAL_TERMS_VERSION: z.string().default("2026-10-01"),
-    LEGAL_PRIVACY_VERSION: z.string().default("2026-10-01"),
+    LEGAL_TERMS_VERSION: z.string().default("2026-10-07"),
+    LEGAL_PRIVACY_VERSION: z.string().default("2026-10-07"),
 
     /**
      * IDs (UUID, separados por vírgula) de quem é SEMPRE administrador. Ao entrar, a conta listada é promovida a ADMIN no

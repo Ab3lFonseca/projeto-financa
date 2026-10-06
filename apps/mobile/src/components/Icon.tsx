@@ -1,6 +1,16 @@
 // Importa cada ícone individualmente (lucide-react-native/icons/<nome>) para não embutir os ~1.500 ícones.
 import type { ComponentType } from "react";
 import Apple from "lucide-react-native/icons/apple";
+import BadgeInfo from "lucide-react-native/icons/badge-info";
+import Ban from "lucide-react-native/icons/ban";
+import Copyright from "lucide-react-native/icons/copyright";
+import Database from "lucide-react-native/icons/database";
+import HandHeart from "lucide-react-native/icons/hand-heart";
+import Scale from "lucide-react-native/icons/scale";
+import ShieldAlert from "lucide-react-native/icons/shield-alert";
+import LifeBuoy from "lucide-react-native/icons/life-buoy";
+import MessageCircle from "lucide-react-native/icons/message-circle";
+import Undo2 from "lucide-react-native/icons/undo-2";
 import ArrowDownLeft from "lucide-react-native/icons/arrow-down-left";
 import ArrowLeft from "lucide-react-native/icons/arrow-left";
 import ArrowLeftRight from "lucide-react-native/icons/arrow-left-right";
@@ -159,6 +169,8 @@ const ICONS = {
   "trending-up": TrendingUp, "triangle-alert": TriangleAlert, "trophy": Trophy, "tv": Tv, "user": User, "users": Users,
   "utensils": Utensils, "wallet": Wallet, "wallet-cards": WalletCards, "wifi": Wifi, "wifi-off": WifiOff,
   "wrench": Wrench, "x": X, "zap": Zap,
+  "badge-info": BadgeInfo, "ban": Ban, "copyright": Copyright, "database": Database, "hand-heart": HandHeart, "scale": Scale,
+  "shield-alert": ShieldAlert, "undo-2": Undo2, "life-buoy": LifeBuoy, "message-circle": MessageCircle,
 } satisfies Record<string, IconComponent>;
 
 export type IconName = keyof typeof ICONS;

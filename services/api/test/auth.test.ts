@@ -16,8 +16,8 @@ const registerBody = (email: string, extra: Record<string, unknown> = {}) => ({
   password: "senhaForte123",
   acceptTerms: true,
   acceptPrivacy: true,
-  termsVersion: "2026-10-01",
-  privacyVersion: "2026-10-01",
+  termsVersion: "2026-10-07",
+  privacyVersion: "2026-10-07",
   ...extra,
 });
 

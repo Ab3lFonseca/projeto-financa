@@ -13,6 +13,7 @@ import { Card, Divider, IconBadge, ListRow, Screen, ScreenHeader, Section } from
 import { Money } from "@/components/ui/Money";
 import { Sheet } from "@/components/ui/Sheet";
 import { api } from "@/lib/api/endpoints";
+import { celebrate } from "@/lib/celebrate";
 import { formatDateShort } from "@/lib/format";
 import { useApiMutation, useGoal, useToday } from "@/lib/hooks";
 import { confirmDialog } from "@/lib/ui-store";
@@ -37,7 +38,23 @@ export default function GoalDetailScreen() {
 
   const contribute = useApiMutation(
     () => api.goals.contribute(id!, { amountCents: kind === "in" ? amount! : -amount!, occurredOn: date, notes: notes.trim() || null }),
-    { success: kind === "in" ? "Aporte registrado" : "Resgate registrado", onSuccess: () => { setSheet(false); setAmount(null); setNotes(""); } },
+    {
+      // Aporte ganha uma comemoração (dinheiro guardado); completar a meta ganha a grande, com foguete e confete.
+      success: kind === "in" ? undefined : "Resgate registrado",
+      onSuccess: (updated, _vars) => {
+        const saved = kind === "in" ? amount ?? 0 : 0;
+        setSheet(false);
+        setAmount(null);
+        setNotes("");
+        if (kind !== "in" || saved <= 0) return;
+        const wasAchieved = goal?.status === "ACHIEVED";
+        if (updated.status === "ACHIEVED" && !wasAchieved) {
+          celebrate({ kind: "goal", title: "Meta alcançada!", message: `Você completou “${updated.name}”. Que orgulho de você!`, amountCents: updated.targetCents, actionLabel: "Ver minhas metas", onAction: () => router.push("/goals" as never) });
+        } else {
+          celebrate({ kind: "saved", title: "Mais perto do sonho!", message: `Você guardou para “${updated.name}”.`, amountCents: saved, progressPct: Math.min(100, updated.progressPct) });
+        }
+      },
+    },
   );
   const removeContribution = useApiMutation((cid: string) => api.goals.removeContribution(id!, cid), { success: "Lançamento removido" });
   const archive = useApiMutation((archived: boolean) => api.goals.update(id!, { status: archived ? "ARCHIVED" : "ACTIVE" }), { success: "Meta atualizada" });

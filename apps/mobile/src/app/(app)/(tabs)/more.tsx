@@ -102,6 +102,8 @@ export default function MoreScreen() {
           <ShortcutRow icon="graduation-cap" title="Tutorial do app" subtitle="Reveja o que o Finança faz, passo a passo" onPress={() => useTourStore.getState().start("manual")} color={colors.accent} />
         </TourTarget>
         <Divider inset={52} />
+        <ShortcutRow icon="life-buoy" title="Ajuda e suporte" subtitle="WhatsApp, e-mail e dúvidas rápidas" onPress={() => go("/support")} color="#22C55E" />
+        <Divider inset={52} />
         <ShortcutRow icon="shield-check" title="Privacidade e dados" subtitle="Consentimentos, exportar e excluir" onPress={() => go("/settings/privacy")} color="#14B8A6" />
         <Divider inset={52} />
         <ShortcutRow icon="file-text" title="Termos de Uso" onPress={() => go("/legal/terms")} color="#94A3B8" />

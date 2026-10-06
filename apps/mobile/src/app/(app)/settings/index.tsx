@@ -88,6 +88,8 @@ export default function SettingsScreen() {
             }}
             color={colors.accent}
           />
+          <Divider inset={52} />
+          <ShortcutRow icon="life-buoy" title="Ajuda e suporte" subtitle="Fale com a gente pelo WhatsApp ou e-mail" onPress={() => go("/support")} color="#22C55E" />
         </Card>
       </Section>
 

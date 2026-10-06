@@ -1,13 +1,14 @@
 import NetInfo from "@react-native-community/netinfo";
 import { focusManager, onlineManager } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { Slot, usePathname, type ErrorBoundaryProps } from "expo-router";
+import { Stack, usePathname, type ErrorBoundaryProps } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { AppState, Platform, Pressable, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { CelebrationHost } from "@/components/celebration/CelebrationHost";
 import { PaywallHost } from "@/components/PaywallHost";
 import { TourController } from "@/components/tour/TourController";
 import { TourOverlay } from "@/components/tour/TourOverlay";
@@ -96,13 +97,21 @@ function Background() {
 }
 
 function Shell() {
-  const { scheme } = useTheme();
+  const { scheme, colors } = useTheme();
   return (
     <>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <Background />
       <AppLockGate>
-        <Slot />
+        {/*
+          Pilha de telas na raiz (e não `Slot`): telas como Termos de Uso, Política de Privacidade e Suporte abrem POR CIMA da tela atual, que
+          continua montada embaixo. Com `Slot` a tela de baixo era descartada e o "voltar" caía sempre no Início (e quem estava preenchendo o
+          cadastro perdia o que digitou ao ler os Termos). Troca entre entrada e app é só um fade.
+        */}
+        <Stack screenOptions={{ headerShown: false, animation: "fade", contentStyle: { backgroundColor: colors.bg } }}>
+          <Stack.Screen name="legal/[doc]" options={{ animation: "slide_from_right" }} />
+          <Stack.Screen name="support" options={{ animation: "slide_from_right" }} />
+        </Stack>
         <TourController />
       </AppLockGate>
       {/* Abaixo do bloqueio por biometria (z 2000) e dos avisos (z 1000): o tutorial nunca cobre um nem o outro. */}
@@ -110,6 +119,7 @@ function Shell() {
       <ToastHost />
       <ConfirmHost />
       <PaywallHost />
+      <CelebrationHost />
     </>
   );
 }

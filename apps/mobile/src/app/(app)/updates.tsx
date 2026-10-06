@@ -1,20 +1,19 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
+import { HeroBanner, type BannerTone } from "@/components/art/HeroBanner";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Controls";
-import { GoChevron, PressableRow } from "@/components/ui/Interactive";
-import { Card, Divider, IconBadge, Reveal, Screen, ScreenHeader, Section } from "@/components/ui/Layout";
+import { Reveal, Screen, ScreenHeader } from "@/components/ui/Layout";
 import { Sheet } from "@/components/ui/Sheet";
 import { Text } from "@/components/ui/Text";
 import { itemsByStatus, ROADMAP_SECTIONS, roadmapItem, type RoadmapItem, type RoadmapStatus } from "@/content/roadmap";
 import { useTheme } from "@/theme/ThemeProvider";
 
-const STATUS_BADGE: Record<RoadmapStatus, { label: string; tone: "primary" | "warning" | "positive" }> = {
-  building: { label: "Em desenvolvimento", tone: "primary" },
-  soon: { label: "Em breve", tone: "warning" },
-  done: { label: "Disponível", tone: "positive" },
+const STATUS_LOOK: Record<RoadmapStatus, { tone: BannerTone; badge: string; rocket: boolean }> = {
+  building: { tone: "primary", badge: "Em desenvolvimento", rocket: true },
+  soon: { tone: "violet", badge: "Em breve", rocket: false },
+  done: { tone: "positive", badge: "Já disponível", rocket: false },
 };
 
 const monthLabel = (since: string) => {
@@ -23,7 +22,7 @@ const monthLabel = (since: string) => {
   return `${names[Number(m) - 1]} de ${y}`;
 };
 
-/** Mural: o que já chegou e o que está a caminho. Itens com explicação abrem uma folha (para que serve, como vai funcionar, o que esperar). */
+/** Mural de novidades em banners: degradê, mensagem centralizada, brilhos que piscam e foguete no que está sendo construído agora. */
 export default function UpdatesScreen() {
   const params = useLocalSearchParams<{ item?: string }>();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -35,78 +34,59 @@ export default function UpdatesScreen() {
   }, [params.item]);
 
   const open = roadmapItem(openId ?? undefined);
+  let order = 0;
   return (
     <Screen header={<ScreenHeader title="Novidades" subtitle="O que já chegou e o que vem por aí" />}>
-      {ROADMAP_SECTIONS.map((section, si) => {
+      <HeroBanner tone="slate" icon="rocket" badge="Mural do Finança" title="Estamos sempre construindo" subtitle="Veja o que já chegou e o que vem por aí. Sem datas marcadas: preferimos lançar quando estiver bom." rocket />
+
+      {ROADMAP_SECTIONS.map((section) => {
         const items = itemsByStatus(section.status);
         if (items.length === 0) return null;
         return (
-          <Reveal key={section.status} index={si}>
-            <Section title={section.title}>
-              <Text variant="caption" tone="muted" style={{ marginTop: -6 }}>
-                {section.hint}
-              </Text>
-              <Card style={{ paddingVertical: 6 }}>
-                {items.map((item, i) => (
-                  <View key={item.id}>
-                    {i > 0 ? <Divider inset={52} /> : null}
-                    <UpdateRow item={item} onOpen={() => setOpenId(item.id)} />
-                  </View>
-                ))}
-              </Card>
-            </Section>
-          </Reveal>
+          <View key={section.status} style={{ gap: 12 }}>
+            <Reveal index={order + 1}>
+              <View style={{ alignItems: "center", gap: 2, paddingTop: 8 }}>
+                <Text variant="heading">{section.title}</Text>
+                <Text variant="caption" tone="muted">
+                  {section.hint}
+                </Text>
+              </View>
+            </Reveal>
+            {items.map((item) => {
+              const look = STATUS_LOOK[item.status];
+              const delay = 120 + 90 * order++;
+              return (
+                <HeroBanner
+                  key={item.id}
+                  compact
+                  tone={look.tone}
+                  icon={item.icon}
+                  badge={item.status === "done" && item.since ? `${look.badge} · ${monthLabel(item.since)}` : look.badge}
+                  title={item.title}
+                  subtitle={item.summary}
+                  rocket={look.rocket}
+                  delay={delay}
+                  hint={item.preview ? "Toque para ver como vai funcionar" : undefined}
+                  onPress={item.preview ? () => setOpenId(item.id) : undefined}
+                />
+              );
+            })}
+          </View>
         );
       })}
-      <Text variant="caption" tone="faint" align="center">
-        Sem datas marcadas de propósito: preferimos lançar quando estiver bom. Novidades aparecem aqui.
-      </Text>
       <PreviewSheet item={open} onClose={() => setOpenId(null)} />
     </Screen>
   );
 }
 
-/** Linha do mural. O resumo pode ocupar várias linhas; itens com explicação são tocáveis. */
-function UpdateRow({ item, onOpen }: { item: RoadmapItem; onOpen: () => void }) {
-  const body = (hovered?: boolean) => (
-    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, paddingVertical: item.preview ? 10 : 12 }}>
-      <IconBadge icon={item.icon} size={40} />
-      <View style={{ flex: 1, gap: 4 }}>
-        <Text weight="600">{item.title}</Text>
-        <Text variant="bodySm" tone="muted">
-          {item.summary}
-        </Text>
-        {item.status === "done" && item.since ? (
-          <Text variant="caption" tone="faint">
-            {monthLabel(item.since)}
-          </Text>
-        ) : null}
-      </View>
-      {item.preview ? <GoChevron hovered={hovered} /> : null}
-    </View>
-  );
-  if (!item.preview) return body();
-  return (
-    <PressableRow onPress={onOpen} label={item.title}>
-      {({ hovered }) => body(hovered)}
-    </PressableRow>
-  );
-}
-
 function PreviewSheet({ item, onClose }: { item: RoadmapItem | undefined; onClose: () => void }) {
   const { colors } = useTheme();
+  const look = item ? STATUS_LOOK[item.status] : null;
   return (
-    <Sheet visible={!!item} onClose={onClose} title={item?.title}>
-      {item?.preview ? (
+    <Sheet visible={!!item} onClose={onClose}>
+      {item?.preview && look ? (
         <View style={{ gap: 18, paddingBottom: 8 }}>
-          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-            <Badge label={STATUS_BADGE[item.status].label} tone={STATUS_BADGE[item.status].tone} />
-            {item.since ? (
-              <Text variant="caption" tone="muted">
-                {monthLabel(item.since)}
-              </Text>
-            ) : null}
-          </View>
+          <HeroBanner compact tone={look.tone} icon={item.icon} badge={look.badge} title={item.title} rocket={look.rocket} />
           <Block title="Para que serve">
             <Text tone="muted">{item.preview.purpose}</Text>
           </Block>

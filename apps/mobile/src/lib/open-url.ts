@@ -11,3 +11,16 @@ export async function openExternal(url: string): Promise<void> {
   }
   await Linking.openURL(url);
 }
+
+/**
+ * Abre um link que leva a OUTRO aplicativo (e-mail, WhatsApp). Na web, o WhatsApp abre numa aba nova, para a pessoa não perder o app;
+ * `mailto:` abre o programa de e-mail sem sair da página.
+ */
+export async function openLink(url: string): Promise<void> {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    if (url.startsWith("mailto:")) window.location.href = url;
+    else window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  await Linking.openURL(url);
+}

@@ -10,4 +10,4 @@ const apiWarning = localApiOnPublicHost((globalThis as { location?: { hostname?:
 if (apiWarning) console.error(`[config] ${apiWarning}`);
 
 /** Versão dos documentos legais exibidos/aceitos no cadastro (deve acompanhar a API). */
-export const LEGAL_VERSION = "2026-10-01";
+export const LEGAL_VERSION = "2026-10-07";
