@@ -30,6 +30,28 @@ export function themeRows(themes: AdminStatsDTO["themes"]): ThemeRow[] {
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "pt-BR"));
 }
 
+export type ActionLook = { icon: string; tone: "default" | "positive" | "negative" | "warning" | "primary"; verb: string };
+
+const ACTIONS: Record<string, ActionLook> = {
+  "admin.user.deleted": { icon: "trash", tone: "negative", verb: "Excluiu a conta de" },
+  "admin.user.suspended": { icon: "ban", tone: "warning", verb: "Suspendeu a conta de" },
+  "admin.user.reactivated": { icon: "circle-check", tone: "positive", verb: "Reativou a conta de" },
+  "admin.user.role_changed": { icon: "shield", tone: "primary", verb: "Mudou o papel de" },
+  "admin.user.password_reset_sent": { icon: "mail", tone: "default", verb: "Enviou a redefinição de senha a" },
+  "admin.user.viewed": { icon: "eye", tone: "default", verb: "Abriu o cadastro de" },
+  "admin.users.listed": { icon: "users", tone: "default", verb: "Consultou a lista de usuários" },
+  "admin.access.granted": { icon: "gift", tone: "positive", verb: "Concedeu acesso gratuito a" },
+  "admin.access.revoked": { icon: "undo-2", tone: "warning", verb: "Retirou o acesso gratuito de" },
+  "admin.trial.extended": { icon: "clock", tone: "primary", verb: "Prorrogou o teste de" },
+  "admin.mfa.removed": { icon: "smartphone", tone: "warning", verb: "Desligou a verificação em duas etapas de" },
+  "admin.bootstrap": { icon: "crown", tone: "primary", verb: "Virou administrador pela configuração do servidor" },
+};
+
+/** Como uma ação registrada na auditoria aparece na tela de atividade (ícone, cor e verbo em português). Ação desconhecida não quebra. */
+export function describeAdminAction(action: string): ActionLook {
+  return ACTIONS[action] ?? { icon: "file-text", tone: "default", verb: action.replace(/^admin\./, "").replace(/[._]/g, " ") };
+}
+
 /** Inicial para o avatar: primeira letra do nome (ou do e-mail, se a pessoa não tem nome). */
 export function userInitial(displayName: string | null, email: string): string {
   const source = (displayName?.trim() || email.trim()).replace(/^[^\p{L}\p{N}]+/u, "");

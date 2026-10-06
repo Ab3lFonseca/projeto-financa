@@ -69,6 +69,7 @@ function Dashboard() {
           <StatTile label="Ativos em 7 dias" value={users.activeLast7Days} tone="primary" hint="usaram o app" />
           <StatTile label="Concluíram o tutorial" value={rate ?? 0} suffix="%" tone="positive" hint={`${users.onboardingCompleted} de ${users.total}`} />
           <StatTile label="Premium" value={users.premium} tone="primary" />
+          <StatTile label="Com verificação em 2 etapas" value={users.mfaEnabled} tone="positive" hint={`${users.total > 0 ? Math.round((users.mfaEnabled / users.total) * 100) : 0}% das contas`} />
           <StatTile label="Suspensos" value={users.suspended} tone={users.suspended > 0 ? "negative" : "primary"} />
         </View>
       </Reveal>
@@ -183,6 +184,8 @@ function Dashboard() {
       <Reveal index={4}>
         <Card style={{ paddingVertical: 6 }}>
           <ShortcutRow icon="users" title="Usuários" subtitle="Nomes, e-mails, planos e situação das contas" onPress={() => go("/admin/users")} color={colors.accent} />
+          <Divider inset={52} />
+          <ShortcutRow icon="list-checks" title="Atividade dos administradores" subtitle="Quem fez o quê, em qual conta e quando" onPress={() => go("/admin/activity")} color="#14B8A6" />
           <Divider inset={52} />
           <ShortcutRow icon="file-text" title="Diagnóstico do app" subtitle="Erros e respostas da API deste aparelho" onPress={() => go("/settings/diagnostics")} color="#64748B" />
         </Card>

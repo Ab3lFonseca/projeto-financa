@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { fillSignups, onboardingRate, themeRows, userInitial, userLabel } from "./admin";
+import { describeAdminAction, fillSignups, onboardingRate, themeRows, userInitial, userLabel } from "./admin";
+
+describe("describeAdminAction", () => {
+  it("traduz cada ação da auditoria em verbo, ícone e cor", () => {
+    expect(describeAdminAction("admin.user.deleted")).toMatchObject({ icon: "trash", tone: "negative", verb: "Excluiu a conta de" });
+    expect(describeAdminAction("admin.trial.extended").verb).toBe("Prorrogou o teste de");
+    expect(describeAdminAction("admin.mfa.removed").tone).toBe("warning");
+    expect(describeAdminAction("admin.bootstrap").verb).toMatch(/administrador/);
+  });
+  it("ação desconhecida (de uma versão mais nova do servidor) aparece de forma legível e nunca quebra", () => {
+    expect(describeAdminAction("admin.algo.novo_aqui")).toEqual({ icon: "file-text", tone: "default", verb: "algo novo aqui" });
+  });
+});
 
 describe("fillSignups", () => {
   it("devolve sempre `days` dias seguidos, terminando hoje, com 0 nos dias sem cadastro", () => {

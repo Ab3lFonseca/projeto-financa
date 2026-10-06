@@ -88,6 +88,15 @@ export const useAdminUsers = (search: string, enabled = true) =>
     placeholderData: keepPreviousData,
     enabled,
   });
+/** Atividade dos administradores (quem fez o quê, em qual conta, quando), do mais recente para o mais antigo. */
+export const useAdminAudit = (enabled = true) =>
+  useInfiniteQuery({
+    queryKey: ["admin", "audit"],
+    queryFn: ({ pageParam }) => api.admin.audit({ cursor: pageParam, limit: 30 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.page.nextCursor ?? undefined,
+    enabled,
+  });
 export const useAdminUser = (id: string | null) => useQuery({ queryKey: ["admin", "user", id], queryFn: () => api.admin.user(id!), enabled: !!id });
 
 export const useOpenFinanceStatus = () => useQuery({ queryKey: ["of-status"], queryFn: api.openFinance.status });
