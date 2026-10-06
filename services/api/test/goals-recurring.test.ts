@@ -99,15 +99,16 @@ describe("metas", () => {
     expect((await b.user.get("/v1/goals")).body.data).toHaveLength(0);
   });
 
-  it("plano gratuito: no máximo 2 metas ativas", async () => {
+  it("cobrança ligada: sem limite de metas no teste grátis; vencido o teste, criar meta responde 402 SUBSCRIPTION_REQUIRED", async () => {
     const billing = await createTestEnv({ BILLING_ENFORCED: "true" });
     try {
       const u = await billing.newUser();
-      expect((await u.post("/v1/goals", { name: "A", targetCents: 1000 })).status).toBe(201);
-      expect((await u.post("/v1/goals", { name: "B", targetCents: 1000 })).status).toBe(201);
-      const third = await u.post("/v1/goals", { name: "C", targetCents: 1000 });
-      expect(third.status).toBe(402);
-      expect(third.body.error.code).toBe("PLAN_LIMIT_REACHED");
+      for (const name of ["A", "B", "C"]) expect((await u.post("/v1/goals", { name, targetCents: 1000 })).status).toBe(201);
+      await billing.expireTrial(u.id);
+      const blocked = await u.post("/v1/goals", { name: "D", targetCents: 1000 });
+      expect(blocked.status).toBe(402);
+      expect(blocked.body.error.code).toBe("SUBSCRIPTION_REQUIRED");
+      expect((await u.get("/v1/goals")).body.data).toHaveLength(3);
     } finally {
       await billing.close();
     }

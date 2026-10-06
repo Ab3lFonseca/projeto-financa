@@ -7,7 +7,9 @@ import type { OpCtx, Tx } from "../../lib/db";
 import { dateOut, num, tsOut } from "../../lib/dto";
 import { AppError, Errors } from "../../lib/errors";
 import { decodeCursor, encodeCursor, slicePage } from "../../lib/pagination";
-import { limitsFor, resolvePlan } from "../../lib/plan";
+import { planOf, type AccessConfig } from "../../lib/access";
+import { loadAccess } from "../../lib/access-db";
+import { limitsFor } from "../../lib/plan";
 import type { AuthUser } from "../../types";
 import { createNotifications, type NewNotification } from "../notifications/service";
 import type { PushNotifier } from "../notifications/notifier";
@@ -26,7 +28,8 @@ export type OfDeps = {
   provider: OpenFinanceProvider;
   notifier: PushNotifier;
   now: () => Date;
-  billingEnforced: boolean;
+  /** Regra de acesso (cobrança ligada, dias de teste...): decide se a pessoa tem o plano que inclui o Open Finance. */
+  access: AccessConfig;
   pepper: string;
   /** Deep link do app para onde o banco devolve o usuário após autorizar. */
   redirectUri?: string;
@@ -138,10 +141,9 @@ export async function getConnectionDTO(prisma: PrismaClient, userId: string, id:
 
 // ---------------------------------------------------------------------------- plano e consentimento
 
-export async function userHasOpenFinance(deps: Pick<OfDeps, "prisma" | "billingEnforced" | "now">, userId: string): Promise<boolean> {
-  const subscription = await deps.prisma.subscription.findUnique({ where: { userId } });
-  const plan = resolvePlan(subscription, deps.billingEnforced, deps.now());
-  return limitsFor(plan).openFinance;
+export async function userHasOpenFinance(deps: Pick<OfDeps, "prisma" | "access" | "now">, userId: string): Promise<boolean> {
+  const access = await loadAccess(deps.prisma, userId, deps.access, deps.now());
+  return access ? limitsFor(planOf(access)).openFinance : false;
 }
 
 export async function hasOpenFinanceConsent(tx: Tx | PrismaClient, userId: string): Promise<boolean> {
@@ -330,7 +332,7 @@ async function syncConnectionOnce(deps: OfDeps, connectionId: string): Promise<S
   }
 
   const info = { id: conn.id, userId, institutionName: item.institutionName.slice(0, 120) };
-  const autoDeps = { prisma, notifier: deps.notifier, now: deps.now, billingEnforced: deps.billingEnforced, log: deps.log };
+  const autoDeps = { prisma, notifier: deps.notifier, now: deps.now, access: deps.access, log: deps.log };
 
   let links = await prisma.bankConnectionAccount.findMany({ where: { connectionId: conn.id, userId } });
   const createdAccounts = new Map<string, { accountId: string; balanceCents: number | null }>();

@@ -30,6 +30,16 @@ export function registerAuthHooks(app: FastifyInstance): void {
     }
   });
 
+  // Depois do teste grátis e sem assinatura o app fica SOMENTE LEITURA: consultar e exportar continuam (a pessoa não perde os dados),
+  // criar e editar respondem 402 SUBSCRIPTION_REQUIRED. Administradores, cortesias, assinantes e o beta nunca caem aqui.
+  const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+  app.decorate("requireActiveAccess", async (req) => {
+    if (SAFE_METHODS.has(req.method) || req.user?.access.allowed) return;
+    // Marcar notificação como lida não é editar dados.
+    if (req.routeOptions.url?.startsWith("/v1/notifications")) return;
+    throw Errors.subscriptionRequired();
+  });
+
   app.decorate("requireAdmin", async (req) => {
     if (req.user?.role !== "ADMIN") throw Errors.forbidden("Acesso restrito a administradores");
   });

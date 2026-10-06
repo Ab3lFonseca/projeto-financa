@@ -49,15 +49,20 @@ describe("disponibilidade e acesso", () => {
     }
   });
 
-  it("plano gratuito (com cobrança ligada) recebe 402; no beta todos têm acesso", async () => {
+  it("teste vencido e sem assinatura (cobrança ligada) recebe 402; no beta todos têm acesso", async () => {
     const paid = await createTestEnv({ OPEN_FINANCE_ENABLED: "true", BILLING_ENFORCED: "true" }, { openFinanceProvider: provider });
     try {
       const w = await createWorld(paid);
+      await paid.expireTrial(w.user.id);
       const status = await w.user.get("/v1/open-finance/status");
       expect(status.body).toMatchObject({ enabled: true, allowedByPlan: false });
+      // Ler a lista de bancos pede o plano; já criar a conexão (escrita) cai antes no somente leitura.
+      const connectors = await w.user.get("/v1/open-finance/connectors");
+      expect(connectors.status).toBe(402);
+      expect(connectors.body.error.details.feature).toBe("openFinance");
       const res = await w.user.post("/v1/open-finance/connect-token", {});
       expect(res.status).toBe(402);
-      expect(res.body.error.details.feature).toBe("openFinance");
+      expect(res.body.error.code).toBe("SUBSCRIPTION_REQUIRED");
     } finally {
       await paid.close();
     }
@@ -123,6 +128,7 @@ describe("bancos regulados (widget só lista estes)", () => {
     const paid = await createTestEnv({ OPEN_FINANCE_ENABLED: "true", BILLING_ENFORCED: "true" }, { openFinanceProvider: provider });
     try {
       const w = await createWorld(paid);
+      await paid.expireTrial(w.user.id);
       expect((await w.user.get("/v1/open-finance/connectors")).status).toBe(402);
     } finally {
       await paid.close();
@@ -524,8 +530,9 @@ describe("webhook do provedor", () => {
       const { itemId, accountIds } = paidProvider.addItem(w.user.id, { accounts: [{ kind: "BANK", name: "CC", txs: [{ description: "X" }] }] });
       const reg = (await w.user.post("/v1/open-finance/connections", { itemId, autoImport: false })).body;
       await w.user.put(`/v1/open-finance/connections/${reg.id}/accounts/${accountIds[0]}`, { accountId: w.account.id });
-      // simula plano gratuito: liga a cobrança no runtime e deixa o usuário sem assinatura
-      (paid.app.openFinance!.deps as { billingEnforced: boolean }).billingEnforced = true;
+      // simula o fim do teste grátis sem assinatura: liga a cobrança no runtime e deixa a conta antiga (teste de 30 dias vencido)
+      paid.app.openFinance!.deps.access.billingEnforced = true;
+      await paid.expireTrial(w.user.id);
       await paid.anon.post("/v1/webhooks/pluggy", { event: "item/updated", eventId: `evt-${Math.random()}`, itemId }, { headers: { "x-webhook-secret": WEBHOOK_SECRET } });
       await paid.app.openFinance!.idle();
       expect(await paid.prisma.bankTransaction.count({ where: { userId: w.user.id } })).toBe(0);

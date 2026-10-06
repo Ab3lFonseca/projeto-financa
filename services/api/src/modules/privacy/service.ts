@@ -37,6 +37,11 @@ export async function exportUserData(tx: Tx, user: { id: string; email: string }
   const bankInvestments = await tx.bankInvestment.findMany({ where, orderBy: { createdAt: "asc" } });
   const bankInvestmentSnapshots = await tx.bankInvestmentSnapshot.findMany({ where, orderBy: { snapshotDate: "asc" } });
   const notifications = await tx.notification.findMany({ where, orderBy: { createdAt: "asc" } });
+  // Situação da assinatura. Os ids do provedor de pagamento ficam de fora: são identificadores internos de lá, sem uso para a pessoa.
+  const subscription = await tx.subscription.findUnique({
+    where,
+    select: { plan: true, status: true, store: true, currentPeriodEnd: true, trialEndsAt: true, cancelAtPeriodEnd: true, investmentsAddon: true, canceledAt: true, createdAt: true },
+  });
 
   // Removemos só campos internos (userId repetido em cada linha).
   const strip = <T extends { userId?: unknown }>(rows: T[]) => rows.map(({ userId: _u, ...rest }) => rest);
@@ -65,6 +70,7 @@ export async function exportUserData(tx: Tx, user: { id: string; email: string }
       bankInvestments: strip(bankInvestments),
       bankInvestmentSnapshots: strip(bankInvestmentSnapshots),
       notifications: strip(notifications),
+      subscription,
     },
   };
 }

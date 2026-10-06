@@ -1,7 +1,8 @@
 import type { PrismaClient } from "@app/database";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { finalizeDeletions } from "../modules/privacy/service";
-import { revokeAllConnections, runOpenFinanceJob } from "../modules/open-finance/service";
+import { runOpenFinanceJob } from "../modules/open-finance/service";
+import { beforeEraseOf } from "../modules/privacy/before-erase";
 import { runDueRecurrences } from "../modules/recurring/service";
 import { runMaintenance } from "./maintenance";
 import { runReminders } from "./reminders";
@@ -40,7 +41,7 @@ export function startJobs(app: FastifyInstance): () => void {
     pepper: config.IP_HASH_PEPPER,
     now: () => app.clock(),
     log,
-    beforeErase: app.openFinance ? (id: string) => revokeAllConnections(app.openFinance!.deps, id, { strict: true }) : undefined,
+    beforeErase: beforeEraseOf(app),
   });
 
   const jobs: JobDef[] = [

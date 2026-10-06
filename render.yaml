@@ -32,8 +32,24 @@ services:
       # Os jobs rodam dentro da API; no plano gratuito ela "dorme" após 15 min sem tráfego (veja o guia).
       - key: JOBS_ENABLED
         value: "true"
-      - key: BILLING_ENFORCED
-        value: "false"
+      # Assinatura (docs/assinatura.md). Ficam só no painel do Render (sync: false) para uma nova sincronização do Blueprint não desligar a
+      # cobrança nem trocar as chaves. Sem elas o app segue em beta: tudo liberado e ninguém precisa assinar.
+      - key: BILLING_ENFORCED # true = 30 dias de teste e depois somente leitura até assinar
+        sync: false
+      - key: BILLING_PROVIDER # stripe
+        sync: false
+      - key: BILLING_STARTS_AT # AAAA-MM-DD do início da cobrança (contas antigas começam o teste nesse dia)
+        sync: false
+      - key: STRIPE_SECRET_KEY # SECRETA (sk_ ou rk_), nunca a publicável
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET # whsec_..., do endpoint https://SUA-API/v1/webhooks/stripe
+        sync: false
+      - key: STRIPE_PRICE_ID # price_... do plano básico
+        sync: false
+      - key: STRIPE_PRICE_ID_INVESTMENTS # price_... do adicional Rendimentos (opcional)
+        sync: false
+      - key: APP_WEB_URL # endereço do site (https://financa-web.onrender.com): para onde o pagamento volta
+        sync: false
       # Ligue (true) depois de cadastrar PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET e o endereço de retorno web.
       - key: OPEN_FINANCE_ENABLED
         value: "false"

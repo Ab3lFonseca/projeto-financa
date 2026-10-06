@@ -323,11 +323,14 @@ describe("relatórios", () => {
     expect((await env.anon.get("/v1/reports/cash-flow")).status).toBe(401);
   });
 
-  it("plano gratuito: só 'este mês' e 'últimos 3 meses'; demais períodos pedem Premium (402)", async () => {
+  it("somente leitura (teste vencido): só 'este mês' e 'últimos 3 meses'; demais períodos pedem assinatura (402)", async () => {
     const billing = await createTestEnv({ BILLING_ENFORCED: "true" });
     try {
       const u = await billing.newUser();
       await u.get("/v1/me");
+      // Dentro do teste grátis os períodos longos estão liberados.
+      expect((await u.get("/v1/reports/income-vs-expense", { query: { range: "this_year" } })).status).toBe(200);
+      await billing.expireTrial(u.id);
       expect((await u.get("/v1/reports/category-breakdown", { query: { range: "this_month" } })).status).toBe(200);
       expect((await u.get("/v1/reports/cash-flow", { query: { range: "last_3_months" } })).status).toBe(200);
       for (const range of ["last_6_months", "this_year"]) {

@@ -119,6 +119,8 @@ describe("manutenção e retenção", () => {
     await env.prisma.idempotencyKey.create({ data: { userId: w.user.id, key: "chave-nova-00001", createdAt: env.now() } });
     await env.prisma.webhookEvent.create({ data: { provider: "PLUGGY", eventId: "velho", eventType: "x", payload: {}, receivedAt: old } });
     await env.prisma.webhookEvent.create({ data: { provider: "PLUGGY", eventId: "novo", eventType: "x", payload: {}, receivedAt: env.now() } });
+    await env.prisma.billingEvent.create({ data: { provider: "stripe", eventId: "evt_velho", eventType: "x", receivedAt: old } });
+    await env.prisma.billingEvent.create({ data: { provider: "stripe", eventId: "evt_novo", eventType: "x", receivedAt: env.now() } });
     await env.prisma.auditLog.create({ data: { action: "teste.velho", createdAt: old } });
     await env.prisma.auditLog.create({ data: { action: "teste.novo", createdAt: env.now() } });
     await env.prisma.notification.create({ data: { userId: w.user.id, type: "SYSTEM", title: "velha", body: "x", readAt: old, createdAt: old } });
@@ -127,12 +129,15 @@ describe("manutenção e retenção", () => {
     const result = await runMaintenance(env.prisma, env.now());
     expect(result.idempotencyKeys).toBeGreaterThanOrEqual(1);
     expect(result.webhookEvents).toBeGreaterThanOrEqual(1);
+    expect(result.billingEvents).toBeGreaterThanOrEqual(1);
     expect(result.auditLogs).toBeGreaterThanOrEqual(1);
     expect(result.notifications).toBeGreaterThanOrEqual(1);
 
     expect(await env.prisma.idempotencyKey.count({ where: { key: "chave-velha-0001" } })).toBe(0);
     expect(await env.prisma.idempotencyKey.count({ where: { key: "chave-nova-00001" } })).toBe(1);
     expect(await env.prisma.webhookEvent.count({ where: { eventId: "novo" } })).toBe(1);
+    expect(await env.prisma.billingEvent.count({ where: { eventId: "evt_velho" } })).toBe(0);
+    expect(await env.prisma.billingEvent.count({ where: { eventId: "evt_novo" } })).toBe(1);
     expect(await env.prisma.auditLog.count({ where: { action: "teste.novo" } })).toBe(1);
     expect(await env.prisma.notification.count({ where: { title: "velha" } })).toBe(0);
     expect(await env.prisma.notification.count({ where: { title: "não lida" } })).toBe(1);

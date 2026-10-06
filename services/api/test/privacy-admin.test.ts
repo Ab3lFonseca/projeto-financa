@@ -256,11 +256,13 @@ describe("administração", () => {
 
     // Contrato fechado: só estes campos, nunca nada financeiro ou bancário (contagens, bancos conectados...).
     expect(Object.keys(detail).sort()).toEqual(
-      ["createdAt", "displayName", "email", "id", "lastSeenAt", "onboardingCompleted", "plan", "role", "status", "themePreset"].sort(),
+      ["access", "createdAt", "displayName", "email", "id", "lastSeenAt", "onboardingCompleted", "plan", "role", "status", "themePreset"].sort(),
     );
     expect(Object.keys(found.body.data[0]).sort()).toEqual(
-      ["createdAt", "displayName", "email", "id", "lastSeenAt", "onboardingCompleted", "plan", "role", "status"].sort(),
+      ["access", "createdAt", "displayName", "email", "id", "lastSeenAt", "onboardingCompleted", "plan", "role", "status"].sort(),
     );
+    // Quem acabou de se cadastrar está no teste grátis (30 dias), com o Rendimentos incluído.
+    expect(found.body.data[0].access).toMatchObject({ state: "trial", investments: true });
 
     const everything = JSON.stringify([found.body, detail]);
     expect(everything).not.toContain("Dado financeiro sensível");

@@ -276,7 +276,7 @@ de cartão e `auto_import`) é aplicada junto com as demais (passo 3 da seção 
 - [ ] Domínio com HTTPS emitido; `EXPO_PUBLIC_API_URL` apontando para ele.
 - [ ] `APP_ID` próprio; textos legais revisados e com os dados da empresa; URL pública da política.
 - [ ] Ícones definitivos.
-- [ ] Primeiro admin criado; `BILLING_ENFORCED` decidido.
+- [ ] Primeiro admin criado; cobrança decidida (`BILLING_ENFORCED`, Stripe, `BILLING_STARTS_AT`: checklist em [assinatura.md](assinatura.md#5-antes-de-ligar-a-cobrança-checklist)).
 - [ ] `pnpm test` e `pnpm typecheck` verdes no CI.
 
 ## 15. Variáveis de ambiente

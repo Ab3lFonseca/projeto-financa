@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
 import type { Config } from "./config";
+import { accessConfigOf } from "./lib/access-db";
 import { Errors } from "./lib/errors";
 import { createLogSinks, type LogSinks } from "./lib/log-files";
 import { diagnosticsRoutes } from "./modules/diagnostics/routes";
@@ -19,6 +20,11 @@ import { DEV_AUDIENCE, DEV_ISSUER, DevAuthProvider } from "./modules/auth/dev-pr
 import { SupabaseAuthProvider } from "./modules/auth/supabase-provider";
 import { JoseTokenVerifier, type TokenVerifier } from "./modules/auth/token-verifier";
 import { UserDirectory } from "./modules/users/directory";
+import { DevBillingProvider } from "./modules/billing/dev";
+import type { BillingProvider } from "./modules/billing/provider";
+import { billingRoutes, billingWebhookRoutes } from "./modules/billing/routes";
+import { BillingService } from "./modules/billing/service";
+import { StripeProvider } from "./modules/billing/stripe";
 import { ExpoPushNotifier, NoopNotifier, type PushNotifier } from "./modules/notifications/notifier";
 import { DemoOpenFinanceProvider } from "./modules/open-finance/demo";
 import { PluggyProvider } from "./modules/open-finance/pluggy";
@@ -42,8 +48,24 @@ export type AppDeps = {
   notifier?: PushNotifier;
   /** Injetável nos testes; em produção vem da configuração (Pluggy). */
   openFinanceProvider?: OpenFinanceProvider;
+  /** Injetável nos testes; em produção vem da configuração (BILLING_PROVIDER). `null` = ninguém consegue assinar. */
+  billingProvider?: BillingProvider | null;
   clock?: () => Date;
 };
+
+function buildBillingProvider(config: Config): BillingProvider | null {
+  if (config.BILLING_PROVIDER === "dev") return new DevBillingProvider();
+  if (config.BILLING_PROVIDER === "stripe") {
+    return new StripeProvider({
+      secretKey: config.STRIPE_SECRET_KEY!,
+      webhookSecret: config.STRIPE_WEBHOOK_SECRET!,
+      priceId: config.STRIPE_PRICE_ID!,
+      investmentsPriceId: config.STRIPE_PRICE_ID_INVESTMENTS,
+      apiBase: config.STRIPE_API_BASE,
+    });
+  }
+  return null;
+}
 
 /** Provedor "desligado": falha com 503 claro quando a autenticação não está configurada. */
 class DisabledAuthProvider implements AuthProvider {
@@ -211,6 +233,17 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.decorate("tokenVerifier", deps.tokenVerifier ?? buildTokenVerifier(config));
   app.decorate("users", new UserDirectory(prisma, config, clock));
   app.decorate(
+    "billing",
+    new BillingService({
+      prisma,
+      config,
+      provider: deps.billingProvider !== undefined ? deps.billingProvider : buildBillingProvider(config),
+      users: app.users,
+      now: clock,
+      log: app.log,
+    }),
+  );
+  app.decorate(
     "notifier",
     deps.notifier ?? (config.NODE_ENV === "test" ? new NoopNotifier() : new ExpoPushNotifier(prisma, app.log)),
   );
@@ -224,7 +257,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
           provider: ofProvider,
           notifier: app.notifier,
           now: clock,
-          billingEnforced: config.BILLING_ENFORCED,
+          access: accessConfigOf(config),
           pepper: config.IP_HASH_PEPPER,
           redirectUri: config.OPEN_FINANCE_REDIRECT_URI,
           webRedirectUri: config.OPEN_FINANCE_WEB_REDIRECT_URI,
@@ -253,6 +286,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await v1.register(authRoutes, { prefix: "/auth" });
       // Webhooks de provedores: sem login de usuário, autenticados por segredo.
       await v1.register(openFinanceWebhookRoutes, { prefix: "/webhooks" });
+      await v1.register(billingWebhookRoutes, { prefix: "/webhooks" });
 
       // Tudo abaixo exige token válido.
       await v1.register(async (authed) => {
@@ -262,8 +296,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         await authed.register(meRoutes, { prefix: "/me" });
         await authed.register(privacyRoutes, { prefix: "/privacy" });
         await authed.register(diagnosticsRoutes, { prefix: "/diagnostics" });
+        await authed.register(billingRoutes, { prefix: "/billing" });
         await authed.register(async (gated) => {
           gated.addHook("onRequest", app.requireConsent);
+          // Depois do teste grátis, sem assinatura: só leitura (criar e editar respondem 402).
+          gated.addHook("onRequest", app.requireActiveAccess);
           await registerDomainRoutes(gated);
         });
       });

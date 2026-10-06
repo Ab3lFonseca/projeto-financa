@@ -4,23 +4,7 @@ import { Errors } from "./errors";
 
 type Tx = Prisma.TransactionClient;
 
-type SubscriptionLike = {
-  plan: PlanName;
-  status: "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELED" | "EXPIRED";
-  currentPeriodEnd: Date | null;
-} | null;
-
-/**
- * Plano efetivo do usuário. Com BILLING_ENFORCED=false (beta), todos têm Premium.
- * Com cobrança ligada, Premium só vale com assinatura ativa/em teste e dentro do período.
- */
-export function resolvePlan(subscription: SubscriptionLike, billingEnforced: boolean, now: Date): PlanName {
-  if (!billingEnforced) return "PREMIUM";
-  if (!subscription || subscription.plan !== "PREMIUM") return "FREE";
-  const active = subscription.status === "ACTIVE" || subscription.status === "TRIALING";
-  const notExpired = !subscription.currentPeriodEnd || subscription.currentPeriodEnd > now;
-  return active && notExpired ? "PREMIUM" : "FREE";
-}
+// O plano efetivo de cada pessoa (Premium enquanto o acesso está liberado, Free no somente leitura) vem de `lib/access.ts` (`planOf`).
 
 export function limitsFor(plan: PlanName): PlanLimits {
   return PLAN_LIMITS[plan];

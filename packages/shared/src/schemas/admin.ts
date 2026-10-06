@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Plan, UserRole, UserStatus } from "../enums";
+import { AccessState } from "./billing";
 import { cursorQuery, isoDate, timestamp, uuid } from "./common";
 
 // O painel administrativo NUNCA expõe senhas, tokens, credenciais bancárias nem dados financeiros
@@ -18,6 +19,11 @@ export const adminUserDTO = z.object({
   lastSeenAt: timestamp.nullable(),
   /** Concluiu (ou pulou) o tutorial de primeiro uso. */
   onboardingCompleted: z.boolean(),
+  /**
+   * Acesso que a pessoa terá com a cobrança ligada (teste grátis até quando, assinante, cortesia, administrador ou teste vencido).
+   * Mostrado mesmo no beta, para o administrador ver o que acontece quando a cobrança começar.
+   */
+  access: z.object({ state: AccessState, expiresAt: timestamp.nullable(), investments: z.boolean() }),
 });
 
 /** Detalhe de um usuário: os mesmos dados da lista mais a aparência escolhida. Nada financeiro. */
@@ -49,6 +55,21 @@ export const adminStatsDTO = z.object({
   signupsByDay: z.array(z.object({ date: isoDate, count: z.number().int() })),
   /** Quantas pessoas usam cada tema (id do tema → total). */
   themes: z.record(z.string(), z.number().int()),
+  /** Assinaturas, como estariam com a cobrança ligada. Só números: nada de quem paga nem de quanto cada um pagou. */
+  billing: z.object({
+    /** A cobrança está ligada neste servidor. */
+    enforced: z.boolean(),
+    trial: z.number().int(),
+    paid: z.number().int(),
+    complimentary: z.number().int(),
+    admin: z.number().int(),
+    expired: z.number().int(),
+    /** Entre os pagantes e as cortesias, quantos têm o adicional Rendimentos. */
+    investmentsAddon: z.number().int(),
+    /** Receita mensal recorrente estimada (assinantes pagos × preço mensal lido do provedor); `null` sem preço ou sem provedor. */
+    monthlyRevenueCents: z.number().int().nullable(),
+    currency: z.string().length(3).nullable(),
+  }),
   bankConnections: z.record(z.string(), z.number().int()),
 });
 

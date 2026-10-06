@@ -1,11 +1,13 @@
 import type { BankConnectionAccount, BankTransaction, PrismaClient } from "@app/database";
 import { addDays, fromISODate, toISODate, type ISODate } from "@app/shared";
 import type { FastifyBaseLogger } from "fastify";
+import { planOf, resolveAccess, type AccessConfig } from "../../lib/access";
+import { loadAccess } from "../../lib/access-db";
 import { accountBalances } from "../../lib/balances";
 import type { OpCtx, Tx } from "../../lib/db";
 import { dateOut, num } from "../../lib/dto";
 import { invoiceTotals, syncInvoiceStatuses } from "../../lib/invoices";
-import { countUsage, limitsFor, resolvePlan } from "../../lib/plan";
+import { countUsage, limitsFor } from "../../lib/plan";
 import type { AuthUser } from "../../types";
 import type { PushNotifier } from "../notifications/notifier";
 import { createTransactions } from "../transactions/service";
@@ -23,7 +25,7 @@ export type AutoDeps = {
   prisma: PrismaClient;
   notifier: PushNotifier;
   now: () => Date;
-  billingEnforced: boolean;
+  access: AccessConfig;
   log?: FastifyBaseLogger;
 };
 
@@ -166,8 +168,8 @@ export async function autoLinkAccounts(
   const pending = links.filter((l) => !l.accountId && !l.cardId).sort((a, b) => (a.kind === "BANK" ? -1 : 1) - (b.kind === "BANK" ? -1 : 1));
   if (pending.length === 0) return out;
 
-  const subscription = await prisma.subscription.findUnique({ where: { userId: conn.userId } });
-  const limits = limitsFor(resolvePlan(subscription, deps.billingEnforced, deps.now()));
+  const access = await loadAccess(prisma, conn.userId, deps.access, deps.now());
+  const limits = limitsFor(access ? planOf(access) : "FREE");
   const usage = await countUsage(prisma, conn.userId);
   const accountNames = new Set((await prisma.account.findMany({ where: { userId: conn.userId, deletedAt: null }, select: { name: true } })).map((a) => a.name.toLowerCase()));
   const cardNames = new Set((await prisma.creditCard.findMany({ where: { userId: conn.userId, deletedAt: null }, select: { name: true } })).map((c) => c.name.toLowerCase()));
@@ -253,12 +255,13 @@ async function authUserFor(deps: AutoDeps, userId: string): Promise<AuthUser> {
   const { prisma } = deps;
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, role: true } });
   const profile = await prisma.profile.findUnique({ where: { userId }, select: { timezone: true } });
-  const subscription = await prisma.subscription.findUnique({ where: { userId } });
+  const access = (await loadAccess(prisma, userId, deps.access, deps.now())) ?? resolveAccess({ role: "USER", createdAt: new Date(0), subscription: null, config: deps.access, now: deps.now() });
   return {
     id: userId,
     email: user?.email ?? "",
     role: user?.role ?? "USER",
-    plan: resolvePlan(subscription, deps.billingEnforced, deps.now()),
+    plan: planOf(access),
+    access,
     timezone: profile?.timezone ?? "America/Sao_Paulo",
     consentOk: true,
   };

@@ -6,6 +6,7 @@ import {
   adminUserDetailDTO,
   adminUserDTO,
   appearanceSchema,
+  grantAccessBody,
   idParam,
   listAdminUsersQuery,
   listOf,
@@ -16,6 +17,8 @@ import {
 } from "@app/shared";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
+import { resolveAccess, type SubscriptionInfo } from "../../lib/access";
+import { accessConfigOf, subscriptionAccessSelect } from "../../lib/access-db";
 import { audit } from "../../lib/audit";
 import { tsOut } from "../../lib/dto";
 import { Errors } from "../../lib/errors";
@@ -44,24 +47,32 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
 
   type UserRow = {
     id: string; email: string; role: AdminUserDTO["role"]; status: AdminUserDTO["status"];
-    createdAt: Date; lastSeenAt: Date | null; subscription: { plan: AdminUserDTO["plan"]; status: string } | null;
+    createdAt: Date; lastSeenAt: Date | null; subscription: SubscriptionInfo;
     profile: { displayName: string | null; onboardingCompletedAt: Date | null; theme: "SYSTEM" | "LIGHT" | "DARK"; appearance: unknown } | null;
   };
 
-  const toUserDTO = (u: UserRow): AdminUserDTO => ({
-    id: u.id,
-    email: u.email,
-    displayName: u.profile?.displayName ?? null,
-    role: u.role,
-    status: u.status,
-    plan: u.subscription?.plan === "PREMIUM" && ["ACTIVE", "TRIALING"].includes(u.subscription.status) ? "PREMIUM" : "FREE",
-    createdAt: tsOut(u.createdAt),
-    lastSeenAt: u.lastSeenAt ? tsOut(u.lastSeenAt) : null,
-    onboardingCompleted: Boolean(u.profile?.onboardingCompletedAt),
-  });
+  // O painel mostra o acesso que cada pessoa TERÁ com a cobrança ligada (mesmo durante o beta): é o que o administrador precisa ver.
+  const accessOf = (u: Pick<UserRow, "role" | "createdAt" | "subscription">) =>
+    resolveAccess({ role: u.role, createdAt: u.createdAt, subscription: u.subscription, config: { ...accessConfigOf(config), billingEnforced: true }, now: app.clock() });
+
+  const toUserDTO = (u: UserRow): AdminUserDTO => {
+    const access = accessOf(u);
+    return {
+      id: u.id,
+      email: u.email,
+      displayName: u.profile?.displayName ?? null,
+      role: u.role,
+      status: u.status,
+      plan: access.state === "paid" || access.state === "complimentary" ? "PREMIUM" : "FREE",
+      createdAt: tsOut(u.createdAt),
+      lastSeenAt: u.lastSeenAt ? tsOut(u.lastSeenAt) : null,
+      onboardingCompleted: Boolean(u.profile?.onboardingCompletedAt),
+      access: { state: access.state, expiresAt: access.expiresAt ? tsOut(access.expiresAt) : null, investments: access.features.investments },
+    };
+  };
   const userSelect = {
     id: true, email: true, role: true, status: true, createdAt: true, lastSeenAt: true,
-    subscription: { select: { plan: true, status: true } },
+    subscription: { select: subscriptionAccessSelect },
     profile: { select: { displayName: true, onboardingCompletedAt: true, theme: true, appearance: true } },
   } as const;
 
@@ -131,6 +142,27 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 
+  // Cortesia: acesso sem pagar (dias ou sem prazo, com ou sem o adicional Rendimentos). Quem já paga não é sobrescrito.
+  app.post(
+    "/users/:id/access",
+    { schema: { tags: ["admin"], params: idParam, body: grantAccessBody, response: { 200: adminUserDTO } } },
+    async (req) => {
+      await app.billing.grantComplimentary(req.user!.id, req.params.id, req.body, req.ip);
+      const u = await prisma.user.findUniqueOrThrow({ where: { id: req.params.id }, select: userSelect });
+      return toUserDTO(u);
+    },
+  );
+
+  app.delete(
+    "/users/:id/access",
+    { schema: { tags: ["admin"], params: idParam, response: { 200: adminUserDTO } } },
+    async (req) => {
+      await app.billing.revokeComplimentary(req.user!.id, req.params.id, req.ip);
+      const u = await prisma.user.findUniqueOrThrow({ where: { id: req.params.id }, select: userSelect });
+      return toUserDTO(u);
+    },
+  );
+
   app.get(
     "/stats",
     { schema: { tags: ["admin"], response: { 200: adminStatsDTO } } },
@@ -164,11 +196,39 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
         themes[key] = (themes[key] ?? 0) + Number(r.n);
       }
 
+      // Assinaturas (como estariam com a cobrança ligada). Carrega só o mínimo de cada conta e conta em memória.
+      const everyone = await prisma.user.findMany({ select: { role: true, createdAt: true, subscription: { select: subscriptionAccessSelect } } });
+      const billing = { enforced: config.BILLING_ENFORCED, trial: 0, paid: 0, complimentary: 0, admin: 0, expired: 0, investmentsAddon: 0 };
+      let paidWithAddon = 0;
+      for (const u of everyone) {
+        const a = accessOf(u);
+        if (a.state === "trial") billing.trial++;
+        else if (a.state === "paid") { billing.paid++; if (a.features.investments) paidWithAddon++; }
+        else if (a.state === "complimentary") { billing.complimentary++; if (a.features.investments) billing.investmentsAddon++; }
+        else if (a.state === "admin") billing.admin++;
+        else if (a.state === "expired") billing.expired++;
+      }
+      billing.investmentsAddon += paidWithAddon;
+      // Receita mensal recorrente estimada: pagantes × preço mensal lido do provedor (anual ÷ 12). Cortesia não paga, então não entra.
+      let monthlyRevenueCents: number | null = null;
+      let currency: string | null = null;
+      try {
+        const prices = await app.billing.provider?.prices();
+        if (prices?.basic) {
+          const monthly = (p: { amountCents: number; interval: "month" | "year" }) => (p.interval === "year" ? Math.round(p.amountCents / 12) : p.amountCents);
+          monthlyRevenueCents = billing.paid * monthly(prices.basic) + (prices.investments ? paidWithAddon * monthly(prices.investments) : 0);
+          currency = prices.basic.currency;
+        }
+      } catch {
+        /* sem preço (provedor fora do ar): a receita fica nula, o resto do painel funciona */
+      }
+
       const conns = await prisma.bankConnection.groupBy({ by: ["status"], _count: { _all: true } });
       return {
         users: { total, active, suspended, premium, newLast7Days: new7, newLast30Days: new30, activeLast7Days: active7, onboardingCompleted: onboarded },
         signupsByDay,
         themes,
+        billing: { ...billing, monthlyRevenueCents, currency },
         bankConnections: Object.fromEntries(conns.map((c) => [c.status, c._count._all])),
       };
     },

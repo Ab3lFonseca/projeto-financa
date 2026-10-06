@@ -1,8 +1,9 @@
 import { Prisma, seedDefaultCategories, type PrismaClient } from "@app/database";
 import type { Config } from "../../config";
+import { planOf, resolveAccess } from "../../lib/access";
+import { accessConfigOf, subscriptionAccessSelect } from "../../lib/access-db";
 import { audit } from "../../lib/audit";
 import { Errors } from "../../lib/errors";
-import { resolvePlan } from "../../lib/plan";
 import type { AuthUser } from "../../types";
 import type { VerifiedToken } from "../auth/token-verifier";
 
@@ -73,11 +74,13 @@ export class UserDirectory {
     }
 
     const accepted = new Set(row.consents.filter((c) => this.isCurrent(c.type, c.version)).map((c) => c.type));
+    const access = resolveAccess({ role: row.role, createdAt: row.createdAt, subscription: row.subscription, config: accessConfigOf(this.config), now: this.now() });
     const user: AuthUser = {
       id: row.id,
       email: claims.email ?? row.email,
       role: row.role,
-      plan: resolvePlan(row.subscription, this.config.BILLING_ENFORCED, this.now()),
+      plan: planOf(access),
+      access,
       timezone: row.profile?.timezone ?? "America/Sao_Paulo",
       consentOk: accepted.has("TERMS") && accepted.has("PRIVACY"),
     };
@@ -104,8 +107,9 @@ export class UserDirectory {
         role: true,
         status: true,
         lastSeenAt: true,
+        createdAt: true,
         profile: { select: { timezone: true } },
-        subscription: { select: { plan: true, status: true, currentPeriodEnd: true } },
+        subscription: { select: subscriptionAccessSelect },
         consents: {
           where: { type: { in: ["TERMS", "PRIVACY"] }, revokedAt: null },
           select: { type: true, version: true },

@@ -134,6 +134,21 @@ export async function createTestEnv(overrides: Record<string, string> = {}, extr
       now = new Date(iso);
     },
     now: () => new Date(now),
+    /**
+     * Faz o teste grátis do usuário já estar vencido (cadastro em 2020). O relógio de teste fica em 2026-10-04 e o `created_at` vem do relógio
+     * real do banco, então esperar não serve: o jeito é recuar a data de cadastro. Sem assinatura, o app passa a ser somente leitura.
+     */
+    async expireTrial(userId: string) {
+      await prisma.user.update({ where: { id: userId }, data: { createdAt: new Date("2020-01-01T00:00:00.000Z") } });
+      app.users.invalidate(userId);
+    },
+    /** Dá ao usuário uma assinatura paga (ativa por mais 30 dias) para os testes de cobrança ligada. */
+    async makePaid(userId: string, over: { investmentsAddon?: boolean; store?: "WEB" | "MANUAL"; currentPeriodEnd?: Date | null } = {}) {
+      const end = over.currentPeriodEnd === undefined ? new Date(now.getTime() + 30 * 86_400_000) : over.currentPeriodEnd;
+      const data = { plan: "PREMIUM" as const, status: "ACTIVE" as const, store: over.store ?? ("WEB" as const), currentPeriodEnd: end, investmentsAddon: over.investmentsAddon ?? false };
+      await prisma.subscription.upsert({ where: { userId }, create: { userId, ...data }, update: data });
+      app.users.invalidate(userId);
+    },
     async close() {
       await app.close();
       await prisma.$disconnect();

@@ -218,30 +218,75 @@ describe("contas", () => {
   });
 });
 
-describe("limites do plano gratuito", () => {
-  it("com cobrança ligada, o plano FREE permite 2 contas e bloqueia a 3ª com 402", async () => {
+describe("cobrança ligada: teste grátis, assinatura e somente leitura", () => {
+  it("dentro do teste grátis tudo está liberado (sem limite de contas); vencido o teste, criar responde 402 e ler continua", async () => {
     const billing = await createTestEnv({ BILLING_ENFORCED: "true" });
     try {
       const u = await billing.newUser();
       const me = (await u.get("/v1/me")).body;
-      expect(me.entitlements.plan).toBe("FREE");
-      expect(me.entitlements.limits.accounts).toBe(2);
-      expect(me.entitlements.features.openFinance).toBe(false);
+      expect(me.entitlements.plan).toBe("PREMIUM");
+      expect(me.entitlements.access).toMatchObject({ state: "trial", allowed: true, features: { investments: true } });
+      expect(me.entitlements.access.daysLeft).toBeGreaterThan(25);
 
-      expect((await u.post("/v1/accounts", { name: "A", type: "CHECKING" })).status).toBe(201);
-      expect((await u.post("/v1/accounts", { name: "B", type: "CHECKING" })).status).toBe(201);
-      const third = await u.post("/v1/accounts", { name: "C", type: "CHECKING" });
-      expect(third.status).toBe(402);
-      expect(third.body.error.code).toBe("PLAN_LIMIT_REACHED");
-      expect(third.body.error.details).toMatchObject({ resource: "accounts", limit: 2 });
+      for (const name of ["A", "B", "C"]) expect((await u.post("/v1/accounts", { name, type: "CHECKING" })).status).toBe(201);
 
-      // Premium ativo libera
-      await billing.prisma.subscription.update({
-        where: { userId: u.id },
-        data: { plan: "PREMIUM", status: "ACTIVE", currentPeriodEnd: new Date("2027-01-01T00:00:00Z") },
-      });
-      billing.app.users.invalidate(u.id);
-      expect((await u.post("/v1/accounts", { name: "C", type: "CHECKING" })).status).toBe(201);
+      // O teste acaba, sem assinatura: somente leitura.
+      await billing.expireTrial(u.id);
+      const after = (await u.get("/v1/me")).body;
+      expect(after.entitlements.access).toMatchObject({ state: "expired", allowed: false, expiresAt: null, features: { investments: false } });
+      expect(after.entitlements.plan).toBe("FREE");
+
+      const blocked = await u.post("/v1/accounts", { name: "D", type: "CHECKING" });
+      expect(blocked.status).toBe(402);
+      expect(blocked.body.error.code).toBe("SUBSCRIPTION_REQUIRED");
+      expect((await u.put(`/v1/accounts/${(await u.get("/v1/accounts")).body.data[0].id}`, { name: "Nova" })).body.error.code).toBe("SUBSCRIPTION_REQUIRED");
+      // Ler e exportar continuam: a pessoa não perde os dados.
+      expect((await u.get("/v1/accounts")).body.data).toHaveLength(3);
+      expect((await u.get("/v1/dashboard")).status).toBe(200);
+      expect((await u.get("/v1/privacy/export")).status).toBe(200);
+    } finally {
+      await billing.close();
+    }
+  });
+
+  it("assinatura paga em dia libera de novo; cortesia e administrador nunca ficam em somente leitura", async () => {
+    const billing = await createTestEnv({ BILLING_ENFORCED: "true" });
+    try {
+      const paid = await billing.newUser();
+      await paid.get("/v1/me");
+      await billing.expireTrial(paid.id);
+      expect((await paid.post("/v1/accounts", { name: "X", type: "CHECKING" })).status).toBe(402);
+
+      await billing.makePaid(paid.id);
+      expect((await paid.get("/v1/me")).body.entitlements.access).toMatchObject({ state: "paid", allowed: true, features: { investments: false } });
+      expect((await paid.post("/v1/accounts", { name: "X", type: "CHECKING" })).status).toBe(201);
+
+      const gift = await billing.newUser();
+      await gift.get("/v1/me");
+      await billing.expireTrial(gift.id);
+      await billing.makePaid(gift.id, { store: "MANUAL", currentPeriodEnd: null, investmentsAddon: true });
+      expect((await gift.get("/v1/me")).body.entitlements.access).toMatchObject({ state: "complimentary", allowed: true, expiresAt: null, features: { investments: true } });
+      expect((await gift.post("/v1/accounts", { name: "Y", type: "CHECKING" })).status).toBe(201);
+
+      const admin = await billing.newUser();
+      await admin.get("/v1/me");
+      await billing.expireTrial(admin.id);
+      await billing.prisma.user.update({ where: { id: admin.id }, data: { role: "ADMIN" } });
+      billing.app.users.invalidate(admin.id);
+      expect((await admin.get("/v1/me")).body.entitlements.access).toMatchObject({ state: "admin", allowed: true });
+      expect((await admin.post("/v1/accounts", { name: "Z", type: "CHECKING" })).status).toBe(201);
+    } finally {
+      await billing.close();
+    }
+  });
+
+  it("marcar notificações como lidas continua liberado no somente leitura (não é editar dados)", async () => {
+    const billing = await createTestEnv({ BILLING_ENFORCED: "true" });
+    try {
+      const u = await billing.newUser();
+      await u.get("/v1/me");
+      await billing.expireTrial(u.id);
+      expect((await u.post("/v1/notifications/read-all", {})).status).not.toBe(402);
     } finally {
       await billing.close();
     }

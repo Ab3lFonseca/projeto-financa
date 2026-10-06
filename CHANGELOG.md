@@ -11,6 +11,15 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Assinatura (servidor):** 30 dias de teste grátis com tudo liberado e, depois, mensalidade; sem assinar, o app vira **somente leitura** (consulta e
+  exporta, não cria nem edita: `402 SUBSCRIPTION_REQUIRED`; nada é apagado). Pagamento hospedado pelo Stripe (Checkout + portal do cliente; dados de
+  cartão nunca passam por aqui), adicional **Rendimentos** como segundo item da assinatura, webhook com assinatura HMAC, idempotente e à prova de eventos
+  fora de ordem (o servidor relê a assinatura no Stripe), preços lidos do provedor e nunca no código. Cartão recusado mantém o acesso até o fim do período
+  pago; cancelar vale ao fim do período. **Acesso gratuito:** administradores sempre; **cortesia** concedida pelo administrador
+  (`POST/DELETE /v1/admin/users/:id/access`, por N dias ou sem prazo, com ou sem Rendimentos, auditada). Vem **desligada** (`BILLING_ENFORCED=false`);
+  `BILLING_STARTS_AT` faz as contas antigas começarem o teste na data da cobrança. O painel do administrador ganha o acesso de cada pessoa e os números
+  de assinatura (sem dado de pagamento). Guias: [docs/assinatura.md](docs/assinatura.md) e [docs/monetizacao.md](docs/monetizacao.md) (taxas e como cobrar
+  de forma rentável). As telas de assinatura no app vêm a seguir.
 - **O banco se atualiza sozinho a cada deploy.** O contêiner da API agora roda `prisma migrate deploy` ao iniciar, antes de subir o servidor
   (`docker-entrypoint.sh`, CLI do Prisma fixado na mesma versão do projeto e conferido por teste). Chega de "a API nova leu uma coluna que o banco ainda
   não tem" (erro 500): se uma migration falhar, o contêiner sai com erro, o deploy é dado como falho e a versão anterior continua no ar. A CI sobe a imagem

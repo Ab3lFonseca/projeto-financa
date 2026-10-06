@@ -13,6 +13,7 @@
 | Consentimentos | Prova de aceite (versão + data + hash do IP) | `consents` |
 | Token de push, nome do aparelho | Avisos | `push_tokens` |
 | Conexões, contas, cartões, transações e **investimentos** do banco (Open Finance, se ligado) | Importar e mostrar os dados do banco com consentimento específico (somente leitura) | `bank_connections`, `bank_connection_accounts`, `bank_transactions`, `bank_investments`, `bank_investment_snapshots` |
+| Assinatura (situação, fim do período, id do cliente e da assinatura no provedor de pagamento, se tem o adicional) | Cobrar e liberar o acesso | `subscriptions`, `billing_events` (só id e tipo do evento). **Cartão e demais dados de pagamento ficam só no provedor (Stripe)**: o pagamento é feito na página dele e nada disso passa pelo nosso servidor |
 | Auditoria (ações sensíveis) | Segurança e prova | `audit_logs` (sem valores financeiros) |
 | Acesso do administrador (equipe técnica) | Operar o app: saber quem se cadastrou, dar suporte e acompanhar números agregados | O painel mostra nome, e-mail, plano, situação, datas e tema da conta. **Não** mostra saldos, lançamentos, contas, cartões nem bancos conectados. Só contas com papel `ADMIN` (definidas pela equipe) acessam; toda leitura vira registro de auditoria **sem dados pessoais** (`admin.users.listed`, `admin.user.viewed`) |
 | Logs técnicos da API e relatórios de erro do app | Segurança, estabilidade e correção de falhas | Arquivos de log do servidor (id do usuário como pseudônimo; sem e-mail, valores, tokens nem corpo de requisição). Cada pessoa pode desligar o envio de erros do app em *Privacidade e dados*; quem lê o registro é só o administrador ([logs.md](logs.md)) |
@@ -42,7 +43,7 @@ manutenção (a cada 6 h):
 | Dado | Prazo |
 |---|---|
 | Chaves de idempotência | 48 horas |
-| Eventos de webhook | 30 dias |
+| Eventos de webhook (do banco e do pagamento) | 30 dias |
 | Auditoria | 180 dias |
 | Notificações lidas | 90 dias |
 | Tokens de push sem uso | 180 dias |
@@ -63,7 +64,7 @@ manutenção (a cada 6 h):
 ## 5. Operadores/suboperadores (confirme e cite na política)
 
 Supabase (banco e autenticação, região São Paulo), Fly.io (hospedagem da API), Expo (entrega de push),
-provedor de SMTP escolhido (e-mails de conta) e, se ligado, Pluggy (Open Finance). Verifique onde cada um
+provedor de SMTP escolhido (e-mails de conta), Stripe (pagamento da assinatura, quando a cobrança estiver ligada) e, se ligado, Pluggy (Open Finance). Verifique onde cada um
 armazena/processa dados e se precisa de cláusulas de transferência internacional.
 
 ## 6. Pendências (não são código)

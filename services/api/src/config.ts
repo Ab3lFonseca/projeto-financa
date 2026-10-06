@@ -11,6 +11,10 @@ const csv = z
   .default("")
   .transform((s) => s.split(",").map((x) => x.trim()).filter(Boolean));
 
+/** Variável opcional: vazia vale como não definida (assim o painel do Render pode deixar o campo em branco). */
+const optionalText = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : typeof v === "string" ? v.trim() : v), schema.optional());
+
 const schema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -83,8 +87,42 @@ const schema = z
      */
     ADMIN_USER_IDS: csv.pipe(z.array(z.uuid()).transform((ids) => ids.map((id) => id.toLowerCase()))),
 
-    /** false = beta: todos têm recursos Premium. true = limites do plano gratuito valem. */
+    /**
+     * false = beta: ninguém precisa assinar, tudo liberado para todos.
+     * true  = cobrança ligada: cada pessoa tem TRIAL_DAYS de teste grátis (com tudo liberado) e depois o app fica somente leitura
+     *         até assinar. Administradores e contas com cortesia nunca são limitados. Ver docs/assinatura.md.
+     */
     BILLING_ENFORCED: bool(false),
+    /** Dias de teste grátis, contados do cadastro. */
+    TRIAL_DAYS: z.coerce.number().int().min(0).max(365).default(30),
+    /**
+     * Data (AAAA-MM-DD) em que a cobrança começa. Contas criadas antes dela começam o teste grátis nesta data (senão as contas
+     * antigas já nasceriam com o teste vencido no dia em que a cobrança ligasse). Vazio = o teste conta do cadastro.
+     */
+    BILLING_STARTS_AT: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato AAAA-MM-DD")
+        .transform((s) => new Date(`${s}T00:00:00.000Z`))
+        .refine((d) => !Number.isNaN(d.getTime()), "Data inválida")
+        .optional(),
+    ),
+
+    // --- Pagamento da assinatura ---
+    /** "none" (padrão: ninguém consegue assinar), "stripe" (cobrança hospedada pelo provedor) ou "dev" (ativa na hora, só desenvolvimento). */
+    BILLING_PROVIDER: z.enum(["none", "stripe", "dev"]).default("none"),
+    /** Chave secreta do Stripe (sk_live_/sk_test_ ou restrita rk_...). NUNCA a publicável (pk_...). Só no servidor. */
+    STRIPE_SECRET_KEY: optionalText(z.string().regex(/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/, "Use a chave SECRETA do Stripe (sk_... ou rk_...), não a publicável (pk_...)")),
+    /** Segredo de assinatura do endpoint de webhook (whsec_...), em Stripe → Developers → Webhooks. */
+    STRIPE_WEBHOOK_SECRET: optionalText(z.string().regex(/^whsec_[A-Za-z0-9]+$/, "Deve começar com whsec_")),
+    /** Preço recorrente mensal do plano básico, criado no painel do Stripe (price_...). O valor nunca fica no código. */
+    STRIPE_PRICE_ID: optionalText(z.string().regex(/^price_[A-Za-z0-9]+$/, "Deve começar com price_")),
+    /** Preço recorrente do adicional "Rendimentos" (price_...). Sem ele, o adicional não pode ser contratado. */
+    STRIPE_PRICE_ID_INVESTMENTS: optionalText(z.string().regex(/^price_[A-Za-z0-9]+$/, "Deve começar com price_")),
+    STRIPE_API_BASE: z.url().default("https://api.stripe.com"),
+    /** Endereço do site (ex.: https://financa-web.onrender.com): o pagamento volta para ele. Nunca vem do cliente (sem redirecionamento aberto). */
+    APP_WEB_URL: optionalText(z.url()),
 
     RATE_LIMIT_ENABLED: bool(true),
     RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(300),
@@ -110,7 +148,19 @@ const schema = z
     OPEN_FINANCE_WEB_REDIRECT_URI: z.url().optional(),
   })
   .superRefine((env, ctx) => {
+    // Em qualquer ambiente: um provedor pela metade quebra a assinatura de um jeito difícil de achar.
+    if (env.BILLING_PROVIDER === "stripe") {
+      for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID", "APP_WEB_URL"] as const) {
+        if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: `${key} é obrigatória com BILLING_PROVIDER=stripe` });
+      }
+    }
     if (env.NODE_ENV !== "production") return;
+    if (env.BILLING_PROVIDER === "dev") {
+      ctx.addIssue({ code: "custom", path: ["BILLING_PROVIDER"], message: "BILLING_PROVIDER=dev é proibido em produção (ativa assinaturas sem pagar)" });
+    }
+    if (env.BILLING_ENFORCED && env.BILLING_PROVIDER === "none") {
+      ctx.addIssue({ code: "custom", path: ["BILLING_PROVIDER"], message: "BILLING_ENFORCED=true exige um provedor de pagamento: sem ele, ninguém conseguiria assinar quando o teste acabasse" });
+    }
     if (env.AUTH_MODE === "dev") {
       ctx.addIssue({ code: "custom", path: ["AUTH_MODE"], message: "AUTH_MODE=dev é proibido em produção" });
     }

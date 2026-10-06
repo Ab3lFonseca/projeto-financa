@@ -14,7 +14,7 @@ import { z } from "zod";
 import { audit } from "../../lib/audit";
 import { runAs, runMutation } from "../../lib/db";
 import { AppError, Errors } from "../../lib/errors";
-import { revokeAllConnections } from "../open-finance/service";
+import { beforeEraseOf } from "../privacy/before-erase";
 import { eraseAccount } from "../privacy/service";
 import { buildMe } from "./service";
 
@@ -112,8 +112,8 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
         pepper: config.IP_HASH_PEPPER,
         now: app.clock,
         log: req.log,
-        // Conexões bancárias precisam ser encerradas no provedor ANTES de apagar os registros.
-        beforeErase: app.openFinance ? (id) => revokeAllConnections(app.openFinance!.deps, id, { strict: true }) : undefined,
+        // Conexões bancárias e a assinatura precisam ser encerradas nos provedores ANTES de apagar os registros.
+        beforeErase: beforeEraseOf(app),
       });
       app.users.invalidate(user.id);
       return { ok: true as const };

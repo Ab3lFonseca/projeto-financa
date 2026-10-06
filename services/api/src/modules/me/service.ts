@@ -1,6 +1,7 @@
 import type { ProfileDTO } from "@app/shared";
 import { appearanceSchema, notificationPrefs, type EntitlementsDTO, type MeDTO } from "@app/shared";
 import type { Config } from "../../config";
+import { toAccessDTO } from "../../lib/access";
 import { Errors } from "../../lib/errors";
 import { countUsage, limitsFor } from "../../lib/plan";
 import type { Tx } from "../../lib/db";
@@ -37,6 +38,7 @@ export async function buildEntitlements(tx: Tx, user: AuthUser, config: Config):
   return {
     plan: user.plan,
     billingEnforced: config.BILLING_ENFORCED,
+    access: toAccessDTO(user.access),
     limits: {
       accounts: limits.accounts,
       cards: limits.cards,
@@ -47,6 +49,7 @@ export async function buildEntitlements(tx: Tx, user: AuthUser, config: Config):
       openFinance: limits.openFinance && config.OPEN_FINANCE_ENABLED,
       advancedReports: limits.advancedReports,
       advancedInsights: limits.advancedInsights,
+      investments: user.access.features.investments,
     },
     usage,
   };

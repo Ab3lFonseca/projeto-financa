@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ConsentType, Plan, PushPlatform, ThemePreference, UserRole } from "../enums";
 import { appearanceSchema } from "./appearance";
+import { accessDTO } from "./billing";
 import { singleLine, timestamp } from "./common";
 
 export const notificationPrefs = z.object({
@@ -50,6 +51,8 @@ export const entitlementsDTO = z.object({
   plan: Plan,
   /** false no beta: todos recebem os recursos do Premium. */
   billingEnforced: z.boolean(),
+  /** Como a pessoa acessa o app agora (beta, teste grátis, assinatura, cortesia, administrador ou somente leitura). */
+  access: accessDTO,
   limits: z.object({
     accounts: limitValue,
     cards: limitValue,
@@ -60,6 +63,8 @@ export const entitlementsDTO = z.object({
     openFinance: z.boolean(),
     advancedReports: z.boolean(),
     advancedInsights: z.boolean(),
+    /** Adicional Rendimentos (CDI/CDB, porquinhos e investimentos acompanhados todo dia). */
+    investments: z.boolean(),
   }),
   usage: z.object({
     accounts: z.number().int(),
