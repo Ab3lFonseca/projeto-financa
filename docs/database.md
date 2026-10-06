@@ -168,12 +168,16 @@ Em aberto: por quanto tempo manter o **registro de consentimento** após a exclu
 20261004000300_open_finance_investments_cards    ← Open Finance: investimentos e dados de cartão
 20261005000100_profile_appearance                ← profiles.appearance (tema da conta, jsonb ≤ 512 bytes)
 20261005000200_function_search_path              ← search_path = '' em app_current_user_id() e set_updated_at()
+20261006000100_billing                           ← assinatura: cliente no provedor, cancelamento agendado, adicional; billing_events (idempotência)
 ```
 
-Ambiente que já existe (Supabase): depois de atualizar o código, rode `pnpm db:deploy` da sua máquina para aplicar as duas últimas.
+**Em produção as migrations se aplicam sozinhas:** o contêiner da API roda `prisma migrate deploy` ao iniciar, antes de subir o servidor (ver
+[deploy-render.md](deploy-render.md#31-o-banco-se-atualiza-sozinho-migrations-automáticas)). Se uma falhar, o deploy falha e a versão anterior continua no ar.
+**Toda migration precisa ser compatível com o código anterior** (acrescentar, não remover/renomear no mesmo deploy), porque durante o deploy a versão antiga
+ainda atende pedidos com o banco já migrado.
 
 1. Primeira vez (sem banco necessário): `pnpm --filter @app/database migrate:init`
-2. Aplicar: `pnpm db:deploy` (produção) ou `pnpm db:migrate` (desenvolvimento).
+2. Aplicar manualmente (opcional em produção): `pnpm db:deploy`; em desenvolvimento: `pnpm db:migrate`.
 3. Mudança de estrutura: edite `schema.prisma` → `pnpm db:migrate`. Se a mudança criar tabela com
    `user_id`, **a migration manual correspondente deve** habilitar RLS, criar a policy e conceder
    privilégios (a auto-verificação da migration e o teste "toda tabela com user_id tem RLS"

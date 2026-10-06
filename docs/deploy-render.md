@@ -26,13 +26,30 @@ sem cartão de crédito. O arquivo [`render.yaml`](../render.yaml) descreve os d
 
 Isso serve para **testar**. Para uso real e contínuo, prefira o Fly.io (ou um plano pago do Render) para a API não dormir.
 
+## 3.1. O banco se atualiza sozinho (migrations automáticas)
+
+A cada deploy da API, o contêiner roda `prisma migrate deploy` e só então inicia o servidor (`services/api/docker-entrypoint.sh`):
+
+- **Nada para lembrar:** subiu código com uma coluna nova, o banco ganha a coluna no mesmo deploy. Acabou o "a API nova leu uma coluna que o banco ainda não tem" (erro 500).
+- **Falhou, não sobe:** se uma migration der erro (ou o banco não responder em 3 min), o contêiner sai com erro. No Render o deploy aparece como **falho** e a
+  **versão anterior continua no ar**. O log mostra o motivo (`[migrate] ...` e a mensagem do Prisma).
+- **Idempotente e com trava:** o Prisma só aplica o que falta e usa trava no banco; duas instâncias subindo juntas não repetem uma migration.
+- **Regra para escrever migrations (importante):** enquanto o deploy acontece, a versão anterior do código ainda atende pedidos com o banco **já migrado**. Por isso toda
+  migration precisa ser **compatível com o código anterior**: acrescente colunas/tabelas (com valor padrão ou nulas) e só **remova** o que o código antigo usava em um
+  segundo deploy, depois que ninguém mais usa. Renomear = acrescentar a nova, copiar, migrar o código e só depois remover a antiga.
+- **Desligar:** `MIGRATE_ON_START=false` (variável do Render) pula a etapa; `MIGRATE_TIMEOUT_SECONDS` muda o limite de espera (padrão 180).
+- **Teste na CI:** a cada push, a CI sobe a imagem contra um Postgres **vazio**, confere que todas as migrations são aplicadas sozinhas, que reiniciar não reaplica nada e que
+  um banco inalcançável derruba o contêiner. Como o Render só publica depois da CI passar (`autoDeployTrigger: checksPass`), um problema aparece lá antes de chegar à produção.
+
+`pnpm db:deploy` na sua máquina continua funcionando (útil para olhar com `migrate:status`), mas não é mais obrigatório.
+
 ## 3. Passo a passo
 
-1. **Supabase** (uma vez): siga as seções 4 e 5 do [deploy.md](deploy.md) — projeto, migrations (`pnpm db:deploy` e `pnpm db:seed` da
-   sua máquina, com a string do **Session pooler** também no `DIRECT_URL`) e as chaves. Você vai precisar de: `DATABASE_URL` (**Session pooler**, que funciona em IPv4;
-   a *Direct connection* é IPv6 e costuma falhar), `SUPABASE_URL`,
-   `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY`. A imagem da API não tem o CLI do Prisma e o Render free não roda tarefas avulsas: as migrations
-   são sempre aplicadas por você, da sua máquina (ou pelo workflow do GitHub).
+1. **Supabase** (uma vez): siga as seções 4 e 5 do [deploy.md](deploy.md) — projeto, catálogo de bancos (`pnpm db:seed`, da sua máquina, com a string
+   do **Session pooler** no `DIRECT_URL`) e as chaves. Você vai precisar de: `DATABASE_URL` (**Session pooler**, porta 5432, que funciona em IPv4;
+   a *Direct connection* é IPv6 e costuma falhar; nunca o pooler de transação, 6543), `SUPABASE_URL`,
+   `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY`. **As migrations não precisam mais ser aplicadas por você:** a imagem da API inclui o CLI
+   do Prisma e, a cada deploy, o contêiner aplica as migrations pendentes **antes** de subir o servidor (veja a seção 3.1).
 2. No [Render](https://render.com): **New → Blueprint** → conecte o GitHub e escolha este repositório. Ele lê o `render.yaml` e
    pergunta os valores marcados com `sync: false`. Se `financa-api`/`financa-web` já existirem no Render, troque os nomes no
    arquivo (eles viram `https://NOME.onrender.com`).

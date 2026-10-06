@@ -230,9 +230,10 @@ describe("Row Level Security", () => {
     );
   });
 
-  it("app_user não acessa audit_logs nem webhook_events", async () => {
+  it("app_user não acessa audit_logs, webhook_events nem billing_events", async () => {
     await expect(asUser(null, (q) => q("SELECT * FROM audit_logs"))).rejects.toThrow(/permission denied/i);
     await expect(asUser(null, (q) => q("SELECT * FROM webhook_events"))).rejects.toThrow(/permission denied/i);
+    await expect(asUser(null, (q) => q("SELECT * FROM billing_events"))).rejects.toThrow(/permission denied/i);
   });
 
   it("usuário não consegue se promover a ADMIN nem alterar a própria assinatura", async () => {
@@ -306,6 +307,50 @@ describe("perfil: aparência", () => {
   it("recusa um JSON grande demais (a coluna não é depósito de dados)", async () => {
     const u = await mk.user();
     await expect(inserirPerfil(u.id, { preset: "dark", lixo: "x".repeat(600) })).rejects.toThrow(/ck_profiles_appearance_size/);
+  });
+});
+
+describe("cobrança (assinatura)", () => {
+  it("a assinatura nasce sem cliente no provedor, sem cancelamento agendado e sem o adicional Rendimentos", async () => {
+    const u = await mk.user();
+    const s = await mk.insert("subscriptions", { user_id: u.id });
+    expect(s.provider_customer_id).toBeNull();
+    expect(s.cancel_at_period_end).toBe(false);
+    expect(s.investments_addon).toBe(false);
+    expect(s.trial_ends_at).toBeNull();
+  });
+
+  it("guarda o cliente do provedor e o cancelamento ao fim do período; usuário não altera nem lê o de outro", async () => {
+    const a = await mk.user();
+    const b = await mk.user();
+    await mk.insert("subscriptions", { user_id: a.id, plan: "PREMIUM", store: "WEB", external_id: `sub_${randomUUID()}`, provider_customer_id: "cus_exemplo", cancel_at_period_end: true });
+    await mk.insert("subscriptions", { user_id: b.id });
+    const mine = await asUser(b.id, (q) => q<{ user_id: string }>("SELECT user_id FROM subscriptions"));
+    expect(mine.rows.map((r) => r.user_id)).toEqual([b.id]);
+    await expect(asUser(b.id, (q) => q("UPDATE subscriptions SET plan = 'PREMIUM', cancel_at_period_end = false"))).rejects.toThrow(/permission denied/i);
+  });
+
+  it("a mesma assinatura do provedor não vale para duas contas", async () => {
+    const a = await mk.user();
+    const b = await mk.user();
+    const externalId = `sub_${randomUUID()}`;
+    await mk.insert("subscriptions", { user_id: a.id, plan: "PREMIUM", store: "WEB", external_id: externalId });
+    await expect(mk.insert("subscriptions", { user_id: b.id, plan: "PREMIUM", store: "WEB", external_id: externalId })).rejects.toThrow(/unique|duplicate/i);
+  });
+
+  it("billing_events é idempotente por (provedor, evento): o mesmo webhook não entra duas vezes", async () => {
+    const eventId = `evt_${randomUUID()}`;
+    await db.query("INSERT INTO billing_events (provider, event_id, event_type) VALUES ('stripe', $1, 'customer.subscription.updated')", [eventId]);
+    await expect(
+      db.query("INSERT INTO billing_events (provider, event_id, event_type) VALUES ('stripe', $1, 'customer.subscription.updated')", [eventId]),
+    ).rejects.toThrow(/billing_events_provider_event_id_key|unique|duplicate/i);
+    // Outro provedor pode ter o mesmo identificador.
+    await db.query("INSERT INTO billing_events (provider, event_id, event_type) VALUES ('outro', $1, 'x')", [eventId]);
+  });
+
+  it("billing_events guarda só o necessário: nenhuma coluna de payload ou de dados pessoais", async () => {
+    const cols = await db.query<{ column_name: string }>("SELECT column_name FROM information_schema.columns WHERE table_name = 'billing_events' ORDER BY column_name");
+    expect(cols.rows.map((c) => c.column_name)).toEqual(["event_id", "event_type", "id", "processed_at", "provider", "received_at"]);
   });
 });
 

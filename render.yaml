@@ -37,6 +37,10 @@ services:
       # Ligue (true) depois de cadastrar PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET e o endereço de retorno web.
       - key: OPEN_FINANCE_ENABLED
         value: "false"
+      # O banco se atualiza sozinho: ao iniciar, o contêiner aplica as migrations pendentes antes de subir o servidor. Se falhar, o deploy
+      # falha e a versão anterior continua no ar. Exige a conexão por SESSÃO (Session pooler, porta 5432) no DATABASE_URL. Ver docs/deploy-render.md.
+      - key: MIGRATE_ON_START
+        value: "true"
       - key: IP_HASH_PEPPER
         generateValue: true
       - key: PLUGGY_WEBHOOK_SECRET

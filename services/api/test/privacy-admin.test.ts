@@ -317,7 +317,9 @@ describe("administração", () => {
 
     await env.prisma.profile.update({ where: { userId: w.user.id }, data: { onboardingCompletedAt: new Date(), appearance: { preset: "purple" } } });
 
+    const profilesBefore = await env.prisma.profile.count();
     const stats = (await admin.get("/v1/admin/stats")).body;
+    const profilesAfter = await env.prisma.profile.count();
     expect(stats.users.total).toBeGreaterThan(0);
     expect(stats.users.active).toBeGreaterThan(0);
     expect(stats.users.onboardingCompleted).toBeGreaterThanOrEqual(1);
@@ -325,7 +327,10 @@ describe("administração", () => {
     // Temas: quem escolheu pela tela Aparência conta pelo tema escolhido; quem nunca escolheu conta como "system".
     expect(stats.themes.purple).toBeGreaterThanOrEqual(1);
     expect(stats.themes.system).toBeGreaterThanOrEqual(1);
-    expect(Object.values(stats.themes).reduce((a: number, b) => a + (b as number), 0)).toBe(await env.prisma.profile.count());
+    // Todo perfil entra em exatamente um tema. As suítes dividem o banco e outra pode criar perfis em paralelo: por isso um intervalo, não uma igualdade.
+    const counted = Object.values(stats.themes).reduce((a: number, b) => a + (b as number), 0);
+    expect(counted).toBeGreaterThanOrEqual(profilesBefore);
+    expect(counted).toBeLessThanOrEqual(profilesAfter);
 
     const integrations = (await admin.get("/v1/admin/integrations")).body;
     expect(integrations.auth).toEqual({ provider: "supabase", configured: true });

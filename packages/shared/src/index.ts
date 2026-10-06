@@ -11,6 +11,7 @@ export * from "./enums";
 export * from "./schemas/common";
 export * from "./schemas/auth";
 export * from "./schemas/appearance";
+export * from "./schemas/billing";
 export * from "./schemas/me";
 export * from "./schemas/categories";
 export * from "./schemas/accounts";

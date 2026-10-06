@@ -75,7 +75,9 @@ Instale as CLIs: `npm i -g eas-cli` e o `flyctl` ([fly.io/docs/flyctl/install](h
    `?` → `%3F`, `&` → `%26`, espaço → `%20`), por isso o mais simples é uma senha só com letras e números.
    Para trocar a senha: *Database* (menu lateral) → *Settings* → *Reset database password*.
    *(Nomes e telas do painel mudam; se algo não bater, siga a [documentação do Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres), consultada em 2026-10-04.)*
-3. Aplique as migrations da sua máquina (cria tabelas, restrições, RLS e o papel `app_user`):
+3. Aplique as migrations (cria tabelas, restrições, RLS e o papel `app_user`). **Só a primeira vez precisa ser da sua máquina**: depois disso o contêiner da
+   API aplica as migrations pendentes sozinho a cada deploy (veja [deploy-render.md](deploy-render.md#31-o-banco-se-atualiza-sozinho-migrations-automáticas)); aqui
+   você também roda o `db:seed` (catálogo de bancos):
 
    ```bash
    # PowerShell (a mesma string do Session pooler do DATABASE_URL)
@@ -139,7 +141,8 @@ Instale as CLIs: `npm i -g eas-cli` e o `flyctl` ([fly.io/docs/flyctl/install](h
      CORS_ORIGINS=""
    ```
    (`CORS_ORIGINS` vazio: o app nativo não usa CORS. Só preencha se houver painel web.)
-4. Deploy: `fly deploy` (ou o workflow **Deploy da API** no GitHub, que também aplica as migrations).
+4. Deploy: `fly deploy` (ou o workflow **Deploy da API** no GitHub). As migrations pendentes são aplicadas pelo próprio contêiner ao iniciar (o passo
+   de migrations do workflow continua existindo e é inofensivo: `migrate deploy` é idempotente).
 5. Verifique:
 
    ```bash

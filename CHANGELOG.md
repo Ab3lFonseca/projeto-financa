@@ -11,6 +11,11 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **O banco se atualiza sozinho a cada deploy.** O contêiner da API agora roda `prisma migrate deploy` ao iniciar, antes de subir o servidor
+  (`docker-entrypoint.sh`, CLI do Prisma fixado na mesma versão do projeto e conferido por teste). Chega de "a API nova leu uma coluna que o banco ainda
+  não tem" (erro 500): se uma migration falhar, o contêiner sai com erro, o deploy é dado como falho e a versão anterior continua no ar. A CI sobe a imagem
+  contra um Postgres vazio e confere que tudo é aplicado sozinho, que reiniciar não reaplica nada e que um banco inalcançável derruba o contêiner. Desligar:
+  `MIGRATE_ON_START=false`. Regra para novas migrations: sempre compatíveis com o código anterior (acrescentar; remover só num segundo deploy).
 - **Painel do administrador no app** (*Mais → Painel do administrador*, só para contas `ADMIN`): números de usuários (total, novos, ativos,
   premium, suspensos, quem concluiu o tutorial), cadastros dos últimos 30 dias, temas escolhidos, estado do login/Open Finance/avisos e a **lista de usuários
   com nome, e-mail, plano e situação** (busca por nome ou e-mail, detalhe em folha). Só dados de cadastro: nada de saldos, lançamentos, contas,

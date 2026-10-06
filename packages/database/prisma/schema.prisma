@@ -330,8 +330,16 @@ model Subscription {
   status           SubscriptionStatus @default(ACTIVE)
   store            SubscriptionStore  @default(MANUAL)
   externalId       String?            @map("external_id")
+  /// Cliente no provedor de pagamento (abre o portal de assinatura). Nulo em cortesia e no teste grátis.
+  providerCustomerId String?          @map("provider_customer_id") @db.VarChar(128)
   currentPeriodEnd DateTime?          @map("current_period_end") @db.Timestamptz(6)
+  /// Fim do teste grátis. Nulo = o servidor calcula (cadastro + TRIAL_DAYS); preenchido = prorrogação ou encurtamento pelo suporte.
   trialEndsAt      DateTime?          @map("trial_ends_at") @db.Timestamptz(6)
+  /// A assinatura foi cancelada e termina no fim do período já pago.
+  cancelAtPeriodEnd Boolean           @default(false) @map("cancel_at_period_end")
+  /// Tem o adicional "Rendimentos" (CDI/CDB, porquinhos e investimentos acompanhados todo dia), cobrado por cima do plano básico.
+  /// No teste grátis e na conta de administrador o recurso vale sem este campo. Em cortesia, quem concede escolhe.
+  investmentsAddon Boolean            @default(false) @map("investments_addon")
   canceledAt       DateTime?          @map("canceled_at") @db.Timestamptz(6)
   createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -340,6 +348,21 @@ model Subscription {
 
   @@unique([store, externalId])
   @@map("subscriptions")
+}
+
+/// Webhooks do provedor de pagamento já recebidos (idempotência: o mesmo evento chega mais de uma vez). Sem payload: ele traz e-mail e
+/// dados do pagamento, e o servidor sempre relê o estado atual na API do provedor. Sem acesso para `app_user` (só o servidor).
+model BillingEvent {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider    String    @db.VarChar(20)
+  eventId     String    @map("event_id") @db.VarChar(128)
+  eventType   String    @map("event_type") @db.VarChar(80)
+  receivedAt  DateTime  @default(now()) @map("received_at") @db.Timestamptz(6)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(6)
+
+  @@unique([provider, eventId])
+  @@index([receivedAt])
+  @@map("billing_events")
 }
 
 /// Log de consentimentos (LGPD). Uma linha por aceite; revogação preenche revoked_at.
