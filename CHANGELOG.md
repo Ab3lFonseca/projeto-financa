@@ -11,6 +11,9 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **O botão "+" virou um menu de adicionar.** Ao tocar, o "+" gira até virar "×" e sobem, em cascata, os ícones com os nomes: **Despesa, Receita,
+  Transferência e Recorrência**, cada um levando à sua tela de cadastro (a recorrência deixou de ficar escondida em *Mais*). Toque fora, no "×" ou
+  Esc fecha. O passo "Registre em segundos" do tutorial foi atualizado.
 - **Pagar uma vez (Pix e cartão), sem renovar.** Além da assinatura que renova sozinha, a tela de assinatura oferece o **pagamento único por um período
   fechado** (30 dias no mensal, 1 ano no anual), no mesmo preço lido do Stripe. É o caminho do **Pix**, que o Stripe não mostra em assinatura comum (por isso
   ele "sumia" mesmo habilitado). O acesso só é liberado depois que o servidor **confere a sessão no Stripe** (`paid`); no Pix, o aviso inicial chega pendente e

@@ -96,6 +96,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     },
   },
   {
+    id: "quick-add-menu",
+    title: "Botão + com todas as opções",
+    summary: "O + gira e mostra, com nome, Despesa, Receita, Transferência e Recorrência. Cada uma abre a tela de cadastro.",
+    icon: "plus",
+    status: "done",
+    since: "2026-10-07",
+  },
+  {
     id: "badges",
     title: "Insígnias: 53 conquistas, de Bronze a Mestre",
     summary: "Ganhe insígnias por registrar, economizar, planejar e cuidar da conta. Cada uma tem 6 níveis, e o topo é o Mestre, em roxo profundo. Criar a conta já dá a primeira.",

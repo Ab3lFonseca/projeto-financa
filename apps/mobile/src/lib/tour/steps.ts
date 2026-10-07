@@ -42,7 +42,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     target: "home-fab",
     icon: "plus",
     title: "Registre em segundos",
-    body: "O botão + cria uma despesa, uma receita ou uma transferência entre contas. Funciona até sem internet: o lançamento fica na fila e é enviado quando a conexão voltar.",
+    body: "O botão + abre as opções: despesa, receita, transferência entre contas ou uma recorrência (aluguel, salário…). Funciona até sem internet: o lançamento fica na fila e é enviado quando a conexão voltar.",
     why: "Quanto mais rápido você anota, mais fiel fica o seu controle.",
   },
   {
