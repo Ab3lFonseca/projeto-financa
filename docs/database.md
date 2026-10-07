@@ -74,6 +74,9 @@ fatura ser paga.
 - Compra parcelada = N linhas em `transactions` com o mesmo `installment_group_id`. `occurred_on`
   de cada parcela é a data em que ela é cobrada (compra + i meses), então o orçamento do mês
   reflete a parcela daquele mês.
+- **Parcelar na conta (despesa ou receita)** usa o mesmo mecanismo, sem fatura: uma linha por mês a partir da data
+  escolhida, todas no mesmo `installment_group_id`. O status vale pela data de CADA parcela: a que já passou fica
+  `POSTED`, as futuras ficam `PENDING` (agendadas). No cartão só despesa.
 - Total da fatura = soma dos lançamentos com `invoice_id` (calculado).
 - **Pagar a fatura** = `invoice_payments` (debita a conta, **não** conta como despesa — a despesa já
   foi contada na compra). Evita dupla contagem.
@@ -86,6 +89,13 @@ listagem e filtros por conta usam uma única tabela. Transferências ficam fora 
 **Recorrência.** `recurring_rules` guarda o modelo; o job gera as ocorrências a partir de
 `next_run_on`. `UNIQUE(recurrence_id, occurred_on)` torna a geração idempotente e impede regerar
 uma ocorrência que o usuário excluiu.
+- **Fim:** `end_date` (data) ou, na criação, "depois de N vezes" (`occurrences` no pedido): o servidor calcula a data
+  da N-ésima ocorrência e guarda só `end_date`. `interval_count` = "a cada N" semanas, meses ou anos.
+- **Transferência recorrente** (`type = TRANSFER`): `account_id` é a origem e `to_account_id` o destino (migration
+  `20261009000100_recurring_transfers`); sem cartão nem categoria (CHECK `ck_recurring_rules_transfer`). Cada data gera
+  uma transferência de verdade (cabeçalho + as duas pernas). **Só a perna de saída leva o `recurrence_id`**, porque a
+  chave única regra + data não admite duas pernas da mesma regra no mesmo dia; é ela que garante a idempotência.
+  Origem ou destino arquivados pausam a geração (retoma e recupera o atraso ao desarquivar).
 
 **Orçamento e metas.** Orçamento: uma linha por (categoria, mês); "copiar do mês anterior" é uma
 operação da API. Meta: valor atual = `initial_cents` + Σ `goal_contributions` (aportes positivos,

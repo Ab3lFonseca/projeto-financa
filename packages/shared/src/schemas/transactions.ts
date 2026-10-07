@@ -59,7 +59,10 @@ const baseCreate = z.strictObject({
   paymentMethod: PaymentMethod.optional(),
   status: TransactionStatus.optional(),
   notes: multiLine(1000).nullable().optional(),
-  /** Compra parcelada no cartão: número de parcelas (2–120). `amountCents` é o TOTAL. */
+  /**
+   * Parcelado: número de parcelas (2–120), uma por mês. `amountCents` é o TOTAL. No cartão (só despesa) cada parcela vai para a fatura do mês; na conta
+   * (despesa ou receita) cada parcela é um lançamento mensal, e as futuras ficam agendadas.
+   */
   installments: z.number().int().min(2).max(120).optional(),
 });
 
@@ -75,11 +78,8 @@ export const createTransactionBody = baseCreate.superRefine((v, ctx) => {
   if (hasAccount && v.paymentMethod === "CREDIT") {
     ctx.addIssue({ code: "custom", path: ["paymentMethod"], message: "Crédito exige um cartão" });
   }
-  if (v.installments !== undefined && !hasCard) {
-    ctx.addIssue({ code: "custom", path: ["installments"], message: "Parcelamento só é possível em compras no cartão" });
-  }
-  if (v.installments !== undefined && v.type !== "EXPENSE") {
-    ctx.addIssue({ code: "custom", path: ["installments"], message: "Apenas despesas podem ser parceladas" });
+  if (v.installments !== undefined && hasCard && v.type !== "EXPENSE") {
+    ctx.addIssue({ code: "custom", path: ["installments"], message: "No cartão, apenas despesas podem ser parceladas" });
   }
 });
 

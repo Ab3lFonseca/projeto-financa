@@ -55,8 +55,10 @@ export function TransactionForm({ initial, initialType = "EXPENSE" }: { initial?
   const cardList = cards.data?.data ?? [];
   const effectiveAccount = accountId ?? (accountList[0]?.id ?? null);
   const effectiveCard = cardId ?? (cardList[0]?.id ?? null);
-  const futureDate = date > today;
   const isInstallment = !!initial?.installment;
+  // Parcelar vale ao criar: despesa no cartão, e despesa ou receita na conta (uma parcela por mês).
+  const canSplit = !editing && (source === "card" ? type === "EXPENSE" : true);
+  const splitting = canSplit && installments > 1;
 
   const create = useCreateTransaction(() => goBack());
   const update = useApiMutation((v: { id: string; body: UpdateTransactionInput }) => api.transactions.update(v.id, v.body), {
@@ -92,8 +94,9 @@ export function TransactionForm({ initial, initialType = "EXPENSE" }: { initial?
         type,
         ...common,
         ...(source === "card" ? { cardId: effectiveCard } : { accountId: effectiveAccount, paymentMethod: method }),
-        status: source === "account" ? (futureDate ? (posted ? "POSTED" : "PENDING") : posted ? "POSTED" : "PENDING") : undefined,
-        installments: source === "card" && type === "EXPENSE" && installments > 1 ? installments : undefined,
+        // Parcelado na conta: o servidor decide pela data de cada parcela (a que já passou fica lançada, as futuras ficam agendadas).
+        status: source === "account" && !splitting ? (posted ? "POSTED" : "PENDING") : undefined,
+        installments: splitting ? Math.min(installments, source === "card" ? 24 : 60) : undefined,
       });
       return;
     }
@@ -246,22 +249,27 @@ export function TransactionForm({ initial, initialType = "EXPENSE" }: { initial?
 
       <DateField label="Data" value={date} onChange={setDate} today={today} />
 
-      {source === "card" && type === "EXPENSE" && !editing ? (
+      {canSplit ? (
         <View style={{ gap: 8 }}>
           <Text variant="caption" tone="muted" weight="600">
-            Parcelas
+            {type === "INCOME" ? "Receber em parcelas" : "Parcelas"}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-            <Stepper value={installments} min={1} max={24} onChange={setInstallments} />
+            <Stepper value={installments} min={1} max={source === "card" ? 24 : 60} onChange={setInstallments} />
             <Text tone="muted" style={{ flex: 1 }}>
               {installments === 1 ? "À vista" : parcel ? `${installments}x de ` : ""}
               {installments > 1 && parcel ? <Money cents={parcel} variant="body" weight="700" sensitive={false} /> : null}
             </Text>
           </View>
+          {splitting && source === "account" ? (
+            <Text variant="caption" tone="muted">
+              O valor é dividido em {installments} lançamentos, um por mês a partir da data escolhida. Os dos meses seguintes ficam agendados (pendentes) até chegar o dia.
+            </Text>
+          ) : null}
         </View>
       ) : null}
 
-      {source === "account" ? (
+      {source === "account" && !splitting ? (
         <Pressable
           accessibilityRole="switch"
           accessibilityState={{ checked: posted }}
@@ -291,7 +299,7 @@ export function TransactionForm({ initial, initialType = "EXPENSE" }: { initial?
         </Pressable>
       ) : null}
       {isInstallment ? (
-        <Banner tone="info" icon="credit-card">
+        <Banner tone="info" icon={initial?.card ? "credit-card" : "calendar-clock"}>
           Parcela {initial?.installment?.number} de {initial?.installment?.total}. Valor e data valem só para esta parcela.
         </Banner>
       ) : null}

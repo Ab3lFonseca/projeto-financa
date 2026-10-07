@@ -194,14 +194,16 @@ describe("compras e faturas", () => {
     expect(invoices.find((i: any) => i.referenceMonth === "2026-10-01").totalCents).toBe(0);
   });
 
-  it("regras: cartão exige Crédito; parcelamento só no cartão; conta ou cartão (um só)", async () => {
+  it("regras: cartão exige Crédito; parcelar na conta é permitido (sem fatura); conta ou cartão (um só)", async () => {
     const w = await createWorld(env);
     const card = await newCard(w);
     expect((await buy(w, card.id, { paymentMethod: "PIX" })).status).toBe(422);
+    // na conta o parcelamento vale (uma parcela por mês, sem fatura); ver recurring-transfers.test.ts
     const onAccount = await w.user.post("/v1/transactions", {
       type: "EXPENSE", description: "x", amountCents: 1000, occurredOn: "2026-10-01", accountId: w.account.id, installments: 3,
     });
-    expect(onAccount.status).toBe(422);
+    expect(onAccount.status).toBe(201);
+    expect((await w.user.get("/v1/transactions", { query: { limit: "50" } })).body.data.every((t: any) => t.invoiceId === null)).toBe(true);
     expect((await buy(w, card.id, { accountId: w.account.id })).status).toBe(422);
   });
 

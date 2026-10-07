@@ -102,7 +102,9 @@ export async function createTransactions(
   const card = input.cardId ? await requireCard(tx, user.id, input.cardId) : null;
 
   const paymentMethod = card ? "CREDIT" : (input.paymentMethod ?? "OTHER");
-  const status = input.status ?? (card ? "POSTED" : input.occurredOn > today ? "PENDING" : "POSTED");
+  // Na conta, o que ainda vai acontecer fica agendado (PENDING) e o que já passou fica lançado. Cada parcela vale pela sua data.
+  const statusOn = (date: string): "POSTED" | "PENDING" => input.status ?? (card ? "POSTED" : date > today ? "PENDING" : "POSTED");
+  const status = statusOn(input.occurredOn);
 
   const count = input.installments ?? 1;
   const amounts = count > 1 ? splitInstallments(input.amountCents, count) : [input.amountCents];
@@ -121,7 +123,7 @@ export async function createTransactions(
       id,
       userId: user.id,
       type: input.type,
-      status,
+      status: statusOn(date),
       description: input.description,
       amountCents: amounts[i]!,
       occurredOn: fromISODate(date),

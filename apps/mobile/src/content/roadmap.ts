@@ -96,6 +96,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     },
   },
   {
+    id: "recurring-plus",
+    title: "Recorrências completas e parcelas na conta",
+    summary: "Repita despesa, receita ou transferência, a cada N semanas, meses ou anos, e escolha quando termina (nunca, depois de N vezes ou numa data). Parcelar também vale na conta e nas receitas.",
+    icon: "calendar-clock",
+    status: "done",
+    since: "2026-10-07",
+  },
+  {
     id: "quick-add-menu",
     title: "Botão + com todas as opções",
     summary: "O + gira e mostra, com nome, Despesa, Receita, Transferência e Recorrência. Cada uma abre a tela de cadastro.",

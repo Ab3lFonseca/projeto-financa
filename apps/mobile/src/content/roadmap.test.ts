@@ -25,7 +25,7 @@ describe("mural de novidades", () => {
     const dates = done.map((i) => i.since!);
     expect([...dates].sort().reverse()).toEqual(dates);
     expect(done.length).toBeGreaterThanOrEqual(10); // o mural lista tudo o que chegou, não só um resumo
-    expect(done[0]!.id).toBe("quick-add-menu");
+    expect(done[0]!.id).toBe("recurring-plus");
     // mesma data: mantém a ordem em que foram escritos
     const sameDay = done.filter((i) => i.since === done[0]!.since).map((i) => i.id);
     expect(sameDay).toEqual(ROADMAP.filter((i) => i.since === done[0]!.since).map((i) => i.id));

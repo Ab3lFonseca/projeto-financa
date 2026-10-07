@@ -79,12 +79,16 @@ describe("createTransactionBody", () => {
     expect(createTransactionBody.safeParse({ ...card, paymentMethod: "CREDIT" }).success).toBe(true);
     expect(createTransactionBody.safeParse({ ...base, paymentMethod: "CREDIT" }).success).toBe(false);
   });
-  it("parcelamento só em despesa no cartão", () => {
-    expect(createTransactionBody.safeParse({ ...base, installments: 3 }).success).toBe(false);
+  it("parcelamento: no cartão só despesa; na conta vale para despesa e receita", () => {
     const card = { ...base, accountId: undefined, cardId: uuid2 };
     expect(createTransactionBody.safeParse({ ...card, installments: 3 }).success).toBe(true);
     expect(createTransactionBody.safeParse({ ...card, type: "INCOME", installments: 3 }).success).toBe(false);
     expect(createTransactionBody.safeParse({ ...card, installments: 1 }).success).toBe(false);
+    // na conta
+    expect(createTransactionBody.safeParse({ ...base, installments: 3 }).success).toBe(true);
+    expect(createTransactionBody.safeParse({ ...base, type: "INCOME", installments: 3 }).success).toBe(true);
+    expect(createTransactionBody.safeParse({ ...base, installments: 1 }).success).toBe(false);
+    expect(createTransactionBody.safeParse({ ...base, installments: 121 }).success).toBe(false);
   });
   it("não aceita TRANSFER (existe rota própria), valor <= 0 nem data inválida", () => {
     expect(createTransactionBody.safeParse({ ...base, type: "TRANSFER" }).success).toBe(false);

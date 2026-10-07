@@ -1,6 +1,7 @@
 import {
   addDays,
   createRecurringBody,
+  dateOfOccurrence,
   fromISODate,
   idParam,
   nextOccurrence,
@@ -19,12 +20,7 @@ import { runAs, runMutation } from "../../lib/db";
 import { Errors } from "../../lib/errors";
 import { assertCanCreate } from "../../lib/plan";
 import { requireAccount, requireCard, requireCategory } from "../../lib/refs";
-import { catchUpUser, generateForRule, ruleInclude, ruleShape, toRuleDTO } from "./service";
-
-const dueInclude = {
-  account: { select: { archivedAt: true, deletedAt: true } },
-  card: { select: { id: true, closingDay: true, dueDay: true, archivedAt: true, deletedAt: true } },
-} as const;
+import { catchUpUser, dueRuleInclude as dueInclude, generateForRule, ruleInclude, ruleShape, toRuleDTO } from "./service";
 
 export const recurringRoutes: FastifyPluginAsyncZod = async (app) => {
   const deps = () => ({ notifier: app.notifier });
@@ -52,11 +48,16 @@ export const recurringRoutes: FastifyPluginAsyncZod = async (app) => {
       const b = req.body;
       const dto = await runMutation(req, async (tx, user, ctx) => {
         await assertCanCreate(tx, user, "recurringRules");
-        if (b.accountId) await requireAccount(tx, user.id, b.accountId);
+        if (b.accountId) await requireAccount(tx, user.id, b.accountId, { field: "accountId" });
+        if (b.toAccountId) await requireAccount(tx, user.id, b.toAccountId, { field: "toAccountId" });
         if (b.cardId) await requireCard(tx, user.id, b.cardId);
-        if (b.categoryId) await requireCategory(tx, user.id, b.categoryId, b.type);
+        if (b.categoryId && b.type !== "TRANSFER") await requireCategory(tx, user.id, b.categoryId, b.type);
 
         const dayOfMonth = b.frequency === "WEEKLY" ? null : (b.dayOfMonth ?? parseISODate(b.startDate).day);
+        // "Termina depois de N vezes": a regra guarda só a data do fim (a da N-ésima ocorrência).
+        const endDate = b.occurrences !== undefined
+          ? dateOfOccurrence({ frequency: b.frequency, intervalCount: b.intervalCount, dayOfMonth, startDate: b.startDate }, b.occurrences)
+          : b.endDate ?? null;
         const created = await tx.recurringRule.create({
           data: {
             userId: user.id,
@@ -64,14 +65,15 @@ export const recurringRoutes: FastifyPluginAsyncZod = async (app) => {
             description: b.description,
             amountCents: b.amountCents,
             accountId: b.accountId ?? null,
+            toAccountId: b.type === "TRANSFER" ? (b.toAccountId ?? null) : null,
             cardId: b.cardId ?? null,
-            categoryId: b.categoryId ?? null,
-            paymentMethod: b.cardId ? "CREDIT" : (b.paymentMethod ?? "OTHER"),
+            categoryId: b.type === "TRANSFER" ? null : (b.categoryId ?? null),
+            paymentMethod: b.cardId ? "CREDIT" : b.type === "TRANSFER" ? "OTHER" : (b.paymentMethod ?? "OTHER"),
             frequency: b.frequency,
             intervalCount: b.intervalCount,
             dayOfMonth,
             startDate: fromISODate(b.startDate),
-            endDate: b.endDate ? fromISODate(b.endDate) : null,
+            endDate: endDate ? fromISODate(endDate) : null,
             nextRunOn: fromISODate(b.startDate),
             notes: b.notes ?? null,
           },
@@ -105,7 +107,7 @@ export const recurringRoutes: FastifyPluginAsyncZod = async (app) => {
             .map((date) => ({
               ruleId: r.id,
               date,
-              type: r.type as "INCOME" | "EXPENSE",
+              type: r.type,
               description: r.description,
               amountCents: Number(r.amountCents),
               category: r.category
@@ -138,7 +140,12 @@ export const recurringRoutes: FastifyPluginAsyncZod = async (app) => {
       return runMutation(req, async (tx, user, ctx) => {
         const current = await tx.recurringRule.findFirst({ where: { id: req.params.id, userId: user.id, deletedAt: null } });
         if (!current) throw Errors.notFound("Recorrência");
-        if (b.categoryId) await requireCategory(tx, user.id, b.categoryId, current.type as "INCOME" | "EXPENSE");
+        if (current.type === "TRANSFER") {
+          if (b.categoryId) throw Errors.unprocessable("Transferência não tem categoria", "TRANSFER_NO_CATEGORY", { field: "categoryId" });
+          if (b.paymentMethod) throw Errors.unprocessable("Transferência não tem forma de pagamento", "PAYMENT_METHOD_MISMATCH", { field: "paymentMethod" });
+        } else if (b.categoryId) {
+          await requireCategory(tx, user.id, b.categoryId, current.type);
+        }
         if (b.paymentMethod) {
           if (current.cardId && b.paymentMethod !== "CREDIT") {
             throw Errors.unprocessable("Cartão usa a forma de pagamento Crédito", "PAYMENT_METHOD_MISMATCH", { field: "paymentMethod" });

@@ -481,7 +481,8 @@ model Account {
   bank Bank? @relation(fields: [bankId], references: [id], onDelete: SetNull)
 
   transactions    Transaction[]
-  recurringRules  RecurringRule[]
+  recurringRules  RecurringRule[]         @relation("RecurringFromAccount")
+  recurringIn     RecurringRule[]         @relation("RecurringToAccount")
   transfersOut    Transfer[]              @relation("TransferFromAccount")
   transfersIn     Transfer[]              @relation("TransferToAccount")
   invoicePayments InvoicePayment[]
@@ -709,10 +710,13 @@ model Transfer {
 model RecurringRule {
   id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId        String              @map("user_id") @db.Uuid
-  type          TransactionType // INCOME ou EXPENSE (TRANSFER barrado por CHECK)
+  type          TransactionType // INCOME, EXPENSE ou TRANSFER (transferência: conta de origem em account_id e de destino em to_account_id)
   description   String              @db.VarChar(200)
   amountCents   BigInt              @map("amount_cents")
+  /// Conta de origem (em transferência: de onde sai o dinheiro).
   accountId     String?             @map("account_id") @db.Uuid
+  /// Só em transferência: conta que recebe. Nulo nas despesas e receitas.
+  toAccountId   String?             @map("to_account_id") @db.Uuid
   cardId        String?             @map("card_id") @db.Uuid
   categoryId    String?             @map("category_id") @db.Uuid
   paymentMethod PaymentMethod       @default(OTHER) @map("payment_method")
@@ -732,9 +736,10 @@ model RecurringRule {
   deletedAt     DateTime?           @map("deleted_at") @db.Timestamptz(6)
 
   user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account  Account?    @relation(fields: [userId, accountId], references: [userId, id], onDelete: NoAction)
-  card     CreditCard? @relation(fields: [userId, cardId], references: [userId, id], onDelete: NoAction)
-  category Category?   @relation(fields: [userId, categoryId], references: [userId, id], onDelete: NoAction)
+  account   Account?    @relation("RecurringFromAccount", fields: [userId, accountId], references: [userId, id], onDelete: NoAction)
+  toAccount Account?    @relation("RecurringToAccount", fields: [userId, toAccountId], references: [userId, id], onDelete: NoAction)
+  card      CreditCard? @relation(fields: [userId, cardId], references: [userId, id], onDelete: NoAction)
+  category  Category?   @relation(fields: [userId, categoryId], references: [userId, id], onDelete: NoAction)
 
   transactions Transaction[]
 

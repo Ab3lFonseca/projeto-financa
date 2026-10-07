@@ -11,6 +11,12 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Recorrência de transferência, "a cada N", fim e parcelas na conta.** Em *+ → Recorrência* dá para repetir **despesa, receita ou transferência**
+  entre contas (ex.: guardar R$ 200 por mês na reserva; cada data vira uma transferência de verdade, com saída e entrada). A recorrência agora
+  tem **"a cada N" semanas, meses ou anos** e o **fim**: nunca, **depois de N vezes** (o app mostra a data da última) ou **em uma data**; na lista
+  dá para ver a cadência e o fim, mudar ou tirar a data do fim, e as que acabaram aparecem como "Concluída". **Parcelar** passa a valer também para
+  **despesa na conta e para receita** (uma parcela por mês; as futuras ficam agendadas), não só no cartão. Migration aditiva
+  `20261009000100_recurring_transfers` (compatível com a versão anterior da API). Detalhes em [docs/database.md](docs/database.md).
 - **O botão "+" virou um menu de adicionar.** Ao tocar, o "+" gira até virar "×" e sobem, em cascata, os ícones com os nomes: **Despesa, Receita,
   Transferência e Recorrência**, cada um levando à sua tela de cadastro (a recorrência deixou de ficar escondida em *Mais*). Toque fora, no "×" ou
   Esc fecha. O passo "Registre em segundos" do tutorial foi atualizado.

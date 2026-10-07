@@ -21,6 +21,7 @@ const refSelect = { select: { id: true, name: true, deletedAt: true } } as const
 
 export const ruleInclude = {
   account: refSelect,
+  toAccount: refSelect,
   card: refSelect,
   category: { select: { id: true, name: true, icon: true, color: true, type: true, deletedAt: true } },
 } satisfies Prisma.RecurringRuleInclude;
@@ -32,10 +33,11 @@ const ref = (x: { id: string; name: string; deletedAt: Date | null }) => ({ id: 
 export function toRuleDTO(r: RuleRow): RecurringRuleDTO {
   return {
     id: r.id,
-    type: r.type as "INCOME" | "EXPENSE",
+    type: r.type,
     description: r.description,
     amountCents: num(r.amountCents),
     account: r.account ? ref(r.account) : null,
+    toAccount: r.toAccount ? ref(r.toAccount) : null,
     card: r.card ? ref(r.card) : null,
     category: r.category
       ? { id: r.category.id, name: r.category.name, icon: r.category.icon, color: r.category.color, type: r.category.type, deleted: r.category.deletedAt !== null }
@@ -73,7 +75,7 @@ export function ruleShape(r: { frequency: RecurrenceRule["frequency"]; intervalC
 export async function generateForRule(
   tx: Tx,
   user: { id: string },
-  rule: Prisma.RecurringRuleGetPayload<{ include: { account: { select: { archivedAt: true; deletedAt: true } }; card: { select: { id: true; closingDay: true; dueDay: true; archivedAt: true; deletedAt: true } } } }>,
+  rule: Prisma.RecurringRuleGetPayload<{ include: typeof dueRuleInclude }>,
   today: ISODate,
   deps: { notifier: PushNotifier },
   ctx: OpCtx,
@@ -83,35 +85,41 @@ export async function generateForRule(
   if (nextRun > today) return 0;
   // Conta/cartão arquivados: pausa a geração (retoma ao desarquivar, recuperando o atraso).
   if (rule.account && (rule.account.archivedAt || rule.account.deletedAt)) return 0;
+  if (rule.toAccount && (rule.toAccount.archivedAt || rule.toAccount.deletedAt)) return 0;
   if (rule.card && (rule.card.archivedAt || rule.card.deletedAt)) return 0;
 
   const shape = ruleShape(rule);
   const dates = occurrencesBetween(shape, nextRun, today, 366);
   if (dates.length === 0) return 0;
 
+  let createdCount: number;
   const invoiceIds: string[] = [];
-  const data: Prisma.TransactionCreateManyInput[] = [];
-  for (const date of dates) {
-    const invoiceId = rule.card ? await ensureInvoice(tx, user.id, rule.card, date) : null;
-    if (invoiceId) invoiceIds.push(invoiceId);
-    data.push({
-      id: randomUUID(),
-      userId: user.id,
-      type: rule.type,
-      status: "POSTED",
-      description: rule.description,
-      amountCents: rule.amountCents,
-      occurredOn: fromISODate(date),
-      accountId: rule.accountId,
-      cardId: rule.cardId,
-      categoryId: rule.categoryId,
-      paymentMethod: rule.paymentMethod,
-      invoiceId,
-      recurrenceId: rule.id,
-      notes: rule.notes,
-    });
+  if (rule.type === "TRANSFER") {
+    createdCount = await createTransferOccurrences(tx, user.id, rule, dates);
+  } else {
+    const data: Prisma.TransactionCreateManyInput[] = [];
+    for (const date of dates) {
+      const invoiceId = rule.card ? await ensureInvoice(tx, user.id, rule.card, date) : null;
+      if (invoiceId) invoiceIds.push(invoiceId);
+      data.push({
+        id: randomUUID(),
+        userId: user.id,
+        type: rule.type,
+        status: "POSTED",
+        description: rule.description,
+        amountCents: rule.amountCents,
+        occurredOn: fromISODate(date),
+        accountId: rule.accountId,
+        cardId: rule.cardId,
+        categoryId: rule.categoryId,
+        paymentMethod: rule.paymentMethod,
+        invoiceId,
+        recurrenceId: rule.id,
+        notes: rule.notes,
+      });
+    }
+    createdCount = (await tx.transaction.createMany({ data, skipDuplicates: true })).count;
   }
-  const created = await tx.transaction.createMany({ data, skipDuplicates: true });
 
   const last = dates[dates.length - 1]!;
   const next = nextOccurrence(shape, last);
@@ -124,11 +132,48 @@ export async function generateForRule(
   if (rule.type === "EXPENSE") {
     await evaluateBudgetAlerts(tx, user, deps, ctx, { categoryId: rule.categoryId, occurredOn: last, today });
   }
-  return created.count;
+  return createdCount;
 }
 
-const dueRuleInclude = {
+/**
+ * Transferência recorrente: cada data vira uma transferência de verdade (cabeçalho + as duas pernas, saída e entrada). Só a perna de SAÍDA leva o
+ * `recurrence_id`; é ela que garante que rodar duas vezes não duplica nem recria uma ocorrência que a pessoa excluiu (a exclusão é lógica, a linha
+ * continua lá).
+ */
+async function createTransferOccurrences(
+  tx: Tx,
+  userId: string,
+  rule: { id: string; accountId: string | null; toAccountId: string | null; amountCents: bigint; notes: string | null },
+  dates: ISODate[],
+): Promise<number> {
+  const accounts = await tx.account.findMany({ where: { userId, id: { in: [rule.accountId!, rule.toAccountId!] } }, select: { id: true, name: true } });
+  const from = accounts.find((a) => a.id === rule.accountId);
+  const to = accounts.find((a) => a.id === rule.toAccountId);
+  if (!from || !to) return 0;
+  const already = await tx.transaction.findMany({ where: { recurrenceId: rule.id, occurredOn: { in: dates.map(fromISODate) } }, select: { occurredOn: true } });
+  const seen = new Set(already.map((r) => dateOut(r.occurredOn)));
+  let created = 0;
+  for (const date of dates) {
+    if (seen.has(date)) continue;
+    const transferId = randomUUID();
+    await tx.transfer.create({
+      data: { id: transferId, userId, fromAccountId: from.id, toAccountId: to.id, amountCents: rule.amountCents, occurredOn: fromISODate(date), notes: rule.notes },
+    });
+    const base = { userId, type: "TRANSFER" as const, status: "POSTED" as const, amountCents: rule.amountCents, occurredOn: fromISODate(date), paymentMethod: "OTHER" as const, transferId };
+    await tx.transaction.createMany({
+      data: [
+        { ...base, description: `Transferência para ${to.name}`, accountId: from.id, transferSide: "OUT", recurrenceId: rule.id },
+        { ...base, description: `Transferência de ${from.name}`, accountId: to.id, transferSide: "IN" },
+      ],
+    });
+    created++;
+  }
+  return created;
+}
+
+export const dueRuleInclude = {
   account: { select: { archivedAt: true, deletedAt: true } },
+  toAccount: { select: { archivedAt: true, deletedAt: true } },
   card: { select: { id: true, closingDay: true, dueDay: true, archivedAt: true, deletedAt: true } },
 } as const;
 

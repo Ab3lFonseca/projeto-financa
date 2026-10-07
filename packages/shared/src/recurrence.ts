@@ -36,6 +36,19 @@ export function nextOccurrence(rule: RecurrenceRule, current: ISODate): ISODate 
 }
 
 /**
+ * Data da N-ésima ocorrência (a primeira, no início, conta como 1): é onde a regra "termina depois de N vezes" acaba.
+ * `rule.endDate` é ignorado aqui (é justamente o que se está calculando).
+ */
+export function dateOfOccurrence(rule: Omit<RecurrenceRule, "endDate">, n: number): ISODate {
+  let current: ISODate = rule.startDate;
+  for (let i = 1; i < Math.max(1, Math.floor(n)); i++) {
+    // sem endDate, nextOccurrence nunca devolve null
+    current = nextOccurrence({ ...rule, endDate: null }, current) as ISODate;
+  }
+  return current;
+}
+
+/**
  * Todas as ocorrências de `from` (inclusive) até `to` (inclusive), no máximo `limit`.
  * `from` deve ser uma ocorrência válida da regra (normalmente `nextRunOn`).
  */
