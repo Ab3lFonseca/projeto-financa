@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, 
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PixelLogoBackdrop } from "@/components/art/PixelLogo";
+import { TrialStrip } from "@/components/feature/AccessBanner";
 import { goBack } from "@/lib/navigation";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Icon } from "../Icon";
@@ -150,6 +151,8 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, header,
         <PixelLogoBackdrop />
       )}
       {header}
+      {/* Telas principais: faixa fixa com o teste grátis (quanto falta) e o botão de assinar. */}
+      {tabs ? <TrialStrip /> : null}
       {body}
       {footer ? <View style={{ padding: 16, paddingBottom: 16 + (tabs ? 0 : insets.bottom), backgroundColor: colors.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>{footer}</View> : null}
     </Animated.View>

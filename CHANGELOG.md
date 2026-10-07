@@ -11,6 +11,11 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Faixa do teste grátis em todas as telas principais.** Início, Transações, Gráficos, Carteira, Investir e Mais mostram, fixa sob o cabeçalho, quanto
+  falta do teste grátis e até quando ("Teste grátis: faltam 25 dias (até 03/11/2026)"), com o botão **Assinar agora**, que leva à escolha do plano e
+  do pagamento (renova sozinha ou pagar uma vez, com Pix). Fica azul durante o teste e vira alerta nos últimos 5 dias; no modo somente leitura avisa
+  e oferece assinar; para quem pagou uma vez, avisa 7 dias antes de acabar com o botão **Renovar**. Assinante em dia, cortesia, administrador e o beta
+  não veem nada. Substitui o aviso que só aparecia no Início nos últimos 10 dias. A regra do texto e da cor é `accessStrip` (`lib/access.ts`).
 - **Recorrência de transferência, "a cada N", fim e parcelas na conta.** Em *+ → Recorrência* dá para repetir **despesa, receita ou transferência**
   entre contas (ex.: guardar R$ 200 por mês na reserva; cada data vira uma transferência de verdade, com saída e entrada). A recorrência agora
   tem **"a cada N" semanas, meses ou anos** e o **fim**: nunca, **depois de N vezes** (o app mostra a data da última) ou **em uma data**; na lista

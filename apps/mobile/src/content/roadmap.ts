@@ -96,6 +96,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     },
   },
   {
+    id: "trial-strip",
+    title: "Quanto falta do teste grátis, sempre à vista",
+    summary: "Uma faixa fixa nas telas principais mostra quantos dias restam do teste e até quando, com o botão para assinar já.",
+    icon: "clock",
+    status: "done",
+    since: "2026-10-07",
+  },
+  {
     id: "recurring-plus",
     title: "Recorrências completas e parcelas na conta",
     summary: "Repita despesa, receita ou transferência, a cada N semanas, meses ou anos, e escolha quando termina (nunca, depois de N vezes ou numa data). Parcelar também vale na conta e nas receitas.",

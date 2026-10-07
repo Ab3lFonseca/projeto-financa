@@ -110,24 +110,26 @@ export function accessSummary(access: AccessDTO, autoRenew?: boolean | null): Ac
   }
 }
 
-export type AccessBannerInfo = { tone: "info" | "warning" | "negative"; icon: string; text: string };
+export type AccessStripInfo = { tone: "info" | "warning" | "negative"; icon: string; text: string; /** Texto do botão que leva à assinatura. */ cta: string };
 
 /**
- * Aviso no topo da tela inicial. Só aparece com a cobrança ligada e quando há algo a fazer: teste perto do fim, modo somente leitura
- * ou assinatura cancelada prestes a acabar. Quem está em dia (ou no beta) não vê nada.
+ * Faixa fixa no alto das telas principais (Início, Transações, Gráficos, Carteira, Investir e Mais). Só aparece com a cobrança ligada:
+ * **durante todo o teste grátis** diz quanto falta e até quando, com o botão para assinar já; no modo somente leitura, avisa; e para quem pagou
+ * uma vez (ou cancelou) avisa perto do fim. Assinante em dia, cortesia, administrador e beta não veem nada.
  */
-export function accessBanner(access: AccessDTO, enforced: boolean): AccessBannerInfo | null {
+export function accessStrip(access: AccessDTO, enforced: boolean): AccessStripInfo | null {
   if (!enforced) return null;
   if (access.state === "expired") {
-    return { tone: "negative", icon: "lock", text: "Modo somente leitura: seu teste grátis acabou. Toque para assinar e voltar a criar e editar." };
+    return { tone: "negative", icon: "lock", text: "Somente leitura: seu teste grátis acabou", cta: "Assinar" };
   }
   const days = access.daysLeft;
-  if (access.state === "trial" && days !== null && days <= 10) {
-    const when = days === 0 ? "termina hoje" : `termina em ${daysText(days)}`;
-    return { tone: days <= 5 ? "warning" : "info", icon: "clock", text: `Seu teste grátis ${when}. Toque para ver o plano.` };
+  if (access.state === "trial" && days !== null) {
+    const left = days === 0 ? "termina hoje" : days === 1 ? "falta 1 dia" : `faltam ${days} dias`;
+    const until = access.expiresAt && days > 0 ? ` (até ${dateText(access.expiresAt)})` : "";
+    return { tone: days <= 5 ? "warning" : "info", icon: "clock", text: `Teste grátis: ${left}${until}`, cta: "Assinar agora" };
   }
   if (access.state === "paid" && access.cancelAtPeriodEnd && days !== null && days <= 7) {
-    return { tone: "warning", icon: "calendar-clock", text: `Seu plano ${days === 0 ? "termina hoje" : `termina em ${daysText(days)}`}. Toque para renovar.` };
+    return { tone: "warning", icon: "calendar-clock", text: `Seu plano ${days === 0 ? "termina hoje" : `termina em ${daysText(days)}`}`, cta: "Renovar" };
   }
   return null;
 }

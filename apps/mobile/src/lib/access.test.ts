@@ -1,6 +1,6 @@
 import type { AccessDTO } from "@app/shared";
 import { describe, expect, it } from "vitest";
-import { accessBadge, accessBanner, accessSummary, dateText, daysText, defaultInterval, formatMoneyCents, formatPrice, GRANT_DURATIONS, PAYMENT_MODE_OPTIONS, paymentModeHint, planOffers } from "./access";
+import { accessBadge, accessStrip, accessSummary, dateText, daysText, defaultInterval, formatMoneyCents, formatPrice, GRANT_DURATIONS, PAYMENT_MODE_OPTIONS, paymentModeHint, planOffers } from "./access";
 
 const base: AccessDTO = { state: "trial", allowed: true, expiresAt: "2026-11-03T12:00:00.000Z", daysLeft: 12, cancelAtPeriodEnd: false, features: { investments: true } };
 const access = (over: Partial<AccessDTO>): AccessDTO => ({ ...base, ...over });
@@ -89,29 +89,37 @@ describe("forma de pagar", () => {
   });
 });
 
-describe("aviso na tela inicial", () => {
+describe("faixa do teste grátis nas telas principais", () => {
   it("cobrança desligada (beta): nunca avisa", () => {
-    expect(accessBanner(access({ state: "beta" }), false)).toBeNull();
-    expect(accessBanner(access({ state: "expired", allowed: false }), false)).toBeNull();
+    expect(accessStrip(access({ state: "beta" }), false)).toBeNull();
+    expect(accessStrip(access({ state: "expired", allowed: false }), false)).toBeNull();
+    expect(accessStrip(access({ daysLeft: 20 }), false)).toBeNull();
   });
-  it("teste longe do fim: sem aviso; perto do fim: avisa (informativo, depois alerta)", () => {
-    expect(accessBanner(access({ daysLeft: 25 }), true)).toBeNull();
-    expect(accessBanner(access({ daysLeft: 10 }), true)).toMatchObject({ tone: "info" });
-    expect(accessBanner(access({ daysLeft: 5 }), true)).toMatchObject({ tone: "warning" });
-    expect(accessBanner(access({ daysLeft: 0 }), true)?.text).toContain("termina hoje");
-    expect(accessBanner(access({ daysLeft: 1 }), true)?.text).toContain("1 dia");
+  it("durante TODO o teste grátis mostra quanto falta e até quando, com o botão de assinar (alerta nos últimos 5 dias)", () => {
+    const long = accessStrip(access({ daysLeft: 25 }), true);
+    expect(long).toMatchObject({ tone: "info", cta: "Assinar agora" });
+    expect(long?.text).toMatch(/^Teste grátis: faltam 25 dias \(até \d{1,2}\/11\/2026\)$/);
+    expect(accessStrip(access({ daysLeft: 6 }), true)).toMatchObject({ tone: "info" });
+    expect(accessStrip(access({ daysLeft: 5 }), true)).toMatchObject({ tone: "warning" });
+    expect(accessStrip(access({ daysLeft: 0 }), true)?.text).toBe("Teste grátis: termina hoje");
+    expect(accessStrip(access({ daysLeft: 1 }), true)?.text).toContain("falta 1 dia");
   });
-  it("vencido: aviso forte de somente leitura", () => {
-    const b = accessBanner(access({ state: "expired", allowed: false, daysLeft: null, expiresAt: null }), true);
-    expect(b).toMatchObject({ tone: "negative" });
+  it("sem data de fim conhecida não inventa uma", () => {
+    expect(accessStrip(access({ daysLeft: 12, expiresAt: null }), true)?.text).toBe("Teste grátis: faltam 12 dias");
+  });
+  it("vencido: aviso forte de somente leitura, com botão para assinar", () => {
+    const b = accessStrip(access({ state: "expired", allowed: false, daysLeft: null, expiresAt: null }), true);
+    expect(b).toMatchObject({ tone: "negative", cta: "Assinar" });
     expect(b?.text).toMatch(/somente leitura/i);
   });
-  it("assinante em dia, cortesia e administrador não veem aviso; cancelada perto do fim sim", () => {
-    expect(accessBanner(access({ state: "paid", daysLeft: 20 }), true)).toBeNull();
-    expect(accessBanner(access({ state: "paid", daysLeft: 3, cancelAtPeriodEnd: false }), true)).toBeNull();
-    expect(accessBanner(access({ state: "complimentary", daysLeft: 2 }), true)).toBeNull();
-    expect(accessBanner(access({ state: "admin", daysLeft: null, expiresAt: null }), true)).toBeNull();
-    expect(accessBanner(access({ state: "paid", daysLeft: 3, cancelAtPeriodEnd: true }), true)).toMatchObject({ tone: "warning" });
+  it("assinante em dia, cortesia, administrador e beta não veem a faixa; plano que acaba perto do fim sim (renovar)", () => {
+    expect(accessStrip(access({ state: "paid", daysLeft: 20 }), true)).toBeNull();
+    expect(accessStrip(access({ state: "paid", daysLeft: 3, cancelAtPeriodEnd: false }), true)).toBeNull();
+    expect(accessStrip(access({ state: "paid", daysLeft: 20, cancelAtPeriodEnd: true }), true)).toBeNull();
+    expect(accessStrip(access({ state: "complimentary", daysLeft: 2 }), true)).toBeNull();
+    expect(accessStrip(access({ state: "admin", daysLeft: null, expiresAt: null }), true)).toBeNull();
+    expect(accessStrip(access({ state: "beta" }), true)).toBeNull();
+    expect(accessStrip(access({ state: "paid", daysLeft: 3, cancelAtPeriodEnd: true }), true)).toMatchObject({ tone: "warning", cta: "Renovar" });
   });
 });
 
