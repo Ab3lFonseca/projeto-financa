@@ -16,6 +16,11 @@ const csv = z
 const optionalText = <T extends z.ZodType>(schema: T) =>
   z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : typeof v === "string" ? v.trim() : v), schema.optional());
 
+/** Id de preço do Stripe (price_...). Quem cola um id de produto aqui recebe a dica de onde ele vai. */
+const stripePriceId = () => optionalText(z.string().regex(/^price_[A-Za-z0-9]+$/, "Deve começar com price_ (um id de PRODUTO, prod_..., vai em STRIPE_PRODUCT_ID_MONTHLY ou STRIPE_PRODUCT_ID_YEARLY)"));
+/** Id de produto do Stripe (prod_...): o servidor descobre sozinho o preço ativo dele. */
+const stripeProductId = () => optionalText(z.string().regex(/^prod_[A-Za-z0-9]+$/, "Deve começar com prod_ (um id de PREÇO, price_..., vai em STRIPE_PRICE_ID_MONTHLY ou STRIPE_PRICE_ID_YEARLY)"));
+
 const schema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -117,10 +122,26 @@ const schema = z
     STRIPE_SECRET_KEY: optionalText(z.string().regex(/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/, "Use a chave SECRETA do Stripe (sk_... ou rk_...), não a publicável (pk_...)")),
     /** Segredo de assinatura do endpoint de webhook (whsec_...), em Stripe → Developers → Webhooks. */
     STRIPE_WEBHOOK_SECRET: optionalText(z.string().regex(/^whsec_[A-Za-z0-9]+$/, "Deve começar com whsec_")),
-    /** Preço recorrente mensal do plano básico, criado no painel do Stripe (price_...). O valor nunca fica no código. */
-    STRIPE_PRICE_ID: optionalText(z.string().regex(/^price_[A-Za-z0-9]+$/, "Deve começar com price_")),
-    /** Preço recorrente do adicional "Rendimentos" (price_...). Sem ele, o adicional não pode ser contratado. */
-    STRIPE_PRICE_ID_INVESTMENTS: optionalText(z.string().regex(/^price_[A-Za-z0-9]+$/, "Deve começar com price_")),
+    /**
+     * PLANO BÁSICO, mensal e/ou anual. Para cada ciclo informe o PRODUTO (prod_...: o servidor descobre o preço ativo dele no Stripe) ou, se
+     * preferir fixar, o PREÇO (price_...). Pelo menos um é obrigatório; oferecer os dois ciclos mostra "mensal" e "anual" na tela de assinatura.
+     * Se houver os dois para o mesmo ciclo, o preço (price_) vale mais. Valores nunca ficam no código: vêm sempre do Stripe.
+     */
+    STRIPE_PRODUCT_ID_MONTHLY: stripeProductId(),
+    STRIPE_PRODUCT_ID_YEARLY: stripeProductId(),
+    STRIPE_PRICE_ID_MONTHLY: stripePriceId(),
+    STRIPE_PRICE_ID_YEARLY: stripePriceId(),
+    /** Forma antiga: UM preço só (price_...), de qualquer ciclo. Continua funcionando; o ciclo é o que o Stripe disser. */
+    STRIPE_PRICE_ID: stripePriceId(),
+    /**
+     * ADICIONAL "Rendimentos" (opcional), com o mesmo formato. O Stripe exige o mesmo ciclo em todos os itens de uma assinatura, então o adicional
+     * precisa existir em cada ciclo que você vende o plano. Sem ele em um ciclo, o adicional não é oferecido nesse ciclo.
+     */
+    STRIPE_PRODUCT_ID_INVESTMENTS_MONTHLY: stripeProductId(),
+    STRIPE_PRODUCT_ID_INVESTMENTS_YEARLY: stripeProductId(),
+    STRIPE_PRICE_ID_INVESTMENTS_MONTHLY: stripePriceId(),
+    STRIPE_PRICE_ID_INVESTMENTS_YEARLY: stripePriceId(),
+    STRIPE_PRICE_ID_INVESTMENTS: stripePriceId(),
     STRIPE_API_BASE: z.url().default("https://api.stripe.com"),
     /** Endereço do site (ex.: https://financa-web.onrender.com): o pagamento volta para ele. Nunca vem do cliente (sem redirecionamento aberto). */
     APP_WEB_URL: optionalText(z.url()),
@@ -162,8 +183,12 @@ const schema = z
   .superRefine((env, ctx) => {
     // Em qualquer ambiente: um provedor pela metade quebra a assinatura de um jeito difícil de achar.
     if (env.BILLING_PROVIDER === "stripe") {
-      for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID", "APP_WEB_URL"] as const) {
+      for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "APP_WEB_URL"] as const) {
         if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: `${key} é obrigatória com BILLING_PROVIDER=stripe` });
+      }
+      const hasPlan = [env.STRIPE_PRODUCT_ID_MONTHLY, env.STRIPE_PRODUCT_ID_YEARLY, env.STRIPE_PRICE_ID_MONTHLY, env.STRIPE_PRICE_ID_YEARLY, env.STRIPE_PRICE_ID].some(Boolean);
+      if (!hasPlan) {
+        ctx.addIssue({ code: "custom", path: ["STRIPE_PRODUCT_ID_MONTHLY"], message: "Defina o plano com BILLING_PROVIDER=stripe: STRIPE_PRODUCT_ID_MONTHLY e/ou STRIPE_PRODUCT_ID_YEARLY (ou os STRIPE_PRICE_ID_...)" });
       }
     }
     if (env.OAUTH_PROVIDERS.length > 0) {

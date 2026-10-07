@@ -1,6 +1,18 @@
-import type { BillingPrice } from "@app/shared";
+import type { BillingIntervalName, BillingPrice } from "@app/shared";
 
 export type BillingProviderName = "stripe" | "dev";
+
+/** Ciclo de cobrança: todo mês ou todo ano. */
+export type BillingInterval = BillingIntervalName;
+
+/** Preço de um item em cada ciclo; `null` = o provedor não tem esse preço configurado. */
+export type PricesByInterval = { month: BillingPrice | null; year: BillingPrice | null };
+
+/** Tudo o que se pode vender: o plano básico e o adicional Rendimentos, cada um em cada ciclo. */
+export type BillingCatalog = { basic: PricesByInterval; investments: PricesByInterval };
+
+export const EMPTY_PRICES: PricesByInterval = { month: null, year: null };
+export const EMPTY_CATALOG: BillingCatalog = { basic: EMPTY_PRICES, investments: EMPTY_PRICES };
 
 /** Erro do provedor de pagamento. O código é estável; texto livre do provedor nunca vai para o cliente. */
 export class BillingProviderError extends Error {
@@ -24,6 +36,8 @@ export type NormalizedSubscription = {
   status: "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELED" | "EXPIRED" | "INCOMPLETE";
   currentPeriodEnd: Date | null;
   cancelAtPeriodEnd: boolean;
+  /** Ciclo do plano (mensal ou anual), lido do item do plano básico; nulo se o provedor não informou ou não é mensal/anual simples. */
+  interval: BillingInterval | null;
   /** Tem o item do adicional Rendimentos. */
   investmentsAddon: boolean;
   /** Id do item do adicional dentro da assinatura (para removê-lo depois). */
@@ -40,13 +54,22 @@ export type ParsedWebhook = {
 
 export interface BillingProvider {
   readonly name: BillingProviderName;
-  /** Preços cadastrados no provedor (nunca ficam no código). `null` = não configurado. */
-  prices(): Promise<{ basic: BillingPrice | null; investments: BillingPrice | null }>;
-  /** O adicional Rendimentos pode ser contratado (tem preço configurado). */
+  /** Preços cadastrados no provedor, por ciclo (nunca ficam no código). Um ciclo sem preço configurado vem `null`. */
+  catalog(): Promise<BillingCatalog>;
+  /** O adicional Rendimentos tem preço configurado em algum ciclo (sem consultar o provedor). */
   readonly supportsInvestments: boolean;
-  createCheckout(input: { userId: string; email: string; customerId: string | null; investments: boolean; successUrl: string; cancelUrl: string }): Promise<{ url: string }>;
+  createCheckout(input: {
+    userId: string;
+    email: string;
+    customerId: string | null;
+    interval: BillingInterval;
+    investments: boolean;
+    successUrl: string;
+    cancelUrl: string;
+  }): Promise<{ url: string }>;
   createPortal(input: { customerId: string; returnUrl: string }): Promise<{ url: string }>;
-  setInvestmentsAddon(input: { subscriptionId: string; itemId: string | null; enabled: boolean }): Promise<void>;
+  /** O adicional segue o ciclo da assinatura (o provedor exige o mesmo ciclo em todos os itens), por isso `interval` é o dela. */
+  setInvestmentsAddon(input: { subscriptionId: string; itemId: string | null; enabled: boolean; interval: BillingInterval }): Promise<void>;
   fetchSubscription(subscriptionId: string): Promise<NormalizedSubscription>;
   /**
    * Apaga o cliente no provedor (exclusão de conta): cancela na hora qualquer assinatura dele e remove e-mail e cartão salvos. Cliente que já

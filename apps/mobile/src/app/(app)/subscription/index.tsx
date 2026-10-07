@@ -8,7 +8,9 @@ import { Badge, ProgressBar, SwitchRow } from "@/components/ui/Controls";
 import { ErrorState, SkeletonCard } from "@/components/ui/Feedback";
 import { Card, Divider, Reveal, Row, Screen, ScreenHeader, Section } from "@/components/ui/Layout";
 import { Text } from "@/components/ui/Text";
-import { accessSummary, formatPrice } from "@/lib/access";
+import type { BillingIntervalName } from "@app/shared";
+import { Pressable } from "react-native";
+import { accessSummary, defaultInterval, formatPrice, planOffers, type PlanOffer } from "@/lib/access";
 import { api } from "@/lib/api/endpoints";
 import { useAuth, useMe } from "@/lib/auth/AuthProvider";
 import { useApiMutation, useBilling } from "@/lib/hooks";
@@ -26,6 +28,32 @@ const BENEFITS = [
   "Cancele quando quiser, sem multa",
 ];
 
+/** Uma opção de plano (anual ou mensal): selo de economia calculado, valor total e, no anual, quanto dá por mês. */
+function PlanCard({ offer, selected, disabled, onPress }: { offer: PlanOffer; selected: boolean; disabled?: boolean; onPress: () => void }) {
+  const { colors, radius } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected, disabled }}
+      accessibilityLabel={`Plano ${offer.label}: ${offer.total}`}
+      disabled={disabled}
+      onPress={onPress}
+      style={{ padding: 14, gap: 4, borderRadius: radius.lg, borderWidth: selected ? 2 : 1, borderColor: selected ? colors.accent : colors.border, backgroundColor: selected ? colors.primarySoft : colors.surface, opacity: disabled && !selected ? 0.5 : 1 }}
+    >
+      <Row style={{ justifyContent: "space-between" }}>
+        <Text weight="700">{offer.label}</Text>
+        {offer.savings !== null ? <Badge label={`Economize ${offer.savings}%`} tone="positive" /> : null}
+      </Row>
+      <Text variant="title">{offer.total}</Text>
+      {offer.perMonth ? (
+        <Text variant="caption" tone="muted">
+          Equivale a {offer.perMonth}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
 /** Assinatura: situação atual, plano, adicional Rendimentos, pagar e gerenciar. Os preços vêm do provedor de pagamento. */
 export default function SubscriptionScreen() {
   const me = useMe();
@@ -33,18 +61,21 @@ export default function SubscriptionScreen() {
   const { colors } = useTheme();
   const billing = useBilling();
   const [withInvestments, setWithInvestments] = useState(false);
+  const [chosen, setChosen] = useState<BillingIntervalName | null>(null);
 
   const b = billing.data;
   const access = b?.access ?? me.entitlements.access;
   const enforced = b?.enforced ?? me.entitlements.billingEnforced;
   const summary = accessSummary(access);
-  const basicPrice = formatPrice(b?.prices.basic);
-  const addonPrice = formatPrice(b?.prices.investments);
+  const offers = planOffers(b?.prices.basic);
+  // Quem ainda não assinou escolhe o ciclo (o anual vem marcado); quem já assina vê o ciclo que tem.
+  const interval: BillingIntervalName = chosen && offers.some((o) => o.interval === chosen) ? chosen : defaultInterval(offers);
+  const addonPrice = formatPrice(b?.prices.investments[access.state === "paid" ? (b?.interval ?? "month") : interval]);
   const canSubscribe = enforced && (access.state === "trial" || access.state === "expired") && !!b?.checkoutAvailable;
   const isPaid = access.state === "paid";
   const trialPct = access.state === "trial" && access.daysLeft !== null && b ? Math.max(0, Math.min(100, ((b.trialDays - access.daysLeft) / Math.max(1, b.trialDays)) * 100)) : null;
 
-  const checkout = useApiMutation((investments: boolean) => api.billing.checkout(investments), {
+  const checkout = useApiMutation((v: { investments: boolean; interval: BillingIntervalName }) => api.billing.checkout(v.investments, v.interval), {
     onSuccess: (res) => {
       if (res.url) void openExternal(res.url);
       else {
@@ -102,9 +133,17 @@ export default function SubscriptionScreen() {
         <Reveal index={1}>
           <Section title="O que está incluído">
             <Card style={{ gap: 12 }}>
-              {basicPrice ? (
-                <View style={{ gap: 2 }}>
-                  <Text variant="title">{basicPrice}</Text>
+              {offers.length > 0 ? (
+                <View style={{ gap: 10 }}>
+                  {canSubscribe || offers.length > 1 ? (
+                    <View accessibilityRole="radiogroup" accessibilityLabel="Escolha o plano" style={{ gap: 10 }}>
+                      {offers.map((o) => (
+                        <PlanCard key={o.interval} offer={o} selected={o.interval === (isPaid ? (b?.interval ?? interval) : interval)} disabled={isPaid} onPress={() => setChosen(o.interval)} />
+                      ))}
+                    </View>
+                  ) : (
+                    <Text variant="title">{offers[0]!.total}</Text>
+                  )}
                   <Text variant="caption" tone="muted">
                     {access.state === "trial" ? "Seu teste grátis continua até o fim do prazo; só depois a cobrança começa." : "Cobrado pelo provedor de pagamento, com cancelamento a qualquer momento."}
                   </Text>
@@ -140,7 +179,13 @@ export default function SubscriptionScreen() {
               Acompanhe o CDI e o CDB e traga o seu porquinho e seus investimentos: veja quanto rendem por dia, sem planilha. É um plano a mais, opcional.
             </Text>
             {canSubscribe ? (
-              <SwitchRow title="Incluir na minha assinatura" subtitle={addonPrice ? `Soma ${addonPrice} ao plano` : undefined} value={withInvestments} onChange={setWithInvestments} />
+              <SwitchRow
+                title="Incluir na minha assinatura"
+                subtitle={addonPrice ? `Soma ${addonPrice} ao plano` : "Ainda não está disponível neste plano"}
+                value={withInvestments && !!addonPrice}
+                disabled={!addonPrice}
+                onChange={setWithInvestments}
+              />
             ) : null}
             {isPaid && b.canManage ? (
               <SwitchRow
@@ -166,7 +211,7 @@ export default function SubscriptionScreen() {
           size="lg"
           icon="crown"
           loading={checkout.isPending}
-          onPress={() => checkout.mutate(withInvestments)}
+          onPress={() => checkout.mutate({ investments: withInvestments && !!b?.prices.investments[interval], interval })}
         />
       ) : null}
       {enforced && !b?.checkoutAvailable && (access.state === "trial" || access.state === "expired") && b ? (

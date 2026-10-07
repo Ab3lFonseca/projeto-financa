@@ -1,21 +1,71 @@
 import type { BillingPrice } from "@app/shared";
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { BillingProviderError, type BillingProvider, type NormalizedSubscription, type ParsedWebhook } from "./provider";
+import type { Config } from "../../config";
+import { BillingProviderError, type BillingCatalog, type BillingInterval, type BillingProvider, type NormalizedSubscription, type ParsedWebhook, type PricesByInterval } from "./provider";
+
+/**
+ * De onde sai o preço de um plano: um preço (`price_...`) ou um produto (`prod_...`), de que o servidor descobre o preço ativo. `interval` é o ciclo
+ * que o nome da variável promete (MONTHLY/YEARLY): se o preço real for de outro ciclo, a fonte é ignorada em vez de cobrar o ciclo errado.
+ */
+export type StripePlanSource = { kind: "price" | "product"; id: string; interval?: BillingInterval };
 
 export type StripeConfig = {
   secretKey: string;
   webhookSecret: string;
-  priceId: string;
-  investmentsPriceId?: string;
   apiBase: string;
+  /** Fontes do plano básico, da mais preferida para a menos (a primeira de cada ciclo vale). */
+  basic: StripePlanSource[];
+  /** Fontes do adicional Rendimentos, na mesma lógica. */
+  investments: StripePlanSource[];
+  log?: { warn: (obj: object, msg: string) => void };
 };
+
+type SourceEnv = Pick<
+  Config,
+  | "STRIPE_PRICE_ID"
+  | "STRIPE_PRICE_ID_MONTHLY"
+  | "STRIPE_PRICE_ID_YEARLY"
+  | "STRIPE_PRODUCT_ID_MONTHLY"
+  | "STRIPE_PRODUCT_ID_YEARLY"
+  | "STRIPE_PRICE_ID_INVESTMENTS"
+  | "STRIPE_PRICE_ID_INVESTMENTS_MONTHLY"
+  | "STRIPE_PRICE_ID_INVESTMENTS_YEARLY"
+  | "STRIPE_PRODUCT_ID_INVESTMENTS_MONTHLY"
+  | "STRIPE_PRODUCT_ID_INVESTMENTS_YEARLY"
+>;
+
+/**
+ * Monta as fontes de preço a partir das variáveis de ambiente. Um `price_` explícito vale mais que o `prod_` do mesmo ciclo; o `STRIPE_PRICE_ID`
+ * antigo (um preço só, de qualquer ciclo) continua funcionando e o ciclo dele é o que o Stripe disser.
+ */
+export function stripePlanSources(env: SourceEnv): { basic: StripePlanSource[]; investments: StripePlanSource[] } {
+  const list = (items: [string | undefined, StripePlanSource["kind"], BillingInterval | undefined][]): StripePlanSource[] =>
+    items.flatMap(([id, kind, interval]) => (id ? [{ kind, id, ...(interval ? { interval } : {}) }] : []));
+  return {
+    basic: list([
+      [env.STRIPE_PRICE_ID_MONTHLY, "price", "month"],
+      [env.STRIPE_PRICE_ID_YEARLY, "price", "year"],
+      [env.STRIPE_PRICE_ID, "price", undefined],
+      [env.STRIPE_PRODUCT_ID_MONTHLY, "product", "month"],
+      [env.STRIPE_PRODUCT_ID_YEARLY, "product", "year"],
+    ]),
+    investments: list([
+      [env.STRIPE_PRICE_ID_INVESTMENTS_MONTHLY, "price", "month"],
+      [env.STRIPE_PRICE_ID_INVESTMENTS_YEARLY, "price", "year"],
+      [env.STRIPE_PRICE_ID_INVESTMENTS, "price", undefined],
+      [env.STRIPE_PRODUCT_ID_INVESTMENTS_MONTHLY, "product", "month"],
+      [env.STRIPE_PRODUCT_ID_INVESTMENTS_YEARLY, "product", "year"],
+    ]),
+  };
+}
 
 /** Pedidos de webhook mais antigos que isto são recusados (protege contra reenvio de um pedido capturado). */
 const WEBHOOK_TOLERANCE_SECONDS = 300;
 const REQUEST_TIMEOUT_MS = 15_000;
 const PRICE_TTL_MS = 10 * 60_000;
 
-type StripeSubscriptionItem = { id: string; price?: { id?: string }; current_period_end?: number };
+type StripePriceRef = { id?: string; product?: string | { id?: string } | null; recurring?: { interval?: string; interval_count?: number } | null };
+type StripeSubscriptionItem = { id: string; price?: StripePriceRef; current_period_end?: number };
 type StripeSubscription = {
   id: string;
   customer: string | { id: string };
@@ -26,7 +76,13 @@ type StripeSubscription = {
   metadata?: Record<string, string>;
   items?: { data?: StripeSubscriptionItem[] };
 };
-type StripePrice = { unit_amount?: number | null; currency?: string; recurring?: { interval?: string; interval_count?: number } | null };
+type StripePrice = StripePriceRef & { unit_amount?: number | null; currency?: string; active?: boolean };
+type StripeProduct = { active?: boolean; default_price?: string | { id?: string } | null };
+
+/** Um item à venda já resolvido: o preço a cobrar (`price_...`), o produto dele e como mostrar o valor. */
+type Resolved = { priceId: string; productId: string | null; price: BillingPrice };
+type ResolvedGroup = Partial<Record<BillingInterval, Resolved>>;
+type ResolvedCatalog = { basic: ResolvedGroup; investments: ResolvedGroup };
 
 const STATUS_MAP: Record<string, NormalizedSubscription["status"]> = {
   active: "ACTIVE",
@@ -39,13 +95,24 @@ const STATUS_MAP: Record<string, NormalizedSubscription["status"]> = {
   incomplete: "INCOMPLETE",
 };
 
+const enc = encodeURIComponent;
+const idOf = (v: string | { id?: string } | null | undefined): string | null => (typeof v === "string" ? v : (v?.id ?? null));
+
+/** Só vale ciclo mensal ou anual SIMPLES (a cada 1 mês ou 1 ano); "a cada 3 meses" não é oferecido, para nunca mostrar um valor errado. */
+function intervalOf(price: StripePriceRef | undefined): BillingInterval | null {
+  const interval = price?.recurring?.interval;
+  if ((interval !== "month" && interval !== "year") || (price?.recurring?.interval_count ?? 1) !== 1) return null;
+  return interval;
+}
+
 /**
  * Cobrança hospedada pelo Stripe (Checkout + Portal do cliente). Os dados do cartão/Pix nunca passam pelo nosso servidor: a pessoa
  * paga na página do Stripe e volta para o site. Usa só `fetch` (sem SDK) com tempo limite e a chave SECRETA, que fica só no servidor.
+ * Vende o plano em ciclo mensal e/ou anual: cada ciclo vem de um preço ou de um produto configurado (o servidor descobre o preço ativo do produto).
  */
 export class StripeProvider implements BillingProvider {
   readonly name = "stripe" as const;
-  private priceCache: { at: number; value: { basic: BillingPrice | null; investments: BillingPrice | null } } | null = null;
+  private cache: { at: number; value: ResolvedCatalog } | null = null;
 
   constructor(
     private readonly cfg: StripeConfig,
@@ -53,7 +120,7 @@ export class StripeProvider implements BillingProvider {
   ) {}
 
   get supportsInvestments(): boolean {
-    return Boolean(this.cfg.investmentsPriceId);
+    return this.cfg.investments.length > 0;
   }
 
   private async call<T>(method: "GET" | "POST" | "DELETE", path: string, form?: Record<string, string>): Promise<T> {
@@ -81,27 +148,84 @@ export class StripeProvider implements BillingProvider {
     return body;
   }
 
-  async prices() {
-    if (this.priceCache && Date.now() - this.priceCache.at < PRICE_TTL_MS) return this.priceCache.value;
-    const read = async (id: string | undefined): Promise<BillingPrice | null> => {
-      if (!id) return null;
-      const p = await this.call<StripePrice>("GET", `prices/${encodeURIComponent(id)}`);
-      const interval = p.recurring?.interval;
-      if (typeof p.unit_amount !== "number" || !p.currency || (interval !== "month" && interval !== "year") || (p.recurring?.interval_count ?? 1) !== 1) return null;
-      return { amountCents: p.unit_amount, currency: p.currency.toUpperCase(), interval };
-    };
-    const value = { basic: await read(this.cfg.priceId), investments: await read(this.cfg.investmentsPriceId) };
-    this.priceCache = { at: Date.now(), value };
+  // ------------------------------------------------------------------------------------------------ catálogo de preços
+
+  /** Um `price_` vendável: ativo, recorrente, mensal ou anual simples e com valor; `null` se não serve. */
+  private parsePrice(p: StripePrice, id: string, productFallback: string | null): Resolved | null {
+    const interval = intervalOf(p);
+    if (p.active === false || typeof p.unit_amount !== "number" || !p.currency || !interval) return null;
+    return { priceId: p.id ?? id, productId: idOf(p.product) ?? productFallback, price: { amountCents: p.unit_amount, currency: p.currency.toUpperCase(), interval } };
+  }
+
+  private async resolveSource(src: StripePlanSource): Promise<Resolved | null> {
+    try {
+      if (src.kind === "price") return this.parsePrice(await this.call<StripePrice>("GET", `prices/${enc(src.id)}`), src.id, null);
+
+      const product = await this.call<StripeProduct>("GET", `products/${enc(src.id)}`);
+      if (product.active === false) {
+        this.cfg.log?.warn({ product: src.id }, "produto do Stripe arquivado: ignorado");
+        return null;
+      }
+      const defaultId = idOf(product.default_price);
+      if (defaultId) return this.parsePrice(await this.call<StripePrice>("GET", `prices/${enc(defaultId)}`), defaultId, src.id);
+      // Sem preço padrão no produto: serve se houver UM só preço recorrente ativo (com mais de um, não dá para adivinhar qual cobrar).
+      const list = await this.call<{ data?: (StripePrice & { id: string })[] }>("GET", `prices?product=${enc(src.id)}&active=true&type=recurring&limit=10`);
+      const sellable = (list.data ?? []).flatMap((p) => this.parsePrice(p, p.id, src.id) ?? []);
+      if (sellable.length === 1) return sellable[0]!;
+      this.cfg.log?.warn({ product: src.id, candidates: sellable.length }, "produto do Stripe sem preço padrão e sem um único preço recorrente: defina o preço padrão no Stripe");
+      return null;
+    } catch (err) {
+      // Id digitado errado (ou de outra conta do Stripe): só este ciclo fica fora; o resto da cobrança segue funcionando.
+      if (err instanceof BillingProviderError && err.code === "PROVIDER_RESOURCE_MISSING") {
+        this.cfg.log?.warn({ source: src.id }, "id de preço/produto não encontrado no Stripe: ignorado");
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  private async resolveGroup(sources: StripePlanSource[]): Promise<ResolvedGroup> {
+    const results = await Promise.all(sources.map((s) => this.resolveSource(s)));
+    const out: ResolvedGroup = {};
+    results.forEach((r, i) => {
+      const src = sources[i]!;
+      if (!r) return;
+      if (src.interval && src.interval !== r.price.interval) {
+        this.cfg.log?.warn({ source: src.id, expected: src.interval, actual: r.price.interval }, "o ciclo do preço no Stripe não é o do nome da variável: ignorado");
+        return;
+      }
+      out[r.price.interval] ??= r; // as fontes vêm em ordem de preferência: a primeira de cada ciclo vale
+    });
+    return out;
+  }
+
+  /** Preços já resolvidos, em cache por 10 minutos. Falha de rede NÃO é guardada (a próxima chamada tenta de novo). */
+  private async resolved(): Promise<ResolvedCatalog> {
+    if (this.cache && Date.now() - this.cache.at < PRICE_TTL_MS) return this.cache.value;
+    const [basic, investments] = await Promise.all([this.resolveGroup(this.cfg.basic), this.resolveGroup(this.cfg.investments)]);
+    const value = { basic, investments };
+    this.cache = { at: Date.now(), value };
     return value;
   }
 
-  async createCheckout(input: { userId: string; email: string; customerId: string | null; investments: boolean; successUrl: string; cancelUrl: string }) {
+  async catalog(): Promise<BillingCatalog> {
+    const r = await this.resolved();
+    const show = (g: ResolvedGroup): PricesByInterval => ({ month: g.month?.price ?? null, year: g.year?.price ?? null });
+    return { basic: show(r.basic), investments: show(r.investments) };
+  }
+
+  // ------------------------------------------------------------------------------------------------ pagamento
+
+  async createCheckout(input: { userId: string; email: string; customerId: string | null; interval: BillingInterval; investments: boolean; successUrl: string; cancelUrl: string }) {
+    const r = await this.resolved();
+    const basic = r.basic[input.interval];
+    if (!basic) throw new BillingProviderError("PLAN_NOT_CONFIGURED", "Plano sem preço configurado para este ciclo");
     const form: Record<string, string> = {
       mode: "subscription",
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
       client_reference_id: input.userId,
-      "line_items[0][price]": this.cfg.priceId,
+      "line_items[0][price]": basic.priceId,
       "line_items[0][quantity]": "1",
       "subscription_data[metadata][user_id]": input.userId,
       "metadata[user_id]": input.userId,
@@ -109,8 +233,10 @@ export class StripeProvider implements BillingProvider {
       allow_promotion_codes: "true",
     };
     if (input.investments) {
-      if (!this.cfg.investmentsPriceId) throw new BillingProviderError("ADDON_NOT_CONFIGURED", "Adicional sem preço configurado");
-      form["line_items[1][price]"] = this.cfg.investmentsPriceId;
+      // O Stripe exige o mesmo ciclo em todos os itens da assinatura: o adicional é o do ciclo escolhido.
+      const addon = r.investments[input.interval];
+      if (!addon) throw new BillingProviderError("ADDON_NOT_CONFIGURED", "Adicional sem preço configurado para este ciclo");
+      form["line_items[1][price]"] = addon.priceId;
       form["line_items[1][quantity]"] = "1";
     }
     // Com cliente já existente o Stripe reaproveita o cartão salvo; sem ele, cria o cliente a partir do e-mail.
@@ -127,37 +253,45 @@ export class StripeProvider implements BillingProvider {
     return { url: session.url };
   }
 
-  async setInvestmentsAddon(input: { subscriptionId: string; itemId: string | null; enabled: boolean }) {
-    if (!this.cfg.investmentsPriceId) throw new BillingProviderError("ADDON_NOT_CONFIGURED", "Adicional sem preço configurado");
+  async setInvestmentsAddon(input: { subscriptionId: string; itemId: string | null; enabled: boolean; interval: BillingInterval }) {
+    if (!this.supportsInvestments) throw new BillingProviderError("ADDON_NOT_CONFIGURED", "Adicional sem preço configurado");
     if (input.enabled) {
       if (input.itemId) return; // já tem
+      const addon = (await this.resolved()).investments[input.interval];
+      if (!addon) throw new BillingProviderError("ADDON_NOT_CONFIGURED", "Adicional sem preço configurado para o ciclo desta assinatura");
       await this.call("POST", "subscription_items", {
         subscription: input.subscriptionId,
-        price: this.cfg.investmentsPriceId,
+        price: addon.priceId,
         quantity: "1",
         proration_behavior: "create_prorations",
       });
       return;
     }
     if (!input.itemId) return; // já não tem
-    await this.call("DELETE", `subscription_items/${encodeURIComponent(input.itemId)}?proration_behavior=create_prorations`);
+    await this.call("DELETE", `subscription_items/${enc(input.itemId)}?proration_behavior=create_prorations`);
   }
 
   async deleteCustomer(customerId: string) {
     try {
-      await this.call("DELETE", `customers/${encodeURIComponent(customerId)}`);
+      await this.call("DELETE", `customers/${enc(customerId)}`);
     } catch (err) {
       if (err instanceof BillingProviderError && err.code === "PROVIDER_RESOURCE_MISSING") return;
       throw err;
     }
   }
 
+  /** O item é o do adicional? Pelo `price_` configurado ou pelo produto configurado: sem consultar o Stripe (uma falha de rede nunca "tira" o adicional). */
+  private isAddonItem(item: StripeSubscriptionItem): boolean {
+    return this.cfg.investments.some((src) => (src.kind === "price" ? item.price?.id === src.id : idOf(item.price?.product) === src.id));
+  }
+
   async fetchSubscription(subscriptionId: string): Promise<NormalizedSubscription> {
-    const sub = await this.call<StripeSubscription>("GET", `subscriptions/${encodeURIComponent(subscriptionId)}`);
+    const sub = await this.call<StripeSubscription>("GET", `subscriptions/${enc(subscriptionId)}`);
     const items = sub.items?.data ?? [];
     // O fim do período mudou de lugar entre versões da API do Stripe: ora na assinatura, ora nos itens.
     const periodEndSeconds = sub.current_period_end ?? items.map((i) => i.current_period_end).filter((n): n is number => typeof n === "number").sort((a, b) => a - b)[0];
-    const addonItem = this.cfg.investmentsPriceId ? items.find((i) => i.price?.id === this.cfg.investmentsPriceId) : undefined;
+    const addonItem = items.find((i) => this.isAddonItem(i));
+    const planItem = items.find((i) => !this.isAddonItem(i));
     return {
       providerSubscriptionId: sub.id,
       providerCustomerId: typeof sub.customer === "string" ? sub.customer : sub.customer.id,
@@ -165,6 +299,7 @@ export class StripeProvider implements BillingProvider {
       status: STATUS_MAP[sub.status] ?? "EXPIRED",
       currentPeriodEnd: typeof periodEndSeconds === "number" ? new Date(periodEndSeconds * 1000) : null,
       cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end) || (typeof sub.cancel_at === "number" && sub.cancel_at > 0),
+      interval: intervalOf(planItem?.price),
       investmentsAddon: Boolean(addonItem),
       investmentsItemId: addonItem?.id ?? null,
     };

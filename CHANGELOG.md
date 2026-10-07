@@ -11,6 +11,11 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Assinatura mensal e anual.** A tela de assinatura mostra o plano **anual primeiro** (com a economia calculada dos dois preços e o valor por mês) e o
+  mensal como alternativa; o adicional Rendimentos segue o ciclo escolhido (o Stripe exige o mesmo ciclo em todos os itens). Cada ciclo é um **produto**
+  do Stripe (`STRIPE_PRODUCT_ID_MONTHLY` / `STRIPE_PRODUCT_ID_YEARLY`): o servidor descobre sozinho o preço ativo, então não é preciso copiar `price_...`
+  (um `STRIPE_PRICE_ID_...` explícito continua valendo mais). Dá para vender só um ciclo; o ciclo de cada assinatura fica gravado (migration
+  `20261008000100`) e a receita mensal estimada do painel conta o anual dividido por 12. Sem informar o ciclo, o pagamento é sempre o mensal.
 - **Temas prontos em três famílias novas** (*Configurações → Aparência*, que agora agrupa os temas): **Opacos** (cores cheias e chapadas: Oceano, Floresta,
   Vinho, Uva e Brasa), **Foscos** (tons acinzentados, escuros e claros: Grafite, Ardósia, Sálvia, Areia e Malva) e **Pastéis** (claros e delicados: Rosa,
   Menta, Lavanda, Pêssego e Céu). Todos passam pelas mesmas regras de legibilidade dos demais (texto e realces com contraste mínimo, conferidos por teste).

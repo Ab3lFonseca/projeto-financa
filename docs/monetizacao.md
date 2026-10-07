@@ -38,9 +38,9 @@ Conclusões práticas:
 
 ## 2. Recomendação de partida
 
-1. **Ofereça anual como padrão e mensal como alternativa** (mostrar o anual primeiro, com a economia em reais). Hoje o app lê **um** preço básico
-   (`STRIPE_PRICE_ID`); começar só com o anual, ou só com o mensal, é questão de qual `price_` você coloca. Mostrar os dois lado a lado é uma pequena
-   evolução a fazer quando for publicar a tela de assinatura.
+1. **Ofereça anual como padrão e mensal como alternativa.** Já é assim: a tela de assinatura mostra o **anual primeiro** (já marcado), com a economia
+   calculada dos dois preços, e o mensal como alternativa. Cada ciclo é um produto no Stripe (`STRIPE_PRODUCT_ID_MONTHLY` / `STRIPE_PRODUCT_ID_YEARLY`);
+   vender só um deles também funciona.
 2. **Mantenha o teste sem cartão.** Mais gente chega a usar de verdade (o teste mostra tudo, inclusive o Rendimentos); em troca, converte menos que "teste com
    cartão". O modo **somente leitura** (nada é apagado, dá para exportar) é gentil e ainda deixa claro o que se perde ao não assinar.
 3. **Use o Rendimentos como motivo para assinar.** Ele fica liberado nos 30 dias; no fim, quem já cadastrou o porquinho e vê o rendimento diário tem um
@@ -52,7 +52,6 @@ Conclusões práticas:
 ## 3. Ainda não implementado (ideias que aumentam a conversão)
 
 - Lembretes antes do fim do teste (por exemplo no dia 23, 28 e 30) por notificação no app.
-- Mostrar mensal e anual lado a lado na tela de assinatura (hoje, um preço básico).
 - Mural de novidades com o que vem por aí (inclusive para o Rendimentos).
 - Pix Automático para a cobrança anual/mensal, via um segundo provedor (Asaas, por exemplo), se o Stripe não liberar Pix recorrente para a sua conta.
 - Pausar a assinatura em vez de cancelar.

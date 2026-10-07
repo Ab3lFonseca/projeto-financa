@@ -1,5 +1,5 @@
 import { Prisma, type PrismaClient } from "@app/database";
-import type { BillingDTO, BillingPrice } from "@app/shared";
+import type { BillingDTO } from "@app/shared";
 import type { FastifyBaseLogger } from "fastify";
 import type { Config } from "../../config";
 import { toAccessDTO } from "../../lib/access";
@@ -7,10 +7,14 @@ import { audit } from "../../lib/audit";
 import { Errors } from "../../lib/errors";
 import type { AuthUser } from "../../types";
 import type { UserDirectory } from "../users/directory";
-import { BillingProviderError, type BillingProvider, type NormalizedSubscription } from "./provider";
+import { BillingProviderError, EMPTY_CATALOG, type BillingCatalog, type BillingInterval, type BillingProvider, type NormalizedSubscription } from "./provider";
 
 const DAY_MS = 86_400_000;
-const DEV_PERIOD_DAYS = 30;
+/** Duração do "período pago" do provedor de desenvolvimento (que não cobra nada). */
+const DEV_PERIOD_DAYS: Record<BillingInterval, number> = { month: 30, year: 365 };
+
+/** Ciclo guardado no banco (texto) como o tipo do servidor; qualquer outro valor vira "não sei". */
+export const asInterval = (value: string | null | undefined): BillingInterval | null => (value === "month" || value === "year" ? value : null);
 
 type Deps = {
   prisma: PrismaClient;
@@ -53,10 +57,10 @@ export class BillingService {
   async state(user: AuthUser): Promise<BillingDTO> {
     const { provider, config } = this.deps;
     const sub = await this.subscriptionOf(user.id);
-    let prices: { basic: BillingPrice | null; investments: BillingPrice | null } = { basic: null, investments: null };
+    let prices: BillingCatalog = EMPTY_CATALOG;
     if (provider) {
       try {
-        prices = await provider.prices();
+        prices = await provider.catalog();
       } catch (err) {
         // Preço indisponível não derruba a tela: o app mostra o botão sem o valor e o servidor registra o motivo.
         this.deps.log.warn({ code: err instanceof BillingProviderError ? err.code : "UNKNOWN" }, "não foi possível ler os preços do provedor");
@@ -71,6 +75,8 @@ export class BillingService {
       investmentsAvailable: provider?.supportsInvestments ?? false,
       canManage: provider?.name === "stripe" && Boolean(sub?.providerCustomerId),
       hasInvestmentsAddon: user.access.state === "paid" && user.access.features.investments,
+      // Só mostra o ciclo de quem paga pelo app (teste, cortesia e administrador não têm).
+      interval: user.access.state === "paid" && sub?.store === "WEB" ? asInterval(sub.billingInterval) : null,
       prices,
     };
   }
@@ -78,19 +84,22 @@ export class BillingService {
   // ------------------------------------------------------------------------------------------------ pagamento
 
   /** Abre o pagamento no provedor (ou, só em desenvolvimento, ativa a assinatura na hora). */
-  async checkout(user: AuthUser, body: { investments: boolean }, ip: string): Promise<{ url: string | null; activated: boolean }> {
+  async checkout(user: AuthUser, body: { investments: boolean; interval: BillingInterval }, ip: string): Promise<{ url: string | null; activated: boolean }> {
     const provider = this.requireProvider();
     const { config, prisma, now } = this.deps;
     if (!config.BILLING_ENFORCED) throw Errors.conflict("A cobrança ainda não começou: por enquanto o app é gratuito para todos.", "BILLING_NOT_ENFORCED");
     if (user.access.state === "paid" || user.access.state === "complimentary" || user.access.state === "admin") {
       throw Errors.conflict("Você já tem acesso. Para trocar o cartão ou cancelar, use o gerenciamento da assinatura.", "ALREADY_ACTIVE");
     }
-    if (body.investments && !provider.supportsInvestments) throw Errors.unprocessable("O adicional Rendimentos ainda não está disponível para contratar.", "ADDON_UNAVAILABLE");
+    // O ciclo (e o adicional nele) precisam ter preço no provedor: nunca abre um pagamento para um plano que não existe.
+    const catalog = await this.viaProvider(() => provider.catalog());
+    if (!catalog.basic[body.interval]) throw Errors.unprocessable("Este plano ainda não está disponível. Escolha outra opção.", "INTERVAL_UNAVAILABLE");
+    if (body.investments && !catalog.investments[body.interval]) throw Errors.unprocessable("O adicional Rendimentos ainda não está disponível para contratar neste plano.", "ADDON_UNAVAILABLE");
 
-    await audit(prisma, config.IP_HASH_PEPPER, { actorId: user.id, action: "billing.checkout.started", entity: "user", entityId: user.id, ip, metadata: { investments: body.investments, provider: provider.name } }, this.deps.log);
+    await audit(prisma, config.IP_HASH_PEPPER, { actorId: user.id, action: "billing.checkout.started", entity: "user", entityId: user.id, ip, metadata: { investments: body.investments, interval: body.interval, provider: provider.name } }, this.deps.log);
 
     if (provider.name === "dev") {
-      const end = new Date(now().getTime() + DEV_PERIOD_DAYS * DAY_MS);
+      const end = new Date(now().getTime() + DEV_PERIOD_DAYS[body.interval] * DAY_MS);
       await this.writeSubscription(user.id, {
         status: "ACTIVE",
         store: "WEB",
@@ -98,6 +107,7 @@ export class BillingService {
         providerCustomerId: `dev_${user.id}`,
         currentPeriodEnd: end,
         cancelAtPeriodEnd: false,
+        billingInterval: body.interval,
         investmentsAddon: body.investments,
       });
       return { url: null, activated: true };
@@ -110,6 +120,7 @@ export class BillingService {
         userId: user.id,
         email: user.email,
         customerId: sub?.providerCustomerId ?? null,
+        interval: body.interval,
         investments: body.investments,
         successUrl: `${base}/subscription/return?status=success`,
         cancelUrl: `${base}/subscription/return?status=cancel`,
@@ -135,12 +146,18 @@ export class BillingService {
     if (!provider.supportsInvestments) throw Errors.unprocessable("O adicional Rendimentos ainda não está disponível para contratar.", "ADDON_UNAVAILABLE");
 
     if (provider.name === "dev") {
-      await this.writeSubscription(user.id, { status: "ACTIVE", store: "WEB", externalId: sub.externalId, providerCustomerId: sub.providerCustomerId, currentPeriodEnd: sub.currentPeriodEnd, cancelAtPeriodEnd: sub.cancelAtPeriodEnd, investmentsAddon: enabled });
+      await this.writeSubscription(user.id, { status: "ACTIVE", store: "WEB", externalId: sub.externalId, providerCustomerId: sub.providerCustomerId, currentPeriodEnd: sub.currentPeriodEnd, cancelAtPeriodEnd: sub.cancelAtPeriodEnd, billingInterval: asInterval(sub.billingInterval), investmentsAddon: enabled });
     } else {
       if (!sub.externalId) throw Errors.conflict("Assinatura sem vínculo com o provedor.", "NO_PAID_SUBSCRIPTION");
       const externalId = sub.externalId;
       const current = await this.viaProvider(() => provider.fetchSubscription(externalId));
-      await this.viaProvider(() => provider.setInvestmentsAddon({ subscriptionId: externalId, itemId: current.investmentsItemId, enabled }));
+      // O adicional segue o ciclo da assinatura (o provedor exige o mesmo ciclo em todos os itens). Sem ciclo mensal/anual simples, não dá.
+      const interval = current.interval;
+      if (!interval) throw Errors.unprocessable("O adicional não está disponível para o ciclo desta assinatura.", "ADDON_UNAVAILABLE");
+      if (enabled && !(await this.viaProvider(() => provider.catalog())).investments[interval]) {
+        throw Errors.unprocessable("O adicional Rendimentos ainda não está disponível para contratar neste plano.", "ADDON_UNAVAILABLE");
+      }
+      await this.viaProvider(() => provider.setInvestmentsAddon({ subscriptionId: externalId, itemId: current.investmentsItemId, enabled, interval }));
       // Relê o estado real e grava: a tela já mostra o resultado, sem esperar o webhook.
       await this.apply(await this.viaProvider(() => provider.fetchSubscription(externalId)), user.id);
     }
@@ -218,19 +235,20 @@ export class BillingService {
       providerCustomerId: sub.providerCustomerId,
       currentPeriodEnd: sub.currentPeriodEnd,
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      billingInterval: sub.interval,
       investmentsAddon: sub.investmentsAddon,
     });
     await audit(prisma, this.deps.config.IP_HASH_PEPPER, {
       action: "billing.subscription.synced",
       entity: "user",
       entityId: userId,
-      metadata: { status: sub.status, cancelAtPeriodEnd: sub.cancelAtPeriodEnd, addon: sub.investmentsAddon },
+      metadata: { status: sub.status, cancelAtPeriodEnd: sub.cancelAtPeriodEnd, addon: sub.investmentsAddon, interval: sub.interval },
     }, log);
   }
 
   private async writeSubscription(
     userId: string,
-    s: { status: NormalizedSubscription["status"]; store: "WEB" | "MANUAL"; externalId: string | null; providerCustomerId: string | null; currentPeriodEnd: Date | null; cancelAtPeriodEnd: boolean; investmentsAddon: boolean },
+    s: { status: NormalizedSubscription["status"]; store: "WEB" | "MANUAL"; externalId: string | null; providerCustomerId: string | null; currentPeriodEnd: Date | null; cancelAtPeriodEnd: boolean; billingInterval: BillingInterval | null; investmentsAddon: boolean },
   ): Promise<void> {
     const status = s.status === "INCOMPLETE" ? "EXPIRED" : s.status;
     const data = {
@@ -241,6 +259,7 @@ export class BillingService {
       providerCustomerId: s.providerCustomerId,
       currentPeriodEnd: s.currentPeriodEnd,
       cancelAtPeriodEnd: s.cancelAtPeriodEnd,
+      billingInterval: s.billingInterval,
       investmentsAddon: s.investmentsAddon,
       canceledAt: status === "CANCELED" ? this.deps.now() : null,
     };
@@ -280,7 +299,7 @@ export class BillingService {
 
     const end = input.days === null ? null : new Date(now().getTime() + input.days * DAY_MS);
     // Mantém o cliente do provedor (se a pessoa já pagou antes, o portal continua abrindo com o cartão salvo).
-    await this.writeSubscription(targetId, { status: "ACTIVE", store: "MANUAL", externalId: null, providerCustomerId: s?.providerCustomerId ?? null, currentPeriodEnd: end, cancelAtPeriodEnd: false, investmentsAddon: input.investments });
+    await this.writeSubscription(targetId, { status: "ACTIVE", store: "MANUAL", externalId: null, providerCustomerId: s?.providerCustomerId ?? null, currentPeriodEnd: end, cancelAtPeriodEnd: false, billingInterval: null, investmentsAddon: input.investments });
     await audit(prisma, config.IP_HASH_PEPPER, { actorId: adminId, action: "admin.access.granted", entity: "user", entityId: targetId, ip, metadata: { days: input.days, investments: input.investments } }, this.deps.log);
   }
 

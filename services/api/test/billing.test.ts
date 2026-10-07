@@ -12,9 +12,25 @@ const WHSEC = "whsec_integration123";
 const DAY = 86_400_000;
 const APP_WEB_URL = "https://app.exemplo.test";
 
-function stripeProvider(stripe: FakeStripe, withAddon = true): StripeProvider {
+/** Provedor como o dono vai configurar: um PRODUTO por ciclo (mensal e anual) no plano e no adicional. `addon: "month"` = adicional só no mensal. */
+function stripeProvider(stripe: FakeStripe, withAddon: boolean | "month" = true): StripeProvider {
+  const investments = withAddon
+    ? [
+        { kind: "product" as const, id: "prod_inv", interval: "month" as const },
+        ...(withAddon === true ? [{ kind: "product" as const, id: "prod_inv_year", interval: "year" as const }] : []),
+      ]
+    : [];
   return new StripeProvider(
-    { secretKey: "sk_test_integration", webhookSecret: WHSEC, priceId: "price_basic", investmentsPriceId: withAddon ? "price_inv" : undefined, apiBase: "https://api.stripe.test" },
+    {
+      secretKey: "sk_test_integration",
+      webhookSecret: WHSEC,
+      apiBase: "https://api.stripe.test",
+      basic: [
+        { kind: "product", id: "prod_basic", interval: "month" },
+        { kind: "product", id: "prod_basic_year", interval: "year" },
+      ],
+      investments,
+    },
     stripe.fetch,
   );
 }
@@ -77,8 +93,8 @@ describe("assinatura com Stripe (cobrança ligada)", () => {
   };
 
   /** A pessoa paga no Stripe: a assinatura passa a existir lá e o webhook de checkout concluído chega. */
-  async function subscribe(u: TestUser, subId: string, o: { addon?: boolean; periodEnd?: Date; customer?: string } = {}) {
-    stripe.setActive(subId, { userId: u.id, customer: o.customer ?? `cus_${subId}`, periodEnd: o.periodEnd ?? new Date(env.now().getTime() + 30 * DAY), addon: o.addon });
+  async function subscribe(u: TestUser, subId: string, o: { addon?: boolean; periodEnd?: Date; customer?: string; interval?: "month" | "year" } = {}) {
+    stripe.setActive(subId, { userId: u.id, customer: o.customer ?? `cus_${subId}`, periodEnd: o.periodEnd ?? new Date(env.now().getTime() + 30 * DAY), addon: o.addon, interval: o.interval });
     const res = await hook.deliver("checkout.session.completed", { subscription: subId, client_reference_id: u.id });
     expect(res.status).toBe(200);
   }
@@ -96,7 +112,11 @@ describe("assinatura com Stripe (cobrança ligada)", () => {
         investmentsAvailable: true,
         canManage: false,
         hasInvestmentsAddon: false,
-        prices: { basic: { amountCents: 1000, currency: "BRL", interval: "month" }, investments: { amountCents: 500, currency: "BRL", interval: "month" } },
+        interval: null,
+        prices: {
+          basic: { month: { amountCents: 1000, currency: "BRL", interval: "month" }, year: { amountCents: 10000, currency: "BRL", interval: "year" } },
+          investments: { month: { amountCents: 500, currency: "BRL", interval: "month" }, year: { amountCents: 5000, currency: "BRL", interval: "year" } },
+        },
       });
       expect(res.body.access).toMatchObject({ state: "trial", allowed: true, cancelAtPeriodEnd: false, features: { investments: true } });
       expect(res.body.access.daysLeft).toBeGreaterThan(0);
@@ -116,7 +136,7 @@ describe("assinatura com Stripe (cobrança ligada)", () => {
         const u = await member(e);
         const res = await u.get("/v1/billing");
         expect(res.status).toBe(200);
-        expect(res.body.prices).toEqual({ basic: null, investments: null });
+        expect(res.body.prices).toEqual({ basic: { month: null, year: null }, investments: { month: null, year: null } });
         expect(res.body.checkoutAvailable).toBe(true);
       } finally {
         await e.close();
@@ -176,6 +196,73 @@ describe("assinatura com Stripe (cobrança ligada)", () => {
       expect(res.status).toBe(502);
       expect(res.body.error.code).toBe("BILLING_PROVIDER_ERROR");
       expect(JSON.stringify(res.body)).not.toContain("4242");
+    });
+  });
+
+  describe("ciclos: mensal e anual", () => {
+    const lastCheckout = () => stripe.calls.filter((c) => c.path === "checkout/sessions").at(-1)!.form!;
+
+    it("sem informar o ciclo vale o MENSAL; o anual só se a pessoa pedir, e o adicional vai no ciclo escolhido", async () => {
+      const u = await member(env);
+      expect((await u.post("/v1/billing/checkout", {})).status).toBe(200);
+      expect(lastCheckout().get("line_items[0][price]")).toBe("price_basic");
+
+      expect((await u.post("/v1/billing/checkout", { interval: "year" })).status).toBe(200);
+      expect(lastCheckout().get("line_items[0][price]")).toBe("price_basic_year");
+      expect(lastCheckout().get("line_items[1][price]")).toBeNull();
+
+      expect((await u.post("/v1/billing/checkout", { interval: "year", investments: true })).status).toBe(200);
+      expect(lastCheckout().get("line_items[0][price]")).toBe("price_basic_year");
+      expect(lastCheckout().get("line_items[1][price]")).toBe("price_inv_year");
+
+      expect((await u.post("/v1/billing/checkout", { interval: "semana" })).status).toBe(422);
+      const intervals = (await env.prisma.auditLog.findMany({ where: { actorId: u.id, action: "billing.checkout.started" } })).map((a) => (a.metadata as { interval?: string }).interval);
+      expect(intervals).toEqual(expect.arrayContaining(["month", "year"]));
+    });
+
+    it("assinatura anual: o ciclo é gravado e aparece no estado; o adicional entra no preço ANUAL", async () => {
+      const u = await member(env, { expired: true });
+      await subscribe(u, "sub_anual", { interval: "year", periodEnd: new Date(env.now().getTime() + 365 * DAY) });
+      expect((await u.get("/v1/billing")).body).toMatchObject({ interval: "year", access: { state: "paid", features: { investments: false } } });
+      expect((await env.prisma.subscription.findUniqueOrThrow({ where: { userId: u.id } })).billingInterval).toBe("year");
+
+      const on = await u.post("/v1/billing/addon", { enabled: true });
+      expect(on.body).toMatchObject({ hasInvestmentsAddon: true, interval: "year" });
+      expect(stripe.calls.some((c) => c.path === "subscription_items" && c.form?.get("price") === "price_inv_year" && c.form?.get("subscription") === "sub_anual")).toBe(true);
+      expect(stripe.calls.some((c) => c.path === "subscription_items" && c.form?.get("price") === "price_inv" && c.form?.get("subscription") === "sub_anual")).toBe(false);
+      expect((await u.post("/v1/billing/addon", { enabled: false })).body.hasInvestmentsAddon).toBe(false);
+    });
+
+    it("o ciclo só aparece para quem paga pelo app (teste grátis e cortesia ficam sem)", async () => {
+      const trial = await member(env);
+      expect((await trial.get("/v1/billing")).body.interval).toBeNull();
+      const gift = await member(env);
+      await env.makePaid(gift.id, { store: "MANUAL" });
+      expect((await gift.get("/v1/billing")).body.interval).toBeNull();
+      const monthly = await member(env, { expired: true });
+      await subscribe(monthly, "sub_mensal_ciclo");
+      expect((await monthly.get("/v1/billing")).body.interval).toBe("month");
+    });
+
+    it("assinatura num ciclo que não é mensal/anual simples não aceita o adicional (não dá para escolher o preço certo)", async () => {
+      const u = await member(env, { expired: true });
+      await subscribe(u, "sub_trimestral");
+      stripe.subscriptions.get("sub_trimestral")!.items!.data[0]!.price.recurring = { interval: "month", interval_count: 3 };
+      const res = await u.post("/v1/billing/addon", { enabled: true });
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe("ADDON_UNAVAILABLE");
+    });
+
+    it("a receita mensal estimada do painel conta o anual dividido por 12", async () => {
+      const admin = await makeAdmin(env);
+      const revenue = async () => (await admin.get("/v1/admin/stats")).body.billing.monthlyRevenueCents as number;
+      const before = await revenue();
+      const yearly = await member(env, { expired: true });
+      await subscribe(yearly, "sub_receita_anual", { interval: "year", periodEnd: new Date(env.now().getTime() + 365 * DAY) });
+      expect((await revenue()) - before).toBe(833); // R$ 100,00 por ano = R$ 8,33 por mês (arredondado)
+      const yearlyWithAddon = await member(env, { expired: true });
+      await subscribe(yearlyWithAddon, "sub_receita_anual_inv", { interval: "year", addon: true, periodEnd: new Date(env.now().getTime() + 365 * DAY) });
+      expect((await revenue()) - before).toBe(833 + 833 + 417); // + o adicional anual: R$ 50,00 por ano = R$ 4,17 por mês
     });
   });
 
@@ -599,10 +686,10 @@ describe("assinatura com Stripe (cobrança ligada)", () => {
       expect(stats.expired).toBeGreaterThanOrEqual(1);
       expect(stats.admin).toBeGreaterThanOrEqual(1);
       expect(stats.investmentsAddon).toBeGreaterThanOrEqual(2); // a cortesia com Rendimentos + o pagante com adicional
-      // Receita estimada: cada pagante × preço do básico (R$ 10,00) + cada adicional pago (R$ 5,00). Cortesia não paga.
+      // Receita estimada: cada pagante vale o preço do básico do SEU ciclo (mensal R$ 10,00; anual ÷ 12) + o adicional pago. Cortesia não paga.
+      // (O cálculo exato por ciclo é o do teste "a receita mensal estimada do painel conta o anual dividido por 12".)
       expect(stats.currency).toBe("BRL");
       expect(stats.monthlyRevenueCents).toBeGreaterThanOrEqual(1500);
-      expect(stats.monthlyRevenueCents % 500).toBe(0);
 
       const everything = JSON.stringify([list, (await admin.get(`/v1/admin/users/${payer.id}`)).body, stats]);
       expect(everything).not.toMatch(/cus_|sub_painel|providerCustomerId|externalId|stripe/i);
@@ -654,6 +741,29 @@ describe("provedor de desenvolvimento (assina na hora, sem pagar)", () => {
     expect((await u.post("/v1/billing/checkout", { investments: true })).body.activated).toBe(true);
     expect((await u.get("/v1/billing")).body).toMatchObject({ hasInvestmentsAddon: true });
   });
+
+  it("escolher o plano anual: ativa por um ano e guarda o ciclo (o mensal continua sendo o padrão)", async () => {
+    const yearly = await member(env, { expired: true });
+    expect((await yearly.post("/v1/billing/checkout", { interval: "year" })).body.activated).toBe(true);
+    const state = (await yearly.get("/v1/billing")).body;
+    expect(state).toMatchObject({ interval: "year", access: { state: "paid" } });
+    expect(state.access.daysLeft).toBe(365);
+
+    const monthly = await member(env, { expired: true });
+    await monthly.post("/v1/billing/checkout", {});
+    expect((await monthly.get("/v1/billing")).body).toMatchObject({ interval: "month" });
+  });
+
+  it("mostra os dois ciclos, para o plano e para o adicional", async () => {
+    const u = await member(env, { expired: true });
+    const { prices } = (await u.get("/v1/billing")).body;
+    expect(prices.basic.month.interval).toBe("month");
+    expect(prices.basic.year.interval).toBe("year");
+    expect(prices.investments.month.interval).toBe("month");
+    expect(prices.investments.year.interval).toBe("year");
+    // o anual sai mais barato que 12 mensais (é isso que o app anuncia como economia)
+    expect(prices.basic.year.amountCents).toBeLessThan(prices.basic.month.amountCents * 12);
+  });
 });
 
 // =========================================================================================================== sem provedor / beta / sem adicional
@@ -670,7 +780,7 @@ describe("sem provedor de pagamento", () => {
   it("o estado diz que não dá para assinar; tentar assinar ou receber webhook responde 503 claro", async () => {
     const u = await member(env, { expired: true });
     const state = (await u.get("/v1/billing")).body;
-    expect(state).toMatchObject({ provider: "none", checkoutAvailable: false, investmentsAvailable: false, prices: { basic: null, investments: null } });
+    expect(state).toMatchObject({ provider: "none", checkoutAvailable: false, investmentsAvailable: false, interval: null, prices: { basic: { month: null, year: null }, investments: { month: null, year: null } } });
     const checkout = await u.post("/v1/billing/checkout", {});
     expect(checkout.status).toBe(503);
     expect(checkout.body.error.code).toBe("BILLING_UNAVAILABLE");
@@ -714,10 +824,70 @@ describe("Stripe sem preço do adicional", () => {
 
   it("o Rendimentos não pode ser contratado (nem no pagamento nem depois), e a tela é avisada", async () => {
     const u = await member(env, { expired: true });
-    expect((await u.get("/v1/billing")).body).toMatchObject({ investmentsAvailable: false, prices: { investments: null } });
+    expect((await u.get("/v1/billing")).body).toMatchObject({ investmentsAvailable: false, prices: { investments: { month: null, year: null } } });
     const checkout = await u.post("/v1/billing/checkout", { investments: true });
     expect(checkout.status).toBe(422);
     expect(checkout.body.error.code).toBe("ADDON_UNAVAILABLE");
     expect((await u.post("/v1/billing/checkout", {})).status).toBe(200); // o plano básico continua contratável
+  });
+});
+
+describe("Stripe com o adicional só no ciclo mensal", () => {
+  let env: TestEnv;
+  let stripe: FakeStripe;
+  beforeAll(async () => {
+    stripe = new FakeStripe();
+    env = await envWith(stripeProvider(stripe, "month"));
+  });
+  afterAll(async () => {
+    await env.close();
+  });
+
+  it("o adicional é oferecido no mensal e recusado no anual (o Stripe exige o mesmo ciclo em todos os itens)", async () => {
+    const u = await member(env, { expired: true });
+    const state = (await u.get("/v1/billing")).body;
+    expect(state.investmentsAvailable).toBe(true);
+    expect(state.prices.investments).toEqual({ month: { amountCents: 500, currency: "BRL", interval: "month" }, year: null });
+    expect(state.prices.basic.year).not.toBeNull();
+
+    const yearlyWithAddon = await u.post("/v1/billing/checkout", { interval: "year", investments: true });
+    expect(yearlyWithAddon.status).toBe(422);
+    expect(yearlyWithAddon.body.error.code).toBe("ADDON_UNAVAILABLE");
+    expect((await u.post("/v1/billing/checkout", { interval: "year" })).status).toBe(200); // o plano anual sozinho continua
+    expect((await u.post("/v1/billing/checkout", { interval: "month", investments: true })).status).toBe(200);
+  });
+
+  it("quem assina o plano anual não consegue incluir o adicional depois (e nada é cobrado por engano)", async () => {
+    const u = await member(env, { expired: true });
+    stripe.setActive("sub_anual_sem_addon", { userId: u.id, customer: "cus_anual", periodEnd: new Date(env.now().getTime() + 300 * DAY), interval: "year" });
+    expect((await webhooks(env).deliver("checkout.session.completed", { subscription: "sub_anual_sem_addon", client_reference_id: u.id })).status).toBe(200);
+    const res = await u.post("/v1/billing/addon", { enabled: true });
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("ADDON_UNAVAILABLE");
+    expect(stripe.calls.some((c) => c.path === "subscription_items")).toBe(false);
+  });
+});
+
+describe("Stripe vendendo só o plano mensal", () => {
+  it("o anual vem sem preço e abrir um pagamento anual é recusado, sem tocar no Stripe", async () => {
+    const stripe = new FakeStripe();
+    const provider = new StripeProvider(
+      { secretKey: "sk_test_integration", webhookSecret: WHSEC, apiBase: "https://api.stripe.test", basic: [{ kind: "product", id: "prod_basic", interval: "month" }], investments: [] },
+      stripe.fetch,
+    );
+    const env = await envWith(provider);
+    try {
+      const u = await member(env, { expired: true });
+      const state = (await u.get("/v1/billing")).body;
+      expect(state.prices.basic.year).toBeNull();
+      expect(state.prices.basic.month).not.toBeNull();
+      const res = await u.post("/v1/billing/checkout", { interval: "year" });
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe("INTERVAL_UNAVAILABLE");
+      expect(stripe.calls.filter((c) => c.path === "checkout/sessions")).toHaveLength(0);
+      expect((await u.post("/v1/billing/checkout", { interval: "month" })).status).toBe(200);
+    } finally {
+      await env.close();
+    }
   });
 });

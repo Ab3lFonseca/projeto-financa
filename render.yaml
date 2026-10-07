@@ -44,9 +44,15 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET # whsec_..., do endpoint https://SUA-API/v1/webhooks/stripe
         sync: false
-      - key: STRIPE_PRICE_ID # price_... do plano básico
+      # Plano: um PRODUTO por ciclo (prod_...; o servidor descobre o preço ativo no Stripe). Dá para usar STRIPE_PRICE_ID_MONTHLY/YEARLY (price_...) no lugar.
+      - key: STRIPE_PRODUCT_ID_MONTHLY # prod_... do plano mensal
         sync: false
-      - key: STRIPE_PRICE_ID_INVESTMENTS # price_... do adicional Rendimentos (opcional)
+      - key: STRIPE_PRODUCT_ID_YEARLY # prod_... do plano anual
+        sync: false
+      # Adicional Rendimentos (opcional): precisa existir em cada ciclo que você vende o plano.
+      - key: STRIPE_PRODUCT_ID_INVESTMENTS_MONTHLY
+        sync: false
+      - key: STRIPE_PRODUCT_ID_INVESTMENTS_YEARLY
         sync: false
       - key: APP_WEB_URL # endereço do site (https://financa-web.onrender.com): para onde o pagamento volta
         sync: false

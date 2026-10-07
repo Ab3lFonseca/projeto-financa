@@ -24,7 +24,7 @@ import { DevBillingProvider } from "./modules/billing/dev";
 import type { BillingProvider } from "./modules/billing/provider";
 import { billingRoutes, billingWebhookRoutes } from "./modules/billing/routes";
 import { BillingService } from "./modules/billing/service";
-import { StripeProvider } from "./modules/billing/stripe";
+import { StripeProvider, stripePlanSources } from "./modules/billing/stripe";
 import { ExpoPushNotifier, NoopNotifier, type PushNotifier } from "./modules/notifications/notifier";
 import { DemoOpenFinanceProvider } from "./modules/open-finance/demo";
 import { PluggyProvider } from "./modules/open-finance/pluggy";
@@ -53,15 +53,15 @@ export type AppDeps = {
   clock?: () => Date;
 };
 
-function buildBillingProvider(config: Config): BillingProvider | null {
+function buildBillingProvider(config: Config, log: { warn: (obj: object, msg: string) => void }): BillingProvider | null {
   if (config.BILLING_PROVIDER === "dev") return new DevBillingProvider();
   if (config.BILLING_PROVIDER === "stripe") {
     return new StripeProvider({
       secretKey: config.STRIPE_SECRET_KEY!,
       webhookSecret: config.STRIPE_WEBHOOK_SECRET!,
-      priceId: config.STRIPE_PRICE_ID!,
-      investmentsPriceId: config.STRIPE_PRICE_ID_INVESTMENTS,
       apiBase: config.STRIPE_API_BASE,
+      ...stripePlanSources(config),
+      log,
     });
   }
   return null;
@@ -244,7 +244,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     new BillingService({
       prisma,
       config,
-      provider: deps.billingProvider !== undefined ? deps.billingProvider : buildBillingProvider(config),
+      provider: deps.billingProvider !== undefined ? deps.billingProvider : buildBillingProvider(config, app.log),
       users: app.users,
       now: clock,
       log: app.log,

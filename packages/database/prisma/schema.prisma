@@ -371,6 +371,9 @@ model Subscription {
   /// Tem o adicional "Rendimentos" (CDI/CDB, porquinhos e investimentos acompanhados todo dia), cobrado por cima do plano básico.
   /// No teste grátis e na conta de administrador o recurso vale sem este campo. Em cortesia, quem concede escolhe.
   investmentsAddon Boolean            @default(false) @map("investments_addon")
+  /// Ciclo da assinatura paga no provedor: "month" ou "year". Nulo em cortesia, no teste grátis e em assinaturas anteriores a este campo
+  /// (o painel do administrador as conta como mensais até o próximo webhook preencher).
+  billingInterval  String?            @map("billing_interval") @db.VarChar(8)
   canceledAt       DateTime?          @map("canceled_at") @db.Timestamptz(6)
   createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)

@@ -1,18 +1,24 @@
-import { BillingProviderError, type BillingProvider, type NormalizedSubscription, type ParsedWebhook } from "./provider";
+import { BillingProviderError, type BillingCatalog, type BillingProvider, type NormalizedSubscription, type ParsedWebhook } from "./provider";
 
 /**
  * Provedor de DESENVOLVIMENTO: "assina" na hora, sem pagar nada (o serviço ativa a assinatura direto no banco). Serve para testar o fluxo
- * inteiro (teste grátis → somente leitura → assinar) sem conta no provedor. A configuração o PROÍBE em produção.
+ * inteiro (teste grátis → somente leitura → assinar, mensal ou anual) sem conta no provedor. A configuração o PROÍBE em produção.
  * Os preços abaixo são fictícios, só para a tela mostrar algo no desenvolvimento.
  */
 export class DevBillingProvider implements BillingProvider {
   readonly name = "dev" as const;
   readonly supportsInvestments = true;
 
-  async prices() {
+  async catalog(): Promise<BillingCatalog> {
     return {
-      basic: { amountCents: 1000, currency: "BRL", interval: "month" as const },
-      investments: { amountCents: 500, currency: "BRL", interval: "month" as const },
+      basic: {
+        month: { amountCents: 1000, currency: "BRL", interval: "month" },
+        year: { amountCents: 10000, currency: "BRL", interval: "year" },
+      },
+      investments: {
+        month: { amountCents: 500, currency: "BRL", interval: "month" },
+        year: { amountCents: 5000, currency: "BRL", interval: "year" },
+      },
     };
   }
 

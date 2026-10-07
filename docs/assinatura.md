@@ -67,21 +67,30 @@ Segurança do desenho:
 ## 3. Configurar o Stripe (uma vez)
 
 1. Crie a conta no Stripe (Brasil) e trabalhe primeiro no **modo de teste**.
-2. **Catálogo de produtos:** crie o produto "Finança" com um **preço recorrente em BRL** (mensal ou anual) e copie o id (`price_...`) → `STRIPE_PRICE_ID`.
-   O app lê UM preço básico; para trocar mensal ↔ anual basta apontar `STRIPE_PRICE_ID` para o outro preço. (Oferecer os dois lado a lado na mesma
-   tela é um próximo passo; ver [monetizacao.md](monetizacao.md).)
-3. (Opcional) Crie o produto do adicional "Rendimentos" com preço recorrente **do mesmo intervalo** e copie → `STRIPE_PRICE_ID_INVESTMENTS`.
-   Sem esse id, o adicional simplesmente não aparece para contratar.
+2. **Catálogo de produtos (mensal e anual):** crie um produto para cada ciclo, cada um com **um preço recorrente em BRL** definido como **preço padrão**
+   (é o que o painel faz ao criar o produto com preço). Copie o id de cada **produto** (`prod_...`) → `STRIPE_PRODUCT_ID_MONTHLY` e
+   `STRIPE_PRODUCT_ID_YEARLY`. **O servidor descobre sozinho o preço ativo de cada produto**: você não precisa copiar `price_...`. Se preferir fixar um
+   preço específico, use `STRIPE_PRICE_ID_MONTHLY` / `STRIPE_PRICE_ID_YEARLY` (o `price_` vale mais que o `prod_` do mesmo ciclo). Dá para vender só
+   um ciclo. A tela mostra o **anual primeiro**, com a economia **calculada** dos dois preços (nunca escrita à mão). Mudar o preço é criar um preço
+   novo no Stripe e torná-lo o padrão do produto; o app o lê em até 10 minutos. Produto com mais de um preço e **sem preço padrão** é ignorado (o
+   servidor não adivinha qual cobrar) e o motivo fica no log da API.
+3. (Opcional) Adicional "Rendimentos": um produto por ciclo, no mesmo formato → `STRIPE_PRODUCT_ID_INVESTMENTS_MONTHLY` e `..._YEARLY`. O Stripe exige o
+   **mesmo ciclo em todos os itens** de uma assinatura, então quem assina o anual contrata o adicional anual. Sem o adicional num ciclo, ele não é
+   oferecido nesse ciclo.
 4. **Webhook:** *Developers → Webhooks → Add endpoint* com `https://SUA-API.onrender.com/v1/webhooks/stripe` e os eventos
    `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.created`, `customer.subscription.updated`,
    `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`. Copie o **segredo de assinatura** (`whsec_...`) → `STRIPE_WEBHOOK_SECRET`.
 5. **Portal do cliente:** *Settings → Billing → Customer portal*: permita atualizar forma de pagamento, ver faturas e **cancelar assinatura**.
 6. **Meios de pagamento:** *Settings → Payment methods*. Cartão vem ativo; Pix e boleto dependem da disponibilidade para a sua conta.
 7. **Chave secreta:** *Developers → API keys* → `STRIPE_SECRET_KEY` (começa com `sk_`; uma chave **restrita** `rk_` também serve). **Nunca** a publicável (`pk_`):
-   a API recusa subir com ela.
-8. No Render (**financa-api → Environment**): `BILLING_PROVIDER=stripe`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`,
-   `STRIPE_PRICE_ID_INVESTMENTS` (se houver) e `APP_WEB_URL` (endereço do **site**, ex.: `https://financa-web.onrender.com`).
-   O deploy aplica sozinho a migration `20261006000100_billing` (colunas novas em `subscriptions` e a tabela `billing_events`).
+   a API recusa subir com ela. **A chave publicável não é usada em lugar nenhum** (o pagamento é a página hospedada do Stripe; nada de cartão passa pelo
+   app). **Nunca** cole chaves em conversa, e-mail ou no repositório: só no painel do Render. Se uma chave já foi exposta, role-a no Stripe.
+   Uma chave restrita `rk_` precisa de permissão (escrita) em: Checkout Sessions, Customer portal, Customers, Subscriptions e Subscription items; e
+   (leitura) em Products e Prices.
+8. No Render (**financa-api → Environment**): `BILLING_PROVIDER=stripe`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRODUCT_ID_MONTHLY`,
+   `STRIPE_PRODUCT_ID_YEARLY`, `STRIPE_PRODUCT_ID_INVESTMENTS_MONTHLY/YEARLY` (se houver) e `APP_WEB_URL` (endereço do **site**, ex.:
+   `https://financa-web.onrender.com`). O deploy aplica sozinho as migrations `20261006000100_billing` (colunas novas em `subscriptions` e a tabela
+   `billing_events`) e `20261008000100_billing_interval` (guarda se a assinatura é mensal ou anual).
 
 Conferir: com as variáveis certas a API sobe; com alguma faltando ela **recusa subir** e diz qual. Com o provedor ligado (ainda com
 `BILLING_ENFORCED=false`), `GET /v1/billing` já devolve os preços lidos do Stripe, o que confirma que a chave e os `price_` estão certos.

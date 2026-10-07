@@ -14,6 +14,7 @@ import {
   listAdminAuditQuery,
   listAdminUsersQuery,
   listOf,
+  perMonthCents,
   setUserRoleBody,
   setUserStatusBody,
   THEME_PRESET_IDS,
@@ -28,6 +29,8 @@ import { audit } from "../../lib/audit";
 import { tsOut } from "../../lib/dto";
 import { Errors } from "../../lib/errors";
 import { decodeCursor, encodeCursor, slicePage } from "../../lib/pagination";
+import { asInterval } from "../billing/service";
+import type { BillingInterval } from "../billing/provider";
 import { beforeEraseOf } from "../privacy/before-erase";
 import { eraseAccount } from "../privacy/service";
 
@@ -349,27 +352,36 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       }
 
       // Assinaturas (como estariam com a cobrança ligada). Carrega só o mínimo de cada conta e conta em memória.
-      const everyone = await prisma.user.findMany({ select: { role: true, createdAt: true, subscription: { select: subscriptionAccessSelect } } });
+      const everyone = await prisma.user.findMany({ select: { role: true, createdAt: true, subscription: { select: { ...subscriptionAccessSelect, billingInterval: true } } } });
       const billing = { enforced: config.BILLING_ENFORCED, trial: 0, paid: 0, complimentary: 0, admin: 0, expired: 0, investmentsAddon: 0 };
       let paidWithAddon = 0;
+      const payers: { interval: BillingInterval | null; addon: boolean }[] = [];
       for (const u of everyone) {
         const a = accessOf(u);
         if (a.state === "trial") billing.trial++;
-        else if (a.state === "paid") { billing.paid++; if (a.features.investments) paidWithAddon++; }
+        else if (a.state === "paid") { billing.paid++; if (a.features.investments) paidWithAddon++; payers.push({ interval: asInterval(u.subscription?.billingInterval), addon: a.features.investments }); }
         else if (a.state === "complimentary") { billing.complimentary++; if (a.features.investments) billing.investmentsAddon++; }
         else if (a.state === "admin") billing.admin++;
         else if (a.state === "expired") billing.expired++;
       }
       billing.investmentsAddon += paidWithAddon;
-      // Receita mensal recorrente estimada: pagantes × preço mensal lido do provedor (anual ÷ 12). Cortesia não paga, então não entra.
+      // Receita mensal recorrente estimada: cada pagante vale o preço do SEU ciclo lido do provedor (anual ÷ 12). Quem ainda não tem o ciclo
+      // gravado (assinatura anterior a este campo) conta como mensal, ou como anual se só o anual existir. Cortesia não paga, então não entra.
       let monthlyRevenueCents: number | null = null;
       let currency: string | null = null;
       try {
-        const prices = await app.billing.provider?.prices();
-        if (prices?.basic) {
-          const monthly = (p: { amountCents: number; interval: "month" | "year" }) => (p.interval === "year" ? Math.round(p.amountCents / 12) : p.amountCents);
-          monthlyRevenueCents = billing.paid * monthly(prices.basic) + (prices.investments ? paidWithAddon * monthly(prices.investments) : 0);
-          currency = prices.basic.currency;
+        const catalog = await app.billing.provider?.catalog();
+        if (catalog && (catalog.basic.month || catalog.basic.year)) {
+          const fallback: BillingInterval = catalog.basic.month ? "month" : "year";
+          monthlyRevenueCents = 0;
+          for (const p of payers) {
+            const interval = p.interval ?? fallback;
+            const plan = catalog.basic[interval];
+            if (plan) monthlyRevenueCents += perMonthCents(plan);
+            const addon = p.addon ? catalog.investments[interval] : null;
+            if (addon) monthlyRevenueCents += perMonthCents(addon);
+          }
+          currency = (catalog.basic.month ?? catalog.basic.year)!.currency;
         }
       } catch {
         /* sem preço (provedor fora do ar): a receita fica nula, o resto do painel funciona */

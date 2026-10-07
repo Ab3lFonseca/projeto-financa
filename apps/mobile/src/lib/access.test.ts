@@ -1,6 +1,6 @@
 import type { AccessDTO } from "@app/shared";
 import { describe, expect, it } from "vitest";
-import { accessBadge, accessBanner, accessSummary, dateText, daysText, formatMoneyCents, formatPrice, GRANT_DURATIONS } from "./access";
+import { accessBadge, accessBanner, accessSummary, dateText, daysText, defaultInterval, formatMoneyCents, formatPrice, GRANT_DURATIONS, planOffers } from "./access";
 
 const base: AccessDTO = { state: "trial", allowed: true, expiresAt: "2026-11-03T12:00:00.000Z", daysLeft: 12, cancelAtPeriodEnd: false, features: { investments: true } };
 const access = (over: Partial<AccessDTO>): AccessDTO => ({ ...base, ...over });
@@ -100,5 +100,37 @@ describe("cortesia (administrador)", () => {
     }
     expect(new Set(GRANT_DURATIONS.map((d) => d.label)).size).toBe(GRANT_DURATIONS.length);
     expect(GRANT_DURATIONS.some((d) => d.days === null)).toBe(true);
+  });
+});
+
+describe("opções de plano (mensal e anual)", () => {
+  const planPrice = (amountCents: number, interval: "month" | "year") => ({ amountCents, currency: "BRL", interval });
+  const both = { month: planPrice(1000, "month"), year: planPrice(10000, "year") };
+
+  it("mostra o anual primeiro, com a economia calculada dos dois preços e o valor por mês", () => {
+    const [yearly, monthly] = planOffers(both);
+    expect(yearly).toMatchObject({ interval: "year", label: "Anual", savings: 17 });
+    expect(plain(yearly!.total)).toBe("R$ 100,00 / ano");
+    expect(plain(yearly!.perMonth)).toBe("R$ 8,33 por mês");
+    expect(monthly).toMatchObject({ interval: "month", label: "Mensal", savings: null, perMonth: null });
+    expect(plain(monthly!.total)).toBe("R$ 10,00 / mês");
+  });
+
+  it("só mostra o que existe no provedor: um ciclo só, ou nenhum", () => {
+    expect(planOffers({ month: planPrice(1000, "month"), year: null }).map((o) => o.interval)).toEqual(["month"]);
+    expect(planOffers({ month: null, year: planPrice(10000, "year") }).map((o) => o.interval)).toEqual(["year"]);
+    expect(planOffers({ month: null, year: null })).toEqual([]);
+    expect(planOffers(null)).toEqual([]);
+  });
+
+  it("não inventa economia: sem o preço mensal, ou com anual sem desconto, não há selo", () => {
+    expect(planOffers({ month: null, year: planPrice(10000, "year") })[0]!.savings).toBeNull();
+    expect(planOffers({ month: planPrice(1000, "month"), year: planPrice(12000, "year") })[0]!.savings).toBeNull();
+  });
+
+  it("vem marcado o anual, quando existe; senão o que houver", () => {
+    expect(defaultInterval(planOffers(both))).toBe("year");
+    expect(defaultInterval(planOffers({ month: planPrice(1000, "month"), year: null }))).toBe("month");
+    expect(defaultInterval([])).toBe("month");
   });
 });

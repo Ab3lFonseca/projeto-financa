@@ -1,4 +1,4 @@
-import type { AccessDTO, BillingPrice } from "@app/shared";
+import { perMonthCents, yearlySavingsPercent, type AccessDTO, type BillingIntervalName, type BillingPrice, type PricesByInterval } from "@app/shared";
 
 type Tone = "default" | "positive" | "negative" | "warning" | "primary";
 
@@ -7,6 +7,39 @@ export function formatPrice(price: BillingPrice | null | undefined): string | nu
   if (!price) return null;
   const value = new Intl.NumberFormat("pt-BR", { style: "currency", currency: price.currency }).format(price.amountCents / 100);
   return `${value} / ${price.interval === "year" ? "ano" : "mês"}`;
+}
+
+/** Uma opção de plano na tela de assinatura (mensal ou anual), já com os textos prontos. */
+export type PlanOffer = { interval: BillingIntervalName; label: string; price: BillingPrice; total: string; perMonth: string | null; savings: number | null };
+
+const money = (cents: number, currency: string) => new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(cents / 100);
+
+/**
+ * Opções de plano que existem de verdade no provedor, com o anual primeiro. A economia do anual só aparece quando os dois preços existem e o anual
+ * sai mais barato (calculada, nunca escrita à mão). `null` em um ciclo = não oferecido.
+ */
+export function planOffers(prices: PricesByInterval | null | undefined): PlanOffer[] {
+  if (!prices) return [];
+  const savings = yearlySavingsPercent(prices);
+  const make = (interval: BillingIntervalName, price: BillingPrice | null): PlanOffer[] =>
+    price
+      ? [
+          {
+            interval,
+            label: interval === "year" ? "Anual" : "Mensal",
+            price,
+            total: `${money(price.amountCents, price.currency)} / ${interval === "year" ? "ano" : "mês"}`,
+            perMonth: interval === "year" ? `${money(perMonthCents(price), price.currency)} por mês` : null,
+            savings: interval === "year" ? savings : null,
+          },
+        ]
+      : [];
+  return [...make("year", prices.year), ...make("month", prices.month)];
+}
+
+/** O ciclo que já vem marcado: o anual, quando existe (é o que a pessoa vê primeiro); senão o mensal. */
+export function defaultInterval(offers: PlanOffer[]): BillingIntervalName {
+  return offers.find((o) => o.interval === "year")?.interval ?? offers[0]?.interval ?? "month";
 }
 
 /** Valor em centavos como "R$ 1.234,56" (painel do administrador). */
