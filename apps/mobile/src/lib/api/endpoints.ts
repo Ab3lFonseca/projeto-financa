@@ -46,6 +46,7 @@ export type MfaEnrollment = Out<typeof S.mfaEnrollDTO>;
 export type OAuthProvider = S.OAuthProviderInfo;
 export type AdminAuditEntry = S.AdminAuditEntryDTO;
 export type Billing = S.BillingDTO;
+export type Badges = S.BadgesResponse;
 export type Checkout = Out<typeof S.checkoutDTO>;
 export type AdminUser = S.AdminUserDTO;
 export type AdminUserDetail = S.AdminUserDetailDTO;
@@ -220,6 +221,12 @@ export const api = {
     unreadCount: () => http.get<{ count: number }>(`${v1}/notifications/unread-count`),
     markRead: (id: string) => http.patch<AppNotification>(`${v1}/notifications/${id}/read`),
     markAllRead: () => http.post<{ ok: true }>(`${v1}/notifications/read-all`),
+  },
+
+  // Insígnias: ler já avalia (grava os níveis novos); `seen` marca as comemorações como vistas (sem ids = todas).
+  badges: {
+    list: () => http.get<Badges>(`${v1}/badges`),
+    seen: (ids?: string[]) => http.post<{ ok: true }>(`${v1}/badges/seen`, ids && ids.length > 0 ? { ids } : {}),
   },
 
   // Assinatura: estado, pagamento (página do provedor), portal, adicional. Preços vêm do provedor, nunca do app.

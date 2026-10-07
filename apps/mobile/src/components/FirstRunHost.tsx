@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { HeroBanner } from "@/components/art/HeroBanner";
 import { Icon } from "@/components/Icon";
@@ -11,6 +11,8 @@ import { dateBR } from "@/lib/account";
 import { daysText } from "@/lib/access";
 import { api } from "@/lib/api/endpoints";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { BADGE_GATE_TIMEOUT_MS, useBadgeGate } from "@/lib/badgeGate";
+import { useCelebrationStore } from "@/lib/celebrate";
 import { nextFirstRunStep, type FirstRunStep } from "@/lib/firstRun";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -24,8 +26,16 @@ export function FirstRunHost() {
   const { colors } = useTheme();
   const [dismissed, setDismissed] = useState<ReadonlySet<FirstRunStep>>(new Set());
   const [busy, setBusy] = useState(false);
+  // A comemoração de boas-vindas (insígnia da conta nova) vem primeiro: espera a conferência das insígnias e a comemoração fechar.
+  const badgesChecked = useBadgeGate((s) => s.checked);
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setWaited(true), BADGE_GATE_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, []);
+  const celebrating = useCelebrationStore((s) => s.current !== null);
   const step = nextFirstRunStep(me, dismissed);
-  if (!me || !step) return null;
+  if (!me || !step || celebrating || !(badgesChecked || waited)) return null;
 
   const finish = async (which: FirstRunStep, then?: () => void) => {
     setBusy(true);

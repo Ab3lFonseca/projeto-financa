@@ -1,5 +1,6 @@
 import { Redirect, Stack } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
+import { BadgeWatcher } from "@/components/badges/BadgeWatcher";
 import { FirstRunHost } from "@/components/FirstRunHost";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -34,6 +35,8 @@ export default function AppLayout() {
       </Stack>
       {/* Primeiro acesso: pergunta da verificação em duas etapas e aviso do teste grátis (só depois de aceitar os Termos). */}
       <FirstRunHost />
+      {/* Insígnias: confere ao abrir, ao voltar e depois de salvar, e comemora na tela o que for conquistado (só depois do aceite dos Termos). */}
+      {!me.consentRequired ? <BadgeWatcher /> : null}
     </>
   );
 }

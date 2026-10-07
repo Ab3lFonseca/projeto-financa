@@ -43,6 +43,8 @@ export async function exportUserData(tx: Tx, user: { id: string; email: string }
     select: { plan: true, status: true, store: true, currentPeriodEnd: true, trialEndsAt: true, cancelAtPeriodEnd: true, investmentsAddon: true, canceledAt: true, createdAt: true },
   });
 
+  const badges = await tx.userBadge.findMany({ where, orderBy: { earnedAt: "asc" }, select: { badgeId: true, tier: true, earnedAt: true } });
+
   // Removemos só campos internos (userId repetido em cada linha).
   const strip = <T extends { userId?: unknown }>(rows: T[]) => rows.map(({ userId: _u, ...rest }) => rest);
 
@@ -70,6 +72,7 @@ export async function exportUserData(tx: Tx, user: { id: string; email: string }
       bankInvestments: strip(bankInvestments),
       bankInvestmentSnapshots: strip(bankInvestmentSnapshots),
       notifications: strip(notifications),
+      badges,
       subscription,
     },
   };

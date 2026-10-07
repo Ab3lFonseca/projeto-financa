@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import { ScrollView, View } from "react-native";
+import { NextBadges } from "@/components/badges/NextBadges";
 import { BarChart, DonutChart, Legend, LineChart } from "@/components/charts/Charts";
 import { AccessBanner } from "@/components/feature/AccessBanner";
 import { Fab, InsightCard, PendingSyncBanner } from "@/components/feature/Common";
@@ -276,6 +277,9 @@ export default function HomeScreen() {
             </Card>
           </Section>
         ) : null}
+
+        {/* Insígnias a caminho do próximo nível */}
+        <NextBadges />
 
         {/* Últimas transações */}
         <Reveal index={9}>

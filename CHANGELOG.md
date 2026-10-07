@@ -11,6 +11,11 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Insígnias.** 53 conquistas em 8 assuntos (constância, lançamentos, economia, planejamento, metas, cartões, organização e segurança), cada uma com **6
+  níveis: Bronze, Prata, Ouro, Platina, Diamante e Mestre** (roxo profundo, com brasão, coroa e asas), desenhadas em SVG com uma silhueta própria por nível.
+  Aparecem **na tela na hora em que são conquistadas** (ao abrir, ao voltar e depois de salvar algo), e **criar a conta já dá a insígnia de Boas-vindas**
+  com uma mensagem de boas-vindas. Galeria em *Mais → Minhas insígnias* (filtros, detalhe com o que conta, como evoluir e os 6 níveis) e cartão
+  "Próximas conquistas" no Início. Níveis ganhos nunca saem; lançamentos automáticos não inflam as insígnias de "anotar". Guia: [docs/insignias.md](docs/insignias.md).
 - **Assinatura mensal e anual.** A tela de assinatura mostra o plano **anual primeiro** (com a economia calculada dos dois preços e o valor por mês) e o
   mensal como alternativa; o adicional Rendimentos segue o ciclo escolhido (o Stripe exige o mesmo ciclo em todos os itens). Cada ciclo é um **produto**
   do Stripe (`STRIPE_PRODUCT_ID_MONTHLY` / `STRIPE_PRODUCT_ID_YEARLY`): o servidor descobre sozinho o preço ativo, então não é preciso copiar `price_...`

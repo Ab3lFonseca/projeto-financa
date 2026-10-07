@@ -13,6 +13,7 @@ import { createLogSinks, type LogSinks } from "./lib/log-files";
 import { diagnosticsRoutes } from "./modules/diagnostics/routes";
 import { healthRoutes } from "./modules/health/routes";
 import { authRoutes } from "./modules/auth/routes";
+import { badgeRoutes } from "./modules/badges/routes";
 import { meRoutes } from "./modules/me/routes";
 import { privacyRoutes } from "./modules/privacy/routes";
 import type { AuthProvider } from "./modules/auth/provider";
@@ -304,6 +305,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         await authed.register(privacyRoutes, { prefix: "/privacy" });
         await authed.register(diagnosticsRoutes, { prefix: "/diagnostics" });
         await authed.register(billingRoutes, { prefix: "/billing" });
+        // Insígnias: exigem o aceite dos termos, mas não a assinatura paga (ver o comentário nas rotas).
+        await authed.register(async (consented) => {
+          consented.addHook("onRequest", app.requireConsent);
+          await consented.register(badgeRoutes, { prefix: "/badges" });
+        });
         await authed.register(async (gated) => {
           gated.addHook("onRequest", app.requireConsent);
           // Depois do teste grátis, sem assinatura: só leitura (criar e editar respondem 402).

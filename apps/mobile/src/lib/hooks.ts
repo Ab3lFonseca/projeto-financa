@@ -68,6 +68,9 @@ export const useNotifications = () =>
 export const useUnreadCount = () =>
   useQuery({ queryKey: ["unread"], queryFn: api.notifications.unreadCount, refetchInterval: 60_000 });
 
+/** Insígnias da pessoa (a leitura já avalia e grava os níveis novos). */
+export const useBadges = () => useQuery({ queryKey: ["badges"], queryFn: api.badges.list, staleTime: 15_000 });
+
 export const useConsents = () => useQuery({ queryKey: ["consents"], queryFn: api.privacy.consents });
 
 /** Assinatura: estado, preços e o que dá para fazer. `poll` relê de 2 em 2 s (volta do pagamento, enquanto o provedor confirma). */

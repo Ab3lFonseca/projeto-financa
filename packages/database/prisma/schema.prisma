@@ -311,9 +311,28 @@ model User {
   privacyRequests         PrivacyRequest[]
   idempotencyKeys         IdempotencyKey[]
   accountChanges          AccountChange[]
+  badges                  UserBadge[]
 
   @@index([status])
   @@map("users")
+}
+
+/// Níveis de insígnias já ganhos (1 = Bronze ... 6 = Mestre). Nunca são retirados. O catálogo (nomes, metas) vive no código; aqui só quem ganhou o quê e quando.
+/// Escrita só pelo servidor (dono, ignora RLS); a pessoa só lê as próprias.
+model UserBadge {
+  id       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId   String    @map("user_id") @db.Uuid
+  badgeId  String    @map("badge_id") @db.VarChar(40)
+  tier     Int       @db.SmallInt
+  earnedAt DateTime  @default(now()) @map("earned_at") @db.Timestamptz(6)
+  /// Quando a pessoa viu a comemoração. Nulo = o app ainda vai mostrar na tela.
+  seenAt   DateTime? @map("seen_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId, tier])
+  @@index([userId, earnedAt])
+  @@map("user_badges")
 }
 
 /// Alterações de nome, e-mail e senha, para limitar quantas a pessoa faz por mês e por ano. Sem o valor alterado.

@@ -27,3 +27,4 @@ export * from "./schemas/notifications";
 export * from "./schemas/open-finance";
 export * from "./schemas/diagnostics";
 export * from "./schemas/admin";
+export * from "./badges";

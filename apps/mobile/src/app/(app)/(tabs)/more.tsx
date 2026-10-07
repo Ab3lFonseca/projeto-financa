@@ -7,7 +7,7 @@ import { Card, Divider, Screen } from "@/components/ui/Layout";
 import { Text } from "@/components/ui/Text";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { accessBadge, accessSummary } from "@/lib/access";
-import { useBankEntry, useUnreadCount } from "@/lib/hooks";
+import { useBadges, useBankEntry, useUnreadCount } from "@/lib/hooks";
 import { useOutbox } from "@/lib/offline/outbox";
 import { useTourStore } from "@/lib/tour/store";
 import { confirmDialog } from "@/lib/ui-store";
@@ -24,6 +24,8 @@ export default function MoreScreen() {
   const bank = useBankEntry();
   const pending = useOutbox((s) => s.items.length);
   const name = me?.profile.displayName || me?.email.split("@")[0] || "Você";
+  const badges = useBadges().data;
+  const newBadges = badges ? badges.items.filter((i) => i.unseen.length > 0).length : 0;
 
   return (
     <Screen tabs header={<View style={{ paddingHorizontal: 16, paddingTop: 8 }}><Text variant="title">Mais</Text></View>}>
@@ -42,6 +44,17 @@ export default function MoreScreen() {
           </Text>
         </View>
         {me ? <Badge label={accessBadge(me.entitlements.access).label} tone={accessBadge(me.entitlements.access).tone} /> : null}
+      </Card>
+
+      <Card style={{ paddingVertical: 6 }}>
+        <ShortcutRow
+          icon="gem"
+          title="Minhas insígnias"
+          subtitle={badges ? `${badges.summary.unlocked} de ${badges.summary.total} · ${badges.summary.points} pontos` : "Conquistas por usar bem o Finança"}
+          onPress={() => go("/badges")}
+          badge={newBadges > 0 ? <Badge label={newBadges === 1 ? "Nova" : `${newBadges} novas`} tone="primary" /> : undefined}
+          color="#8B5CF6"
+        />
       </Card>
 
       {/* Com a cobrança desligada (beta) não há o que assinar: o cartão nem aparece. */}
