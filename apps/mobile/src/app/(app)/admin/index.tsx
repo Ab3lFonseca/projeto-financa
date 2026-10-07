@@ -10,7 +10,7 @@ import { Card, Divider, IconBadge, ListRow, Reveal, Screen, ScreenHeader, Sectio
 import { Text } from "@/components/ui/Text";
 import { formatMoneyCents } from "@/lib/access";
 import { fillSignups, onboardingRate, themeRows } from "@/lib/admin";
-import { useAdminIntegrations, useAdminStats, useToday } from "@/lib/hooks";
+import { useAdminIntegrations, useAdminStats, useAdminSuggestions, useToday } from "@/lib/hooks";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const go = (path: string) => router.push(path as never);
@@ -29,6 +29,7 @@ function Dashboard() {
   const today = useToday();
   const stats = useAdminStats();
   const integrations = useAdminIntegrations();
+  const pendingSuggestions = useAdminSuggestions("PENDING").data?.counts.PENDING ?? null;
   const refreshing = stats.isRefetching || integrations.isRefetching;
   const header = <ScreenHeader title="Administração" subtitle="Visão geral do app" />;
   const refresh = () => void Promise.all([stats.refetch(), integrations.refetch()]);
@@ -184,6 +185,8 @@ function Dashboard() {
       <Reveal index={4}>
         <Card style={{ paddingVertical: 6 }}>
           <ShortcutRow icon="users" title="Usuários" subtitle="Nomes, e-mails, planos e situação das contas" onPress={() => go("/admin/users")} color={colors.accent} />
+          <Divider inset={52} />
+          <ShortcutRow icon="lightbulb" title="Quadro de sugestões" subtitle={pendingSuggestions === null ? "Ideias enviadas pelos usuários" : pendingSuggestions === 0 ? "Nenhuma esperando análise" : `${pendingSuggestions} esperando análise`} onPress={() => go("/admin/suggestions")} color="#F59E0B" />
           <Divider inset={52} />
           <ShortcutRow icon="list-checks" title="Atividade dos administradores" subtitle="Quem fez o quê, em qual conta e quando" onPress={() => go("/admin/activity")} color="#14B8A6" />
           <Divider inset={52} />

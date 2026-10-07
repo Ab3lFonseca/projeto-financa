@@ -11,6 +11,17 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Quadro de sugestões para o administrador.** Cada usuário pode **enviar sugestões** em *Mais → Enviar sugestão* (de 10 a 1.000 caracteres, no máximo 5 por dia, sem repetir o
+  mesmo texto) e acompanha a situação de cada uma. O administrador tem o **Quadro de sugestões** (*Administração → Quadro de sugestões*), com abas Em análise / Válidas / Não
+  válidas (com o total de cada) e, em cada sugestão, **três botões: verde (válida: passa para a validação), vermelho (não válida: não passa) e branco (em análise, o estado em
+  que toda sugestão chega e para onde dá para devolver)**, com recado opcional para quem sugeriu. Só administradores entram (o servidor confere a cada chamada); cada decisão fica
+  na auditoria (`admin.suggestion.decided`) e aparece em "Atividade dos administradores". No quadro aparece o nome (ou o começo do e-mail), nunca o e-mail inteiro. As sugestões
+  entram na **exportação dos dados** da pessoa e **somem junto com a conta** (LGPD). Migration aditiva `20261009000300_suggestions` (RLS: a pessoa só lê as próprias).
+- **Cada novidade com a sua animação e a sua cor.** No mural de Novidades, cada quadro tem uma **cor própria** (matiz único, com contraste do texto branco garantido) e uma **animação
+  própria** que cruza o fundo bem rápido, de 3 a 5 vezes: moedas que sobem, chaves, escudos, relógios, gemas... (24 trajetórias e ícones diferentes: da esquerda para a direita, ao
+  contrário, subindo, caindo, na diagonal e ondulando). O quadro do topo segue com os foguetes; os foguetinhos de **canto foram retirados**. A cena toca ao abrir e repete a cada ~11 s.
+  **Regra permanente:** toda novidade nova precisa de animação e cor diferentes das existentes; `roadmap.test.ts` quebra se faltar ou repetir. `lib/noveltyLook.ts`,
+  `components/art/Flyby.tsx`.
 - **Desconto na assinatura com insígnias.** A cada **5 insígnias no nível Ouro ou acima, 5% de desconto**, até **15%**, no mensal e no anual. Em *Mais → Minhas insígnias*
   um cartão mostra quantas já contam, quantas faltam para o próximo degrau e o teto; na tela de Assinatura os planos mostram o preço cheio riscado e o valor final
   (e, no anual, quanto dá por mês). O servidor calcula tudo (o pedido de pagamento não aceita percentual), cria os cupons `financa-badges-5/10/15` no Stripe e
@@ -194,6 +205,9 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   A CSP completa fica para depois de testar com o widget do Pluggy.
 
 ### Corrigido
+- **No desenvolvimento, todo reinício da API deslogava todo mundo.** O login local (`AUTH_MODE=dev`) guardava os tokens de renovação só na memória; como o servidor reinicia sozinho a cada
+  arquivo editado, a sessão caía assim que o token de acesso (1 hora) vencia. Agora as sessões ficam em `.data/dev-auth.json.sessions` (não versionado), com rotação e encerramento ao
+  sair preservados. Não afeta a produção (lá o login é o Supabase). Testes em `dev-auth.test.ts`.
 - **A tela de Assinatura quebrava com "Algo deu errado".** Causa: o campo novo `discount` da resposta de `/billing` era lido sem checar; um aparelho com a
   resposta ANTIGA guardada no cache (ou uma API ainda na versão anterior) derrubava a tela com `Cannot read properties of undefined (reading 'percent')`.
   Agora `useBilling` completa os campos que faltam (`billingWithDefaults`), a tela lê com segurança e o cache guardado ganhou nova versão (descarta o antigo).

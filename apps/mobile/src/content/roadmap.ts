@@ -2,11 +2,17 @@
  * Mural de atualizações: tudo o que chegou (do mais recente para o mais antigo) e o que está a caminho. Texto para o público: sem nome de
  * fornecedor e sem prometer data para o que ainda não existe.
  *
- * REGRA: toda mudança que a pessoa perceba entra aqui (visual ou de funcionalidade que influencie o cliente final). Quando algo for lançado, crie
+ * REGRA 1: toda novidade ganha uma ANIMAÇÃO PRÓPRIA (`flight`: algo que cruza o fundo do quadro bem rápido, de 3 a 5 vezes) e uma COR PRÓPRIA (`hue`),
+ * diferentes de todas as outras. Para uma novidade nova: crie uma entrada nova em `FLIGHTS` (`lib/noveltyLook.ts`, ícone + trajetória que ainda não existam
+ * juntos) e escolha um matiz livre. Os testes quebram se faltar ou repetir.
+ *
+ * REGRA 2: toda mudança que a pessoa perceba entra aqui (visual ou de funcionalidade que influencie o cliente final). Quando algo for lançado, crie
  * o item com `status: "done"` e `since` (AAAA-MM-DD, a data em que chegou); o mural ordena sozinho. O que está sendo feito fica em
  * "building"/"soon" (sem data) e vira "done" quando chegar. **Todo item "done" TEM a caixinha `preview`** (um teste confere): o que aconteceu
  * (`purpose`), o que mudou e como usar (`how`) e o que vale saber (`expect`). Em itens ainda não lançados a caixinha diz para que serve e como vai funcionar.
  */
+import type { FlightId } from "@/lib/noveltyLook";
+
 export type RoadmapStatus = "done" | "building" | "soon";
 
 export type RoadmapPreview = {
@@ -23,6 +29,10 @@ export type RoadmapItem = {
   title: string;
   summary: string;
   icon: string;
+  /** Matiz (0 a 359) da cor do quadro. Cada novidade tem o seu, diferente de todos os outros (mínimo de 7° de distância; um teste confere). */
+  hue: number;
+  /** A animação de passagem PRÓPRIA do quadro (`FLIGHTS` em `lib/noveltyLook.ts`). Cada novidade tem uma diferente das outras (um teste confere). */
+  flight: FlightId;
   status: RoadmapStatus;
   /** Dia em que chegou (AAAA-MM-DD). Só para "done". */
   since?: string;
@@ -32,6 +42,8 @@ export type RoadmapItem = {
 export const ROADMAP: readonly RoadmapItem[] = [
   {
     id: "investments",
+    hue: 0,
+    flight: "coins-rise",
     title: "Rendimentos: CDI, CDB e o seu porquinho",
     summary: "Veja quanto o seu dinheiro rende por dia e traga os seus investimentos para o Finança.",
     icon: "piggy-bank",
@@ -51,6 +63,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "social-login",
+    hue: 101,
+    flight: "key-spin",
     title: "Entrar com Google, Facebook e outras contas",
     summary: "Criar a conta e entrar com um toque, sem decorar mais uma senha.",
     icon: "key-round",
@@ -58,6 +72,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "bank-connection",
+    hue: 202,
+    flight: "bank-diag",
     title: "Conexão automática com bancos",
     summary: "Traga saldos e movimentações do seu banco para o Finança, sem digitar.",
     icon: "link",
@@ -78,6 +94,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "plans",
+    hue: 302,
+    flight: "crown-fall",
     title: "Assinatura: plano anual ou mensal",
     summary: "Quando a cobrança começar, você escolhe pagar por ano (com desconto) ou por mês, que renova sozinho ou é pago uma vez só, com Pix, e pode incluir o Rendimentos.",
     icon: "crown",
@@ -97,7 +115,53 @@ export const ROADMAP: readonly RoadmapItem[] = [
     },
   },
   {
+    id: "suggestions-board",
+    hue: 43,
+    flight: "bulb-rise",
+    title: "Envie sugestões para o Finança",
+    summary: "Teve uma ideia? Mande a sua sugestão pelo app e acompanhe o que a equipe decidiu: aprovada para virar novidade, em análise ou não aplicável.",
+    icon: "lightbulb",
+    status: "done",
+    since: "2026-10-07",
+    preview: {
+      purpose: "Deixar você ajudar a decidir o que o Finança vai ganhar a seguir: as melhores ideias dos usuários viram novidades.",
+      how: [
+        "Abra Mais → Enviar sugestão, escreva a sua ideia (de 10 a 1.000 caracteres) e envie.",
+        "A equipe lê cada sugestão e marca como aprovada (vai para validação), em análise ou não aplicável.",
+        "Na mesma tela você vê as suas sugestões e a situação de cada uma.",
+      ],
+      expect: [
+        "Aprovada não é promessa de data: significa que a ideia vai ser validada para entrar no app.",
+        "Há um limite de envios por dia para evitar excesso. Não escreva senhas nem dados pessoais sensíveis na sugestão.",
+      ],
+    },
+  },
+  {
+    id: "novelty-animations",
+    hue: 144,
+    flight: "film-rtl",
+    title: "Cada novidade com a sua animação e a sua cor",
+    summary: "No mural, cada quadro tem uma cor própria e uma animação própria que cruza o fundo bem rápido: moedas, chaves, escudos, relógios e mais.",
+    icon: "film",
+    status: "done",
+    since: "2026-10-07",
+    preview: {
+      purpose: "Deixar o mural de Novidades mais bonito e fácil de percorrer: cada novidade se reconhece de longe pela cor e pelo que passa por ela.",
+      how: [
+        "Cada quadro tem uma cor diferente das outras e uma cena própria: por exemplo, moedas que sobem no quadro de Investimentos e chaves que atravessam o de Entrar com outras contas.",
+        "A cena toca quando a tela abre e de novo de tempos em tempos, para quem estiver mais abaixo na lista também ver. O desenho passa por trás do texto e some na borda.",
+        "O quadro do topo (“Estamos sempre construindo”) segue com os foguetes cruzando. Os foguetinhos de canto foram retirados.",
+      ],
+      expect: [
+        "Com “reduzir movimento” ligado no aparelho, nada se move.",
+        "Toda novidade nova que chegar terá a sua própria cor e animação, diferentes das que já existem.",
+      ],
+    },
+  },
+  {
     id: "fixes-subscription-investments",
+    hue: 245,
+    flight: "wrench-wave",
     title: "Assinatura sem erro e Investir mais rápido",
     summary: "A tela de Assinatura voltou a abrir sem o aviso de erro, a aba Investir aparece na hora e o aviso de erro ganhou um botão para voltar ao Início.",
     icon: "wrench",
@@ -118,6 +182,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "badge-discount",
+    hue: 346,
+    flight: "percent-rtl",
     title: "Desconto na assinatura com insígnias",
     summary: "A cada 5 insígnias no nível Ouro ou acima você ganha 5% de desconto na assinatura, mensal ou anual, até 15%.",
     icon: "percent",
@@ -139,6 +205,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "novelty-rockets",
+    hue: 86,
+    flight: "rocket-up",
     title: "Foguetes passando pelas Novidades",
     summary: "Toda vez que você abre o mural, de 3 a 5 foguetes cruzam o quadro de cima bem rápido e somem.",
     icon: "rocket",
@@ -155,6 +223,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "trial-strip",
+    hue: 187,
+    flight: "clock-spin",
     title: "Quanto falta do teste grátis, sempre à vista",
     summary: "Uma faixa fixa nas telas principais mostra quantos dias restam do teste e até quando, com o botão para assinar já. Uma barra vai do verde ao vermelho escuro e, perto do fim, treme e começa a suar.",
     icon: "clock",
@@ -175,6 +245,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "recurring-plus",
+    hue: 288,
+    flight: "repeat-wave",
     title: "Recorrências completas e parcelas na conta",
     summary: "Repita despesa, receita ou transferência, a cada N semanas, meses ou anos, e escolha quando termina (nunca, depois de N vezes ou numa data). Parcelar também vale na conta e nas receitas.",
     icon: "calendar-clock",
@@ -195,6 +267,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "quick-add-menu",
+    hue: 29,
+    flight: "plus-rise",
     title: "Botão + com todas as opções",
     summary: "O + gira e mostra, com nome, Despesa, Receita, Transferência e Recorrência. Cada uma abre a tela de cadastro.",
     icon: "plus",
@@ -211,6 +285,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "badges",
+    hue: 130,
+    flight: "gem-diag",
     title: "Insígnias: 53 conquistas, de Bronze a Mestre",
     summary: "Ganhe insígnias por registrar, economizar, planejar e cuidar da conta. Cada uma tem 6 níveis, e o topo é o Mestre, em roxo profundo. Criar a conta já dá a primeira.",
     icon: "gem",
@@ -231,6 +307,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "themes-families",
+    hue: 230,
+    flight: "palette-ltr",
     title: "Temas opacos, foscos e pastéis",
     summary: "Quinze temas novos em três famílias: cores cheias e chapadas, tons acinzentados e cores claras e delicadas. Em Configurações → Aparência.",
     icon: "palette",
@@ -247,6 +325,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "living-background",
+    hue: 331,
+    flight: "layers-fall",
     title: "Fundo com a logo em cubos",
     summary: "A logo do Finança aparece inteira ao fundo, feita de muitos cubos. No computador eles reagem quando o mouse passa; no celular, sobem e descem sozinhos.",
     icon: "layers",
@@ -263,6 +343,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "two-factor",
+    hue: 72,
+    flight: "shield-up",
     title: "Verificação em duas etapas",
     summary: "Proteja a conta com um código do celular. Ele é pedido a cada entrada e a cada abertura do app; depois de 3 códigos errados, você é desconectado por segurança.",
     icon: "shield-check",
@@ -282,6 +364,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "my-account",
+    hue: 173,
+    flight: "user-rtl",
     title: "Minha conta",
     summary: "Veja os dados do seu cadastro e troque nome, e-mail e senha, com limites por mês e por ano para proteger a conta.",
     icon: "user",
@@ -298,6 +382,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "celebrations",
+    hue: 274,
+    flight: "party-rise",
     title: "Comemorações animadas",
     summary: "Meta batida, dinheiro guardado, insígnia nova: tela cheia com brilhos, confete e foguete para comemorar com você.",
     icon: "party-popper",
@@ -314,6 +400,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "trial-notice",
+    hue: 14,
+    flight: "gift-spin",
     title: "30 dias de teste grátis, bem explicados",
     summary: "No primeiro acesso você vê que está no teste grátis, até quando vale e como assinar antes, se quiser acesso completo já.",
     icon: "gift",
@@ -333,6 +421,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "support",
+    hue: 115,
+    flight: "buoy-wave",
     title: "Ajuda e suporte",
     summary: "Fale com a gente pelo WhatsApp ou pelo e-mail direto do app, em Mais → Ajuda e suporte.",
     icon: "life-buoy",
@@ -349,6 +439,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "legal",
+    hue: 216,
+    flight: "file-ltr",
     title: "Termos de Uso e Política de Privacidade renovados",
     summary: "Textos mais claros e detalhados, com seus direitos e as leis que protegem os seus dados. Em Mais → Privacidade e dados.",
     icon: "file-text",
@@ -365,6 +457,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "appearance",
+    hue: 317,
+    flight: "sun-fall",
     title: "Temas e personalização",
     summary: "Claro, escuro, azul, roxo, verde, vermelho ou as suas próprias cores, em todo o app.",
     icon: "palette",
@@ -381,6 +475,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "tour",
+    hue: 58,
+    flight: "cap-diag",
     title: "Tutorial de primeiro uso",
     summary: "Um passo a passo curto que mostra cada parte do app e para que ela serve. Dá para rever em Mais.",
     icon: "graduation-cap",
@@ -397,6 +493,8 @@ export const ROADMAP: readonly RoadmapItem[] = [
   },
   {
     id: "motion",
+    hue: 158,
+    flight: "sparkles-wave",
     title: "Animações e acabamento",
     summary: "Telas, listas, gráficos e botões mais fluidos, com respeito à opção de reduzir movimento do seu aparelho.",
     icon: "sparkles",

@@ -50,6 +50,8 @@ describe("foguetes passando pelas Novidades", () => {
         expect(f.durationMs).toBeLessThanOrEqual(1150);
         expect(f.topPct).toBeGreaterThanOrEqual(8);
         expect(f.topPct).toBeLessThanOrEqual(78);
+        expect(f.leftPct).toBeGreaterThanOrEqual(6);
+        expect(f.leftPct).toBeLessThanOrEqual(86);
         expect(f.size).toBeGreaterThanOrEqual(20);
         expect(f.size).toBeLessThanOrEqual(34);
         expect(Math.abs(f.tiltDeg)).toBeLessThanOrEqual(14);

@@ -312,6 +312,8 @@ model User {
   idempotencyKeys         IdempotencyKey[]
   accountChanges          AccountChange[]
   badges                  UserBadge[]
+  suggestions             Suggestion[]            @relation("SuggestionAuthor")
+  suggestionsDecided      Suggestion[]            @relation("SuggestionDecidedBy")
 
   @@index([status])
   @@map("users")
@@ -333,6 +335,28 @@ model UserBadge {
   @@unique([userId, badgeId, tier])
   @@index([userId, earnedAt])
   @@map("user_badges")
+}
+
+/// Sugestões dos usuários para o administrador (quadro de sugestões). Situação: PENDING (branco, em análise), APPROVED (verde, válida: passa para a
+/// validação) ou REJECTED (vermelho, não válida). Escrita só pelo servidor (dono, ignora RLS); a pessoa só lê as próprias.
+model Suggestion {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  body        String    @db.VarChar(1000)
+  status      String    @default("PENDING") @db.VarChar(10)
+  /// Recado opcional da equipe ao decidir.
+  adminNote   String?   @map("admin_note") @db.VarChar(500)
+  decidedById String?   @map("decided_by_id") @db.Uuid
+  decidedAt   DateTime? @map("decided_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user      User  @relation("SuggestionAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  decidedBy User? @relation("SuggestionDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("suggestions")
 }
 
 /// Alterações de nome, e-mail e senha, para limitar quantas a pessoa faz por mês e por ano. Sem o valor alterado.

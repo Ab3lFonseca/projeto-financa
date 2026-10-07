@@ -10,13 +10,17 @@ import { Text } from "@/components/ui/Text";
 import { todayIn } from "@app/shared";
 import { itemsByStatus, isRecent, ROADMAP_SECTIONS, roadmapItem, type RoadmapItem, type RoadmapStatus } from "@/content/roadmap";
 import { useMe } from "@/lib/auth/AuthProvider";
+import { noveltyGradient } from "@/lib/noveltyLook";
 import { useTheme } from "@/theme/ThemeProvider";
 
-const STATUS_LOOK: Record<RoadmapStatus, { tone: BannerTone; badge: string; rocket: boolean }> = {
-  building: { tone: "primary", badge: "Em desenvolvimento", rocket: true },
-  soon: { tone: "violet", badge: "Em breve", rocket: false },
-  done: { tone: "positive", badge: "Já disponível", rocket: false },
+const STATUS_LOOK: Record<RoadmapStatus, { tone: BannerTone; badge: string }> = {
+  building: { tone: "primary", badge: "Em desenvolvimento" },
+  soon: { tone: "violet", badge: "Em breve" },
+  done: { tone: "positive", badge: "Já disponível" },
 };
+
+/** Cada quadro passa a cena da sua animação de novo a cada ~11 s (com variação), para quem está mais abaixo na lista também ver quando chegar nele. */
+const FLIGHT_REPEAT_MS = 11_000;
 
 /** "7 de outubro de 2026" a partir de AAAA-MM-DD. */
 const dayLabel = (since: string) => {
@@ -41,7 +45,7 @@ export default function UpdatesScreen() {
   let order = 0;
   return (
     <Screen header={<ScreenHeader title="Novidades" subtitle="Mural de atualizações do Finança" />}>
-      <HeroBanner tone="slate" icon="rocket" badge="Mural de atualizações" title="Estamos sempre construindo" subtitle="Tudo o que é novo aparece aqui, com a data, do mais recente para o mais antigo. O que ainda vem por aí não tem data marcada: preferimos lançar quando estiver bom." rocket flyby />
+      <HeroBanner tone="slate" icon="rocket" badge="Mural de atualizações" title="Estamos sempre construindo" subtitle="Tudo o que é novo aparece aqui, com a data, do mais recente para o mais antigo. O que ainda vem por aí não tem data marcada: preferimos lançar quando estiver bom." flight="rocket-ltr" />
 
       {ROADMAP_SECTIONS.map((section) => {
         const items = itemsByStatus(section.status);
@@ -68,7 +72,9 @@ export default function UpdatesScreen() {
                   badge={item.status === "done" && item.since ? `${isRecent(item.since, today) ? "Novo" : look.badge} · ${dayLabel(item.since)}` : look.badge}
                   title={item.title}
                   subtitle={item.summary}
-                  rocket={look.rocket}
+                  colors={noveltyGradient(item.hue)}
+                  flight={item.flight}
+                  flightRepeatMs={FLIGHT_REPEAT_MS}
                   delay={delay}
                   hint={item.preview ? (item.status === "done" ? "Toque para ver o que mudou e como usar" : "Toque para ver como vai funcionar") : undefined}
                   onPress={item.preview ? () => setOpenId(item.id) : undefined}
@@ -90,7 +96,7 @@ function PreviewSheet({ item, onClose }: { item: RoadmapItem | undefined; onClos
     <Sheet visible={!!item} onClose={onClose}>
       {item?.preview && look ? (
         <View style={{ gap: 18, paddingBottom: 8 }}>
-          <HeroBanner compact tone={look.tone} icon={item.icon} badge={look.badge} title={item.title} rocket={look.rocket} />
+          <HeroBanner compact tone={look.tone} icon={item.icon} badge={look.badge} title={item.title} colors={noveltyGradient(item.hue)} flight={item.flight} />
           <Block title={item.status === "done" ? "O que aconteceu" : "Para que serve"}>
             <Text tone="muted">{item.preview.purpose}</Text>
           </Block>

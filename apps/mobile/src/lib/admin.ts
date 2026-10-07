@@ -43,6 +43,7 @@ const ACTIONS: Record<string, ActionLook> = {
   "admin.access.granted": { icon: "gift", tone: "positive", verb: "Concedeu acesso gratuito a" },
   "admin.access.revoked": { icon: "undo-2", tone: "warning", verb: "Retirou o acesso gratuito de" },
   "admin.trial.extended": { icon: "clock", tone: "primary", verb: "Prorrogou o teste de" },
+  "admin.suggestion.decided": { icon: "lightbulb", tone: "primary", verb: "Decidiu uma sugestão de" },
   "admin.mfa.removed": { icon: "smartphone", tone: "warning", verb: "Desligou a verificação em duas etapas de" },
   "admin.bootstrap": { icon: "crown", tone: "primary", verb: "Virou administrador pela configuração do servidor" },
 };

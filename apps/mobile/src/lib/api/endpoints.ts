@@ -47,6 +47,9 @@ export type OAuthProvider = S.OAuthProviderInfo;
 export type AdminAuditEntry = S.AdminAuditEntryDTO;
 export type Billing = S.BillingDTO;
 export type Badges = S.BadgesResponse;
+export type Suggestion = S.SuggestionDTO;
+export type MySuggestions = S.MySuggestionsResponse;
+export type AdminSuggestions = S.AdminSuggestionsResponse;
 export type Checkout = Out<typeof S.checkoutDTO>;
 export type AdminUser = S.AdminUserDTO;
 export type AdminUserDetail = S.AdminUserDetailDTO;
@@ -238,7 +241,15 @@ export const api = {
   },
 
   // Só administradores (o servidor confere o papel a cada chamada). Metadados de conta e números agregados; nada financeiro.
+  // Sugestões para a equipe: enviar e ver as suas (com a situação de cada uma).
+  suggestions: {
+    mine: () => http.get<MySuggestions>(`${v1}/suggestions`),
+    send: (body: string) => http.post<Suggestion>(`${v1}/suggestions`, { body }),
+  },
+
   admin: {
+    suggestions: (params: { status?: S.SuggestionStatusName; limit?: number } = {}) => http.get<AdminSuggestions>(`${v1}/admin/suggestions`, { query: params }),
+    decideSuggestion: (id: string, status: S.SuggestionStatusName, note?: string | null) => http.put<Suggestion>(`${v1}/admin/suggestions/${id}`, { status, ...(note ? { note } : {}) }),
     stats: () => http.get<AdminStats>(`${v1}/admin/stats`),
     integrations: () => http.get<AdminIntegrations>(`${v1}/admin/integrations`),
     users: (params: { search?: string; cursor?: string; limit?: number } = {}) => http.get<Page<AdminUser>>(`${v1}/admin/users`, { query: params }),

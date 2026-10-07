@@ -1,4 +1,4 @@
-import { todayIn, type ISODate } from "@app/shared";
+import { todayIn, type ISODate, type SuggestionStatusName } from "@app/shared";
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { randomUUID } from "expo-crypto";
@@ -81,6 +81,11 @@ export const useBilling = (poll = false) =>
 // ------------------------------------------------------------------ administração (só para administradores)
 
 /** `enabled` evita qualquer chamada quando a pessoa não é administradora (a tela também nem é mostrada). */
+/** As sugestões que a própria pessoa enviou. */
+export const useMySuggestions = () => useQuery({ queryKey: ["suggestions"], queryFn: api.suggestions.mine });
+/** Quadro do administrador: as sugestões de uma situação (ou todas) e o total de cada uma. */
+export const useAdminSuggestions = (status?: SuggestionStatusName, enabled = true) =>
+  useQuery({ queryKey: ["admin", "suggestions", status ?? "all"], queryFn: () => api.admin.suggestions({ status, limit: 100 }), enabled, refetchInterval: 60_000 });
 export const useAdminStats = (enabled = true) => useQuery({ queryKey: ["admin", "stats"], queryFn: api.admin.stats, enabled, refetchInterval: 60_000 });
 export const useAdminIntegrations = (enabled = true) => useQuery({ queryKey: ["admin", "integrations"], queryFn: api.admin.integrations, enabled });
 export const useAdminUsers = (search: string, enabled = true) =>

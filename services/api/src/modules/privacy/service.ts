@@ -44,6 +44,8 @@ export async function exportUserData(tx: Tx, user: { id: string; email: string }
   });
 
   const badges = await tx.userBadge.findMany({ where, orderBy: { earnedAt: "asc" }, select: { badgeId: true, tier: true, earnedAt: true } });
+  // Sugestões que a pessoa enviou e a situação de cada uma (quem decidiu fica de fora: é dado interno da equipe).
+  const suggestions = await tx.suggestion.findMany({ where, orderBy: { createdAt: "asc" }, select: { body: true, status: true, adminNote: true, createdAt: true, decidedAt: true } });
 
   // Removemos só campos internos (userId repetido em cada linha).
   const strip = <T extends { userId?: unknown }>(rows: T[]) => rows.map(({ userId: _u, ...rest }) => rest);
@@ -73,6 +75,7 @@ export async function exportUserData(tx: Tx, user: { id: string; email: string }
       bankInvestmentSnapshots: strip(bankInvestmentSnapshots),
       notifications: strip(notifications),
       badges,
+      suggestions,
       subscription,
     },
   };

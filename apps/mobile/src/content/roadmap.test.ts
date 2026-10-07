@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FLIGHTS, hueGap, MIN_HUE_GAP } from "@/lib/noveltyLook";
 import { isRecent, itemsByStatus, ROADMAP, ROADMAP_SECTIONS, roadmapItem } from "./roadmap";
 
 describe("mural de novidades", () => {
@@ -42,7 +43,7 @@ describe("mural de novidades", () => {
 
   it("as novidades recentes do app estão no mural (nada que a pessoa perceba fica de fora)", () => {
     const ids = new Set(ROADMAP.map((i) => i.id));
-    for (const id of ["badges", "themes-families", "living-background", "two-factor", "my-account", "celebrations", "trial-notice", "support", "legal", "appearance", "tour", "motion", "trial-strip", "quick-add-menu", "recurring-plus", "badge-discount", "novelty-rockets"]) {
+    for (const id of ["badges", "themes-families", "living-background", "two-factor", "my-account", "celebrations", "trial-notice", "support", "legal", "appearance", "tour", "motion", "trial-strip", "quick-add-menu", "recurring-plus", "badge-discount", "novelty-rockets", "novelty-animations", "suggestions-board", "fixes-subscription-investments"]) {
       expect(ids.has(id), id).toBe(true);
     }
   });
@@ -55,6 +56,27 @@ describe("mural de novidades", () => {
       expect(i.preview!.expect.length, i.id).toBeGreaterThanOrEqual(1);
       for (const line of [i.preview!.purpose, ...i.preview!.how, ...i.preview!.expect]) expect(line.trim().length, i.id).toBeGreaterThan(10);
     }
+  });
+
+  it("TODA novidade tem a sua própria animação e a sua própria cor (nunca repetidas)", () => {
+    const flights = ROADMAP.map((i) => i.flight);
+    expect(new Set(flights).size, "animações repetidas").toBe(ROADMAP.length);
+    for (const i of ROADMAP) {
+      expect(FLIGHTS.some((f) => f.id === i.flight), `${i.id}: animação "${i.flight}" não existe em FLIGHTS`).toBe(true);
+      expect(i.flight, `${i.id} não pode usar a animação do quadro do topo`).not.toBe("rocket-ltr");
+      expect(Number.isInteger(i.hue) && i.hue >= 0 && i.hue < 360, `${i.id}: matiz inválido`).toBe(true);
+    }
+    // cores: matizes com pelo menos MIN_HUE_GAP graus de distância uns dos outros
+    for (let a = 0; a < ROADMAP.length; a++) {
+      for (let b = a + 1; b < ROADMAP.length; b++) {
+        expect(hueGap(ROADMAP[a]!.hue, ROADMAP[b]!.hue), `${ROADMAP[a]!.id} e ${ROADMAP[b]!.id} têm cores parecidas demais`).toBeGreaterThanOrEqual(MIN_HUE_GAP);
+      }
+    }
+  });
+
+  it("os quadros vizinhos na lista têm cores bem diferentes (não ficam parecidos)", () => {
+    const done = itemsByStatus("done");
+    for (let i = 1; i < done.length; i++) expect(hueGap(done[i - 1]!.hue, done[i]!.hue), `${done[i - 1]!.id} e ${done[i]!.id}`).toBeGreaterThanOrEqual(40);
   });
 
   it("o desconto por insígnias descreve as regras certas (5 insígnias de Ouro ou acima = 5%, até 15%)", () => {

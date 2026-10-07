@@ -26,6 +26,7 @@ import { z } from "zod";
 import { resolveAccess, trialEnd, type SubscriptionInfo } from "../../lib/access";
 import { accessConfigOf, subscriptionAccessSelect } from "../../lib/access-db";
 import { audit } from "../../lib/audit";
+import { adminSuggestionRoutes } from "../suggestions/routes";
 import { tsOut } from "../../lib/dto";
 import { Errors } from "../../lib/errors";
 import { decodeCursor, encodeCursor, slicePage } from "../../lib/pagination";
@@ -54,6 +55,8 @@ function themeOf(profile: { theme: "SYSTEM" | "LIGHT" | "DARK"; appearance: unkn
 export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
   const { prisma, config } = app;
   app.addHook("onRequest", app.requireAdmin);
+  // Quadro de sugestões dos usuários (verde = válida, vermelho = não válida, branco = em análise). Herda a exigência de administrador acima.
+  await app.register(adminSuggestionRoutes, { prefix: "/suggestions" });
 
   type UserRow = {
     id: string; email: string; role: AdminUserDTO["role"]; status: AdminUserDTO["status"];

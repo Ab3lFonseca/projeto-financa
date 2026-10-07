@@ -42,6 +42,28 @@ pessoais na trilha). Exige `role = 'ADMIN'` (ver como promover, inclusive pela c
 | `GET /v1/admin/integrations` | Estado de Auth, Open Finance (ligado/configurado, webhooks e erros em 24 h, códigos de erro mais comuns) e push |
 | `GET /v1/admin/issues` | Problemas recentes: conexões bancárias com erro (só o código, nunca o banco), webhooks que falharam e pedidos LGPD que falharam |
 
+### Sugestões dos usuários (quadro do administrador)
+
+Qualquer usuário envia sugestões em *Mais → Enviar sugestão*; o administrador as decide no **Quadro de sugestões** (*Administração*). Cada sugestão chega **em análise** e
+ganha um de três botões:
+
+| Botão | Situação (`status`) | Significado |
+|---|---|---|
+| Verde, **Válida** | `APPROVED` | É aplicável: passa para a validação (vira candidata a novidade) |
+| Vermelho, **Não válida** | `REJECTED` | Não é aplicável: não passa pela validação |
+| Branco, **Em análise** | `PENDING` | Ainda não decidida (o estado inicial; devolve a sugestão para cá e limpa quem decidiu e o recado) |
+
+| Endpoint | Quem | Para quê |
+|---|---|---|
+| `POST /v1/suggestions` | usuário | Envia (`{ body }`, 10 a 1.000 caracteres; máx. 5 por 24 h; não aceita o mesmo texto duas vezes) |
+| `GET /v1/suggestions` | usuário | As próprias sugestões, a situação de cada uma e quantas ainda dá para enviar hoje |
+| `GET /v1/admin/suggestions` | admin | O quadro (`?status=` filtra; `limit` até 100) com o total de cada situação. Mostra o **nome** de quem enviou (ou o começo do e-mail), nunca o e-mail inteiro |
+| `PUT /v1/admin/suggestions/:id` | admin | Decide: `{ status, note? }` (recado de até 500 caracteres). O administrador **não altera o texto** da sugestão |
+
+Cada decisão é auditada (`admin.suggestion.decided`, com a situação nova e a anterior). Dados: tabela `suggestions` (migration `20261009000300_suggestions`; RLS: a pessoa só lê as
+próprias; escrita só pelo servidor). **LGPD:** as sugestões entram na exportação de dados da pessoa (sem quem decidiu) e são apagadas junto com a conta (`ON DELETE CASCADE`). Aviso na
+tela: não escrever senhas nem dados pessoais sensíveis no texto.
+
 **Painel no app:** quem é administrador vê, em *Mais*, o *Painel do administrador* (números do app, cadastros dos últimos 30 dias,
 temas escolhidos, estado do login/Open Finance/avisos e a lista de usuários com detalhe) e o *Diagnóstico* (erros e respostas da API). As telas
 voltam ao início para quem não é administrador e a API responde 403.

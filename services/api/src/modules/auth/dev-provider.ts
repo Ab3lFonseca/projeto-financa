@@ -30,6 +30,35 @@ export class DevAuthProvider implements AuthProvider {
     private readonly log: (msg: string) => void = () => {},
   ) {
     this.sync();
+    this.loadSessions();
+  }
+
+  /**
+   * As sessões (tokens de renovação) também ficam em arquivo local (`<arquivo>.sessions`, não versionado): o servidor de desenvolvimento reinicia sozinho a cada
+   * arquivo editado, e guardá-las só na memória deslogava todo mundo a cada reinício (assim que o token de acesso, de 1 hora, vencia).
+   */
+  private get sessionsFile() {
+    return `${this.file}.sessions`;
+  }
+
+  private loadSessions() {
+    try {
+      if (!existsSync(this.sessionsFile)) return;
+      const saved = JSON.parse(readFileSync(this.sessionsFile, "utf8")) as Record<string, { userId: string; expiresAt: number }>;
+      const now = Date.now();
+      for (const [token, entry] of Object.entries(saved)) if (entry.expiresAt > now) this.refreshTokens.set(token, entry);
+    } catch {
+      /* arquivo corrompido: começa sem sessões (a pessoa só entra de novo) */
+    }
+  }
+
+  private saveSessions() {
+    try {
+      mkdirSync(dirname(this.sessionsFile), { recursive: true });
+      writeFileSync(this.sessionsFile, JSON.stringify(Object.fromEntries(this.refreshTokens)));
+    } catch {
+      /* sem permissão de escrita: as sessões valem só enquanto o processo viver, como antes */
+    }
   }
 
   /** Outro processo (ex.: `pnpm dev:seed -- --reset`) pode ter alterado o arquivo: relê quando ele mudou. */
@@ -72,6 +101,7 @@ export class DevAuthProvider implements AuthProvider {
       .sign(new TextEncoder().encode(this.secret));
     const refreshToken = `dev-${randomBytes(24).toString("hex")}`;
     this.refreshTokens.set(refreshToken, { userId: user.id, expiresAt: Date.now() + 30 * 86_400_000 });
+    this.saveSessions();
     return { accessToken, refreshToken, expiresIn, expiresAt: now + expiresIn, user: { id: user.id, email: user.email } };
   }
 
@@ -111,6 +141,7 @@ export class DevAuthProvider implements AuthProvider {
   async signOut(accessToken: string): Promise<void> {
     void accessToken;
     this.refreshTokens.clear(); // dev: encerra todas as sessões
+    this.saveSessions();
   }
 
   async requestPasswordReset(email: string): Promise<void> {

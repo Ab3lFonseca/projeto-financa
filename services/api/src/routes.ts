@@ -10,6 +10,7 @@ import { goalRoutes } from "./modules/goals/routes";
 import { notificationRoutes } from "./modules/notifications/routes";
 import { openFinanceRoutes } from "./modules/open-finance/routes";
 import { recurringRoutes } from "./modules/recurring/routes";
+import { suggestionRoutes } from "./modules/suggestions/routes";
 import { reportRoutes } from "./modules/reports/routes";
 import { transactionRoutes } from "./modules/transactions/routes";
 import { transferRoutes } from "./modules/transfers/routes";
@@ -30,6 +31,7 @@ export async function registerDomainRoutes(scope: FastifyInstance): Promise<void
   await scope.register(dashboardRoutes, { prefix: "/dashboard" });
   await scope.register(reportRoutes, { prefix: "/reports" });
   await scope.register(adminRoutes, { prefix: "/admin" });
+  await scope.register(suggestionRoutes, { prefix: "/suggestions" });
   await scope.register(notificationRoutes, { prefix: "/notifications" });
   await scope.register(openFinanceRoutes, { prefix: "/open-finance" });
 }

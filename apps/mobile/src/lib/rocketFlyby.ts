@@ -8,6 +8,8 @@ export const FLYBY_MAX = 5;
 export type Flight = {
   /** Altura da passagem, em % da altura do quadro (de cima para baixo). */
   topPct: number;
+  /** Posição da passagem na largura, em % (para as trajetórias que sobem ou descem). */
+  leftPct: number;
   /** Tamanho do foguete (largura do desenho, em px). */
   size: number;
   /** Atraso até sair, em ms. */
@@ -27,6 +29,7 @@ export function flybyPlan(random: () => number = Math.random, count?: number): F
   for (let i = 0; i < total; i++) {
     flights.push({
       topPct: 8 + random() * 70, // sempre dentro do quadro
+      leftPct: 6 + random() * 80,
       size: 20 + random() * 14,
       delayMs: Math.round(at),
       durationMs: Math.round(800 + random() * 350),

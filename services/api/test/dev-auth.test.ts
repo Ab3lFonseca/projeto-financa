@@ -43,6 +43,40 @@ describe("autenticação local de desenvolvimento", () => {
     await expect(c.signIn("b@teste.dev", "senhaForte123")).resolves.toBeTruthy();
   });
 
+  it("a sessão sobrevive ao reinício do servidor (o servidor de desenvolvimento reinicia a cada arquivo editado)", async () => {
+    const before = new DevAuthProvider(SECRET, file);
+    await before.signUp({ email: "a@teste.dev", password: "senhaForte123", metadata: {} });
+    const session = await before.signIn("a@teste.dev", "senhaForte123");
+
+    const afterRestart = new DevAuthProvider(SECRET, file); // processo novo, mesmo arquivo
+    const renewed = await afterRestart.refresh(session.refreshToken);
+    expect(renewed.user.email).toBe("a@teste.dev");
+    expect(renewed.refreshToken).not.toBe(session.refreshToken);
+    // cada token de renovação vale uma vez (rotação): o antigo não volta a valer nem depois de outro reinício
+    await expect(new DevAuthProvider(SECRET, file).refresh(session.refreshToken)).rejects.toMatchObject({ code: "INVALID_REFRESH_TOKEN" });
+    await expect(new DevAuthProvider(SECRET, file).refresh(renewed.refreshToken)).resolves.toBeTruthy();
+  });
+
+  it("sair encerra as sessões também depois de um reinício; token inventado continua recusado", async () => {
+    const a = new DevAuthProvider(SECRET, file);
+    await a.signUp({ email: "a@teste.dev", password: "senhaForte123", metadata: {} });
+    const session = await a.signIn("a@teste.dev", "senhaForte123");
+    await a.signOut(session.accessToken);
+    await expect(new DevAuthProvider(SECRET, file).refresh(session.refreshToken)).rejects.toMatchObject({ code: "INVALID_REFRESH_TOKEN" });
+    await expect(new DevAuthProvider(SECRET, file).refresh("dev-inventado")).rejects.toMatchObject({ code: "INVALID_REFRESH_TOKEN" });
+  });
+
+  it("arquivo de sessões corrompido não derruba o servidor (só ninguém continua logado)", async () => {
+    const a = new DevAuthProvider(SECRET, file);
+    await a.signUp({ email: "a@teste.dev", password: "senhaForte123", metadata: {} });
+    const session = await a.signIn("a@teste.dev", "senhaForte123");
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(`${file}.sessions`, "{ isto não é json");
+    const b = new DevAuthProvider(SECRET, file);
+    await expect(b.refresh(session.refreshToken)).rejects.toMatchObject({ code: "INVALID_REFRESH_TOKEN" });
+    await expect(b.signIn("a@teste.dev", "senhaForte123")).resolves.toBeTruthy(); // entrar de novo funciona
+  });
+
   it("senha errada continua recusada", async () => {
     const p = new DevAuthProvider(SECRET, file);
     await p.signUp({ email: "a@teste.dev", password: "senhaForte123", metadata: {} });

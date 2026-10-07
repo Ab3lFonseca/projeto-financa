@@ -7,8 +7,9 @@ import { AnimatedPressable, useSpringPress } from "@/components/ui/Interactive";
 import { Text } from "@/components/ui/Text";
 import { mix } from "@/theme/color";
 import { useTheme } from "@/theme/ThemeProvider";
+import { flightById, type FlightId } from "@/lib/noveltyLook";
+import { Flyby } from "./Flyby";
 import { Rocket } from "./Rocket";
-import { RocketFlyby } from "./RocketFlyby";
 import { Sparkle } from "./Sparkle";
 
 export type BannerTone = "primary" | "positive" | "warning" | "violet" | "slate";
@@ -51,7 +52,9 @@ export function HeroBanner({
   subtitle,
   badge,
   rocket = false,
-  flyby = false,
+  flight,
+  flightRepeatMs,
+  colors: gradientColors,
   compact = false,
   children,
   style,
@@ -66,8 +69,12 @@ export function HeroBanner({
   /** Etiqueta pequena acima do título (ex.: "Em breve"). */
   badge?: string;
   rocket?: boolean;
-  /** De 3 a 5 foguetes cruzam o fundo do banner, bem rápido, uma vez quando ele aparece (mural de Novidades). */
-  flyby?: boolean;
+  /** A animação PRÓPRIA do quadro: de 3 a 5 desenhos cruzam o fundo, bem rápido, quando ele aparece (mural de Novidades). */
+  flight?: FlightId;
+  /** Repete a passagem a cada tantos ms (os quadros mais abaixo da lista também mostram a sua cena). Sem isto, toca só uma vez. */
+  flightRepeatMs?: number;
+  /** Cores do degradê (substituem as do `tone`): cada novidade tem a sua. */
+  colors?: [string, string];
   compact?: boolean;
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -80,7 +87,7 @@ export function HeroBanner({
 }) {
   const { colors, radius } = useTheme();
   const gradientId = `hero${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
-  const [from, to] = bannerGradient(tone, colors.primary, colors.accent);
+  const [from, to] = gradientColors ?? bannerGradient(tone, colors.primary, colors.accent);
   const reduce = useReducedMotion();
   const drift = useSharedValue(0);
   useEffect(() => {
@@ -110,8 +117,8 @@ export function HeroBanner({
         {SPARKLES.map((s, i) => (
           <Sparkle key={i} size={s.size} color={s.color} delay={s.delay} duration={s.duration} style={{ left: s.left as never, top: s.top as never }} />
         ))}
-        {/* foguetes cruzando o fundo (3 a 5, uma vez por abertura da tela) */}
-        {flyby ? <RocketFlyby /> : null}
+        {/* a cena própria do quadro cruzando o fundo (3 a 5 desenhos), por trás do texto */}
+        {flight ? <Flyby kind={flightById(flight)} height={compact ? 175 : 270} repeatMs={flightRepeatMs} startDelayMs={delay + 350} /> : null}
       </View>
 
       {rocket ? (
