@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { NextBadges } from "@/components/badges/NextBadges";
 import { BarChart, DonutChart, Legend, LineChart } from "@/components/charts/Charts";
+import { TrialStrip } from "@/components/feature/AccessBanner";
 import { Fab, InsightCard, PendingSyncBanner } from "@/components/feature/Common";
 import { TourTarget } from "@/components/tour/TourTarget";
 import { AccountTile, BudgetRow, CreditCardView, GoalCard, SummaryTile, TransactionRow } from "@/components/feature/Rows";
@@ -69,7 +70,9 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <Screen header={header} tabs refreshing={isRefetching} onRefresh={() => void refetch()} contentStyle={{ paddingBottom: 96 }}>
+      <Screen header={header} tabs trialStrip={false} refreshing={isRefetching} onRefresh={() => void refetch()} contentStyle={{ paddingBottom: 96 }}>
+        {/* Teste grátis: cartão grande, com a barra de progressão e o botão de assinar (nas outras telas é uma faixa fina). */}
+        <TrialStrip variant="hero" />
         <PendingSyncBanner />
 
         {/* Saldo total */}

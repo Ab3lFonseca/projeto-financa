@@ -11,6 +11,10 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Cartão grande do teste grátis no Início.** No alto do Início, no lugar da faixa fina, aparece um cartão que chama atenção: "Faltam 12 dias de teste
+  grátis", a data em que termina e o que acontece depois, a **barra de progressão mais grossa** (com o mesmo tremor e suor, um pouco maiores) e o botão
+  cheio **Assinar agora**. As outras telas principais seguem com a faixa fina. No modo somente leitura e no plano pago uma vez perto do fim o cartão
+  também aparece (com "Assinar" e "Renovar").
 - **Barra de progressão na faixa do teste grátis.** Sob o texto, uma barra enche conforme os dias passam e muda **do verde ao vermelho** (verde → amarelo →
   laranja → vermelho → **vermelho escuro** no último dia). Na segunda metade do teste a barra começa a **estremecer de leve**, cada vez mais rápido e
   mais forte, e nos últimos dias ela **"sua"**: gotinhas pequenas escorrem da borda de baixo da barra (só dela; o texto e o botão ficam parados). Respeita

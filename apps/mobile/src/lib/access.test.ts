@@ -117,6 +117,22 @@ describe("faixa do teste grátis nas telas principais", () => {
     expect(accessStrip(access({ state: "expired", allowed: false, daysLeft: null, expiresAt: null }), true)!.meter).toBeNull();
     expect(accessStrip(access({ state: "paid", daysLeft: 3, cancelAtPeriodEnd: true }), true)!.meter).toBeNull();
   });
+  it("o cartão grande do Início traz título e explicação claros", () => {
+    const long = accessStrip(access({ daysLeft: 12 }), true)!;
+    expect(long.title).toBe("Faltam 12 dias de teste grátis");
+    expect(long.detail).toMatch(/^Termina em .*Depois disso o app fica somente leitura\./);
+    expect(accessStrip(access({ daysLeft: 1 }), true)!.title).toBe("Falta 1 dia de teste grátis");
+    const last = accessStrip(access({ daysLeft: 0 }), true)!;
+    expect(last.title).toBe("Último dia do teste grátis");
+    expect(last.detail).toMatch(/último dia/);
+    const expired = accessStrip(access({ state: "expired", allowed: false, daysLeft: null, expiresAt: null }), true)!;
+    expect(expired.title).toBe("Somente leitura");
+    expect(expired.detail).toMatch(/Assine/);
+    const paid = accessStrip(access({ state: "paid", daysLeft: 3, cancelAtPeriodEnd: true }), true)!;
+    expect(paid.title).toMatch(/termina em 3 dias/);
+    expect(paid.detail).toMatch(/Renove/);
+    expect(accessStrip(access({ daysLeft: 12, expiresAt: null }), true)!.detail).toBe("Depois disso o app fica somente leitura. Dá para assinar já.");
+  });
   it("sem data de fim conhecida não inventa uma", () => {
     expect(accessStrip(access({ daysLeft: 12, expiresAt: null }), true)?.text).toBe("Teste grátis: faltam 12 dias");
   });

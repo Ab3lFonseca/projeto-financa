@@ -115,6 +115,9 @@ export type AccessStripInfo = {
   tone: "info" | "warning" | "negative";
   icon: string;
   text: string;
+  /** Versão grande (cartão do Início): título curto e a explicação embaixo. */
+  title: string;
+  detail: string;
   /** Texto do botão que leva à assinatura. */
   cta: string;
   /** Barra de progressão do teste (só durante o teste grátis): fração usada, cor, tremor e suor. */
@@ -129,16 +132,36 @@ export type AccessStripInfo = {
 export function accessStrip(access: AccessDTO, enforced: boolean, trialDays = 30): AccessStripInfo | null {
   if (!enforced) return null;
   if (access.state === "expired") {
-    return { tone: "negative", icon: "lock", text: "Somente leitura: seu teste grátis acabou", cta: "Assinar", meter: null };
+    return {
+      tone: "negative",
+      icon: "lock",
+      text: "Somente leitura: seu teste grátis acabou",
+      title: "Somente leitura",
+      detail: "Seu teste grátis acabou. Assine para voltar a criar e editar; você continua vendo e exportando tudo.",
+      cta: "Assinar",
+      meter: null,
+    };
   }
   const days = access.daysLeft;
   if (access.state === "trial" && days !== null) {
     const left = days === 0 ? "termina hoje" : days === 1 ? "falta 1 dia" : `faltam ${days} dias`;
     const until = access.expiresAt && days > 0 ? ` (até ${dateText(access.expiresAt)})` : "";
-    return { tone: days <= 5 ? "warning" : "info", icon: "clock", text: `Teste grátis: ${left}${until}`, cta: "Assinar agora", meter: trialMeter(days, trialDays) };
+    return {
+      tone: days <= 5 ? "warning" : "info",
+      icon: "clock",
+      text: `Teste grátis: ${left}${until}`,
+      title: days === 0 ? "Último dia do teste grátis" : days === 1 ? "Falta 1 dia de teste grátis" : `Faltam ${days} dias de teste grátis`,
+      detail:
+        days === 0
+          ? "Hoje é o último dia. Assine para continuar criando e editando."
+          : `${access.expiresAt ? `Termina em ${dateText(access.expiresAt)}. ` : ""}Depois disso o app fica somente leitura. Dá para assinar já.`,
+      cta: "Assinar agora",
+      meter: trialMeter(days, trialDays),
+    };
   }
   if (access.state === "paid" && access.cancelAtPeriodEnd && days !== null && days <= 7) {
-    return { tone: "warning", icon: "calendar-clock", text: `Seu plano ${days === 0 ? "termina hoje" : `termina em ${daysText(days)}`}`, cta: "Renovar", meter: null };
+    const when = days === 0 ? "termina hoje" : `termina em ${daysText(days)}`;
+    return { tone: "warning", icon: "calendar-clock", text: `Seu plano ${when}`, title: `Seu plano ${when}`, detail: "Renove para não perder o acesso para criar e editar.", cta: "Renovar", meter: null };
   }
   return null;
 }

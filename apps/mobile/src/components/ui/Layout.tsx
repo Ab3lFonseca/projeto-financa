@@ -117,6 +117,8 @@ type ScreenProps = {
   padded?: boolean;
   /** Reserva espaço para a barra de abas (telas dentro das abas). */
   tabs?: boolean;
+  /** Nas telas de abas aparece a faixa fina do teste grátis; o Início a troca por um cartão grande e passa `false`. */
+  trialStrip?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
   keyboard?: boolean;
   /** Camada decorativa atrás do conteúdo (ex.: fundo animado das telas de entrada). Não recebe toques. */
@@ -124,7 +126,7 @@ type ScreenProps = {
 };
 
 /** Esqueleto de tela: área segura, fundo do tema, rolagem com "puxar para atualizar" e teclado. A tela entra com um fade curto. */
-export function Screen({ children, scroll = true, refreshing, onRefresh, header, footer, padded = true, tabs = false, contentStyle, keyboard = false, background }: ScreenProps) {
+export function Screen({ children, scroll = true, refreshing, onRefresh, header, footer, padded = true, tabs = false, trialStrip = true, contentStyle, keyboard = false, background }: ScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const body = scroll ? (
@@ -152,7 +154,7 @@ export function Screen({ children, scroll = true, refreshing, onRefresh, header,
       )}
       {header}
       {/* Telas principais: faixa fixa com o teste grátis (quanto falta) e o botão de assinar. */}
-      {tabs ? <TrialStrip /> : null}
+      {tabs && trialStrip ? <TrialStrip /> : null}
       {body}
       {footer ? <View style={{ padding: 16, paddingBottom: 16 + (tabs ? 0 : insets.bottom), backgroundColor: colors.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>{footer}</View> : null}
     </Animated.View>
