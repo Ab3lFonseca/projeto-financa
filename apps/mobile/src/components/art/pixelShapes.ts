@@ -80,8 +80,8 @@ export type HoverShift = { readonly dx: number; readonly dy: number; readonly ro
 
 const AT_REST: HoverShift = Object.freeze({ dx: 0, dy: 0, rotate: 0, glow: 0 });
 
-/** Distância (em unidades da logo) a partir do mouse em que os cubos reagem. */
-export const HOVER_RADIUS = 0.22;
+/** Distância (em unidades da logo) a partir do mouse em que os cubos reagem: um círculo pequeno em volta do cursor. */
+export const HOVER_RADIUS = 0.12;
 
 /**
  * Como um cubo reage ao mouse passando por perto: é empurrado para longe do cursor, gira e brilha, mais forte quanto mais perto (e nada além do
@@ -101,8 +101,10 @@ export function hoverShift(cell: PixelCell, noise: number, pointer: Pointer | nu
   return { dx: Math.cos(angle) * push, dy: Math.sin(angle) * push - strength * 0.02 * noise, rotate: (noise - 0.5) * 300 * strength, glow: strength };
 }
 
-/** Pixels por lado da logo de fundo: grade fina, com bem mais cubos do que a primeira versão (24). */
-export const LOGO_GRID = 40;
+/** Pixels por lado da logo de fundo: grade bem fina (a primeira versão tinha 24; depois 40). */
+export const LOGO_GRID = 56;
+/** A logo de fundo é mostrada INTEIRA (nenhum cubo se solta ou some em repouso); só reage quando o mouse passa. */
+export const LOGO_BREAK_FROM = 1;
 
 /** Quantos grupos de cubos se mexem em oposição no celular, e quanto dura uma subida e descida completa. */
 export const AMBIENT_LAYERS = 6;
@@ -171,6 +173,11 @@ export function logoCells(grid = LOGO_GRID, seed = 11, breakFrom = 0.34): PixelC
       const r3 = rand();
       const r4 = rand();
       const gradient = (cx + cy) / 2;
+      // `breakFrom` 1 ou mais = a logo inteira, sem nenhum cubo solto ou faltando.
+      if (breakFrom >= 1) {
+        out.push({ x: gx * cell, y: gy * cell, size: cell * 0.94, rotate: 0, tone, gradient, alpha: 1, shard: false });
+        continue;
+      }
       // 0 no lado esquerdo intacto, 1 na borda direita.
       const t = Math.max(0, (cx - breakFrom) / (1 - breakFrom));
       const breaks = r1 < Math.min(0.96, t * 1.25);

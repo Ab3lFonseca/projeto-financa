@@ -5,7 +5,7 @@ import Svg, { Rect } from "react-native-svg";
 import { mix } from "@/theme/color";
 import { useTheme } from "@/theme/ThemeProvider";
 import { InteractivePixelLogo, type CellPaint } from "./InteractivePixelLogo";
-import { AMBIENT_AMPLITUDE, AMBIENT_LAYERS, AMBIENT_PERIOD, AMBIENT_PHASES, ambientLayerOf, LOGO_GRID, logoCells, type PixelCell } from "./pixelShapes";
+import { AMBIENT_AMPLITUDE, AMBIENT_LAYERS, AMBIENT_PERIOD, AMBIENT_PHASES, ambientLayerOf, LOGO_BREAK_FROM, LOGO_GRID, logoCells, type PixelCell } from "./pixelShapes";
 
 const web = Platform.OS === "web";
 
@@ -64,16 +64,15 @@ function AmbientCells({ cells, paint, box }: { cells: PixelCell[]; paint: CellPa
 }
 
 /**
- * A logo do Finança no fundo do app, CENTRALIZADA na tela, grande e feita de muitos cubos: desfocada e se desfazendo em pixels (os da direita se
- * soltam, giram e somem). No computador fica parada e, quando o mouse passa por cima, os cubos perto do cursor saltam, giram e acendem, e
- * depois voltam ao lugar. No celular, onde não há mouse, os cubos alternam sozinhos, subindo e descendo. Só decoração (não recebe toques) e
+ * A logo do Finança no fundo do app, CENTRALIZADA na tela, INTEIRA, grande e feita de muitíssimos cubos, desfocada. No computador fica parada e,
+ * quando o mouse passa por cima, os cubos dentro de um círculo pequeno em volta do cursor saltam, giram e acendem, e depois voltam ao lugar. No celular, onde não há mouse, os cubos alternam sozinhos, subindo e descendo. Só decoração (não recebe toques) e
  * bem apagada, para nunca atrapalhar a leitura. `intensity` multiplica a opacidade.
  */
 export function PixelLogoBackdrop({ intensity = 1 }: { intensity?: number }) {
   const { colors, scheme } = useTheme();
   const { width, height } = useWindowDimensions();
-  // Os que passam da borda direita da logo ficavam cortados (invisíveis): nem entram na conta.
-  const cells = useMemo(() => logoCells(LOGO_GRID, 11, 0.34).filter((c) => c.x < 1), []);
+  // A logo inteira, sem cubos soltos nem faltando.
+  const cells = useMemo(() => logoCells(LOGO_GRID, 11, LOGO_BREAK_FROM), []);
 
   // Maior que a menor medida da tela (a logo "estoura" um pouco as bordas, sempre centralizada), com limites.
   const box = Math.round(Math.min(Math.max(Math.min(width, height) * 1.5, 520), 1200));

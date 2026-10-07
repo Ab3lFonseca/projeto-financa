@@ -9,6 +9,7 @@ import {
   approach,
   HOVER_RADIUS,
   hoverShift,
+  LOGO_BREAK_FROM,
   LOGO_GRID,
   logoCells,
   seeded,
@@ -73,16 +74,33 @@ describe("logo em pixels", () => {
     expect(logoCells(24, 11).length).toBeLessThan(600);
   });
 
-  it("a logo de fundo usa uma grade fina: bem mais cubos que a primeira versão (24 por lado), ainda sem chegar a milhares", () => {
+  it("a logo de fundo usa uma grade bem fina: muito mais cubos que a primeira versão (24 por lado), sem passar de poucos milhares", () => {
     const first = logoCells(24, 11).length;
-    const now = logoCells(LOGO_GRID, 11).length;
-    expect(LOGO_GRID).toBeGreaterThanOrEqual(36);
-    expect(now).toBeGreaterThan(first * 2);
-    expect(now).toBeLessThan(1600);
-    // continua se desfazendo à direita e inteira à esquerda
-    const cells = logoCells(LOGO_GRID, 11);
-    expect(cells.filter((c) => c.x < 0.25).every((c) => !c.shard)).toBe(true);
-    expect(cells.filter((c) => c.shard).length).toBeGreaterThan(100);
+    const now = logoCells(LOGO_GRID, 11, LOGO_BREAK_FROM).length;
+    expect(LOGO_GRID).toBeGreaterThanOrEqual(50);
+    expect(now).toBeGreaterThan(first * 4);
+    expect(now).toBeLessThan(4000);
+  });
+
+  it("a logo de fundo é INTEIRA: nenhum cubo solto, nenhum faltando (um para cada ponto do desenho), alinhados na grade e todos opacos", () => {
+    const cells = logoCells(LOGO_GRID, 11, LOGO_BREAK_FROM);
+    expect(cells.every((c) => !c.shard && c.rotate === 0 && c.alpha === 1)).toBe(true);
+    // um cubo para cada célula da grade que cai dentro do ícone: conta direto pelo desenho
+    let expected = 0;
+    for (let gy = 0; gy < LOGO_GRID; gy++) for (let gx = 0; gx < LOGO_GRID; gx++) if (toneAt((gx + 0.5) / LOGO_GRID, (gy + 0.5) / LOGO_GRID) !== null) expected++;
+    expect(cells).toHaveLength(expected);
+    // todos dentro do quadrado do ícone (nada vai para fora da imagem) e as três barras presentes
+    for (const c of cells) {
+      expect(c.x).toBeGreaterThanOrEqual(0);
+      expect(c.y).toBeGreaterThanOrEqual(0);
+      expect(c.x + c.size).toBeLessThanOrEqual(1);
+      expect(c.y + c.size).toBeLessThanOrEqual(1);
+    }
+    expect([1, 2, 3].every((tone) => cells.some((c) => c.tone === tone))).toBe(true);
+  });
+
+  it("o modo antigo (logo se desfazendo) continua disponível para quem pedir: com breakFrom menor que 1 aparecem estilhaços", () => {
+    expect(logoCells(LOGO_GRID, 11, 0.34).some((c) => c.shard)).toBe(true);
   });
 });
 
@@ -161,10 +179,10 @@ describe("cubos reagindo ao mouse", () => {
   it("não há salto na borda do raio: o efeito vai a zero de forma contínua (o cubo não 'estala' quando o mouse passa)", () => {
     const c = cube(0.5, 0.5);
     const mid = center(c);
-    const justInside = hoverShift(c, 0.9, { x: mid.x - (HOVER_RADIUS - 1e-4), y: mid.y });
-    expect(justInside.glow).toBeLessThan(1e-6);
-    expect(Math.hypot(justInside.dx, justInside.dy)).toBeLessThan(1e-5);
-    expect(Math.abs(justInside.rotate)).toBeLessThan(1e-3);
+    const justInside = hoverShift(c, 0.9, { x: mid.x - HOVER_RADIUS * (1 - 1e-3), y: mid.y }); // 0,1% para dentro da borda, qualquer que seja o raio
+    expect(justInside.glow).toBeLessThan(1e-4);
+    expect(Math.hypot(justInside.dx, justInside.dy)).toBeLessThan(1e-4);
+    expect(Math.abs(justInside.rotate)).toBeLessThan(0.01);
   });
 
   it("o cubo é empurrado para LONGE do cursor, qualquer que seja o lado em que o mouse passa", () => {
@@ -182,9 +200,9 @@ describe("cubos reagindo ao mouse", () => {
     const c = cube(0.5, 0.5);
     const mid = center(c);
     const at = (d: number) => hoverShift(c, 0.8, { x: mid.x - d, y: mid.y });
-    const near = at(0.03);
-    const middle = at(0.12);
-    const edge = at(0.2);
+    const near = at(HOVER_RADIUS * 0.15);
+    const middle = at(HOVER_RADIUS * 0.55);
+    const edge = at(HOVER_RADIUS * 0.9);
     expect(near.glow).toBeGreaterThan(middle.glow);
     expect(middle.glow).toBeGreaterThan(edge.glow);
     expect(Math.abs(near.dx)).toBeGreaterThan(Math.abs(middle.dx));
