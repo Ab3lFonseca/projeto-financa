@@ -104,6 +104,19 @@ describe("faixa do teste grátis nas telas principais", () => {
     expect(accessStrip(access({ daysLeft: 0 }), true)?.text).toBe("Teste grátis: termina hoje");
     expect(accessStrip(access({ daysLeft: 1 }), true)?.text).toContain("falta 1 dia");
   });
+  it("a faixa do teste traz a barra de progressão (cor e tremor pelo que falta); as outras faixas não", () => {
+    const start = accessStrip(access({ daysLeft: 30 }), true, 30)!.meter!;
+    expect(start).toMatchObject({ progress: 0, color: "#22C55E", shake: 0, sweat: 0 });
+    const middle = accessStrip(access({ daysLeft: 15 }), true, 30)!.meter!;
+    expect(middle.progress).toBe(0.5);
+    expect(middle.shake).toBe(0);
+    const last = accessStrip(access({ daysLeft: 0 }), true, 30)!.meter!;
+    expect(last).toMatchObject({ progress: 1, color: "#A31D1D", shake: 1, sweat: 1 });
+    // o tamanho do teste vem da configuração: 14 dias, 7 restantes = metade
+    expect(accessStrip(access({ daysLeft: 7 }), true, 14)!.meter!.progress).toBe(0.5);
+    expect(accessStrip(access({ state: "expired", allowed: false, daysLeft: null, expiresAt: null }), true)!.meter).toBeNull();
+    expect(accessStrip(access({ state: "paid", daysLeft: 3, cancelAtPeriodEnd: true }), true)!.meter).toBeNull();
+  });
   it("sem data de fim conhecida não inventa uma", () => {
     expect(accessStrip(access({ daysLeft: 12, expiresAt: null }), true)?.text).toBe("Teste grátis: faltam 12 dias");
   });

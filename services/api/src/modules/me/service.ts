@@ -40,6 +40,7 @@ export async function buildEntitlements(tx: Tx, user: AuthUser, config: Config):
   return {
     plan: user.plan,
     billingEnforced: config.BILLING_ENFORCED,
+    trialDays: config.TRIAL_DAYS,
     access: toAccessDTO(user.access),
     limits: {
       accounts: limits.accounts,

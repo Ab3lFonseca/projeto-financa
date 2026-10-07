@@ -51,6 +51,8 @@ export const entitlementsDTO = z.object({
   plan: Plan,
   /** false no beta: todos recebem os recursos do Premium. */
   billingEnforced: z.boolean(),
+  /** Duração total do teste grátis, em dias (para a barra de progressão do teste). */
+  trialDays: z.number().int().min(0),
   /** Como a pessoa acessa o app agora (beta, teste grátis, assinatura, cortesia, administrador ou somente leitura). */
   access: accessDTO,
   limits: z.object({

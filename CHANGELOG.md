@@ -11,6 +11,11 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Barra de progressão na faixa do teste grátis.** Sob o texto, uma barra enche conforme os dias passam e muda **do verde ao vermelho** (verde → amarelo →
+  laranja → vermelho → **vermelho escuro** no último dia). Na segunda metade do teste a barra começa a **estremecer de leve**, cada vez mais rápido e
+  mais forte, e nos últimos dias ela **"sua"**: gotinhas pequenas escorrem da borda de baixo da barra (só dela; o texto e o botão ficam parados). Respeita
+  "reduzir movimento" do aparelho (sem tremor nem suor, só a cor). Para isso o `/me` passou a informar `entitlements.trialDays` (duração do teste).
+  Cálculo em `lib/trialMeter.ts` (puro e testado), animação em `components/feature/AccessBanner.tsx`.
 - **Faixa do teste grátis em todas as telas principais.** Início, Transações, Gráficos, Carteira, Investir e Mais mostram, fixa sob o cabeçalho, quanto
   falta do teste grátis e até quando ("Teste grátis: faltam 25 dias (até 03/11/2026)"), com o botão **Assinar agora**, que leva à escolha do plano e
   do pagamento (renova sozinha ou pagar uma vez, com Pix). Fica azul durante o teste e vira alerta nos últimos 5 dias; no modo somente leitura avisa

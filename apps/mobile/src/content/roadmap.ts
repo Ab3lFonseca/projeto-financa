@@ -98,7 +98,7 @@ export const ROADMAP: readonly RoadmapItem[] = [
   {
     id: "trial-strip",
     title: "Quanto falta do teste grátis, sempre à vista",
-    summary: "Uma faixa fixa nas telas principais mostra quantos dias restam do teste e até quando, com o botão para assinar já.",
+    summary: "Uma faixa fixa nas telas principais mostra quantos dias restam do teste e até quando, com o botão para assinar já. Uma barra vai do verde ao vermelho escuro e, perto do fim, treme e começa a suar.",
     icon: "clock",
     status: "done",
     since: "2026-10-07",

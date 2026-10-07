@@ -1,3 +1,4 @@
+import { trialMeter, type TrialMeter } from "./trialMeter";
 import { perMonthCents, yearlySavingsPercent, type AccessDTO, type BillingIntervalName, type BillingModeName, type BillingPrice, type PricesByInterval } from "@app/shared";
 
 type Tone = "default" | "positive" | "negative" | "warning" | "primary";
@@ -110,26 +111,34 @@ export function accessSummary(access: AccessDTO, autoRenew?: boolean | null): Ac
   }
 }
 
-export type AccessStripInfo = { tone: "info" | "warning" | "negative"; icon: string; text: string; /** Texto do botão que leva à assinatura. */ cta: string };
+export type AccessStripInfo = {
+  tone: "info" | "warning" | "negative";
+  icon: string;
+  text: string;
+  /** Texto do botão que leva à assinatura. */
+  cta: string;
+  /** Barra de progressão do teste (só durante o teste grátis): fração usada, cor, tremor e suor. */
+  meter: TrialMeter | null;
+};
 
 /**
  * Faixa fixa no alto das telas principais (Início, Transações, Gráficos, Carteira, Investir e Mais). Só aparece com a cobrança ligada:
  * **durante todo o teste grátis** diz quanto falta e até quando, com o botão para assinar já; no modo somente leitura, avisa; e para quem pagou
  * uma vez (ou cancelou) avisa perto do fim. Assinante em dia, cortesia, administrador e beta não veem nada.
  */
-export function accessStrip(access: AccessDTO, enforced: boolean): AccessStripInfo | null {
+export function accessStrip(access: AccessDTO, enforced: boolean, trialDays = 30): AccessStripInfo | null {
   if (!enforced) return null;
   if (access.state === "expired") {
-    return { tone: "negative", icon: "lock", text: "Somente leitura: seu teste grátis acabou", cta: "Assinar" };
+    return { tone: "negative", icon: "lock", text: "Somente leitura: seu teste grátis acabou", cta: "Assinar", meter: null };
   }
   const days = access.daysLeft;
   if (access.state === "trial" && days !== null) {
     const left = days === 0 ? "termina hoje" : days === 1 ? "falta 1 dia" : `faltam ${days} dias`;
     const until = access.expiresAt && days > 0 ? ` (até ${dateText(access.expiresAt)})` : "";
-    return { tone: days <= 5 ? "warning" : "info", icon: "clock", text: `Teste grátis: ${left}${until}`, cta: "Assinar agora" };
+    return { tone: days <= 5 ? "warning" : "info", icon: "clock", text: `Teste grátis: ${left}${until}`, cta: "Assinar agora", meter: trialMeter(days, trialDays) };
   }
   if (access.state === "paid" && access.cancelAtPeriodEnd && days !== null && days <= 7) {
-    return { tone: "warning", icon: "calendar-clock", text: `Seu plano ${days === 0 ? "termina hoje" : `termina em ${daysText(days)}`}`, cta: "Renovar" };
+    return { tone: "warning", icon: "calendar-clock", text: `Seu plano ${days === 0 ? "termina hoje" : `termina em ${daysText(days)}`}`, cta: "Renovar", meter: null };
   }
   return null;
 }
