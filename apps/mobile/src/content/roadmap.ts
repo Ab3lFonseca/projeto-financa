@@ -115,6 +115,51 @@ export const ROADMAP: readonly RoadmapItem[] = [
     },
   },
   {
+    id: "savings-closed-month",
+    hue: 22,
+    flight: "piggy-fall",
+    title: "Economia só conta quando o mês fecha",
+    summary: "Receita lançada no mês em andamento, como o salário, não vira mais “você economizou”. A economia é o que sobrou do mês passado, depois que ele fechou.",
+    icon: "piggy-bank",
+    status: "done",
+    since: "2026-10-07",
+    preview: {
+      purpose: "Corrigir um número que enganava: ao lançar o salário, o app mostrava que você já tinha economizado aquele valor, mas o mês ainda nem tinha terminado.",
+      how: [
+        "No Início, o terceiro número deixou de ser a “economia” do mês em andamento e passou a mostrar quanto sobrou do mês que fechou (“Sobrou em” e o nome do mês passado), com a porcentagem do que você recebeu.",
+        "Se no mês fechado você gastou mais do que recebeu, ou não sobrou nada, aparece um traço (—) em vez de um valor, com a explicação embaixo.",
+        "O aviso “Para você” também mudou: nos primeiros dias do mês novo ele diz quanto sobrou do mês que acabou de fechar (ou quanto você gastou a mais). Receita do mês em andamento não entra nessa conta.",
+      ],
+      expect: [
+        "Receitas e despesas do mês em andamento continuam aparecendo normalmente nos seus totais; só não são chamadas de economia.",
+        "As insígnias de economia já eram calculadas só com meses fechados, então não mudam.",
+      ],
+    },
+  },
+  {
+    id: "cleaner-screens",
+    hue: 260,
+    flight: "chart-rise",
+    title: "Telas mais limpas: Gráficos simples e aviso do teste com mais respiro",
+    summary: "Gráficos mostra só o essencial e deixa o resto em “Ver mais análises”. O aviso do teste grátis ganhou espaço e não fica mais colado no que está em volta.",
+    icon: "layout-grid",
+    status: "done",
+    since: "2026-10-07",
+    preview: {
+      purpose: "Deixar as telas mais leves e fáceis de ler, sem tanta informação junta.",
+      how: [
+        "Em Gráficos, ficam à vista só as despesas por categoria (as 5 maiores, com “Ver todas as categorias”) e o comparativo de receitas × despesas.",
+        "Gastos por semana ou mês, evolução do saldo, fluxo de caixa e comparação entre meses ficam em “Ver mais análises”: toque para abrir e toque de novo para fechar.",
+        "Quando não há lançamentos no período, aparece um único aviso (com o botão Novo lançamento) em vez de um por gráfico.",
+        "A faixa do teste grátis, nas telas principais, ganhou mais espaço em volta e por dentro: texto, botão e barra respiram, e ela não encosta mais no título nem no conteúdo.",
+      ],
+      expect: [
+        "Nada foi apagado: todos os gráficos continuam disponíveis em “Ver mais análises”.",
+        "As análises extras só carregam quando você as abre, então a tela abre mais rápido.",
+      ],
+    },
+  },
+  {
     id: "suggestions-board",
     hue: 43,
     flight: "bulb-rise",

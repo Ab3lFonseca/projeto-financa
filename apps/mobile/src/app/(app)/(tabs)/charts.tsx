@@ -1,4 +1,5 @@
 import type { ISODate } from "@app/shared";
+import { router } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 import { BarChart, DonutChart, Legend, LineChart } from "@/components/charts/Charts";
@@ -28,6 +29,8 @@ const RANGES: { value: ReportRange; label: string }[] = [
   { value: "custom", label: "Personalizado" },
 ];
 const FREE_RANGES: ReportRange[] = ["this_month", "last_3_months"];
+/** Quantas categorias aparecem na lista do gráfico (as maiores); as demais ficam atrás de "Ver todas as categorias". */
+const TOP_CATEGORIES = 5;
 
 /** Cartão de gráfico: mostra o gráfico, um esqueleto ao carregar ou o convite ao Premium (402). */
 function ChartCard<T>({ query, children, empty }: { query: UseQueryResult<T, unknown>; children: (data: T) => React.ReactNode; empty?: (data: T) => boolean }) {
@@ -69,13 +72,19 @@ export default function ChartsScreen() {
   const [upsell, setUpsell] = useState(false);
   const [catType, setCatType] = useState<"EXPENSE" | "INCOME">("EXPENSE");
   const [bucket, setBucket] = useState<"week" | "month" | undefined>(undefined);
+  // Tela limpa: só o essencial à vista (categorias e receitas × despesas). O resto fica atrás de "Ver mais análises" e só é buscado quando abre.
+  const [more, setMore] = useState(false);
+  const [allCategories, setAllCategories] = useState(false);
 
   const params: ReportParams = range === "custom" ? { range, from: custom.from, to: custom.to } : { range };
   const categories = useCategoryBreakdown(params, catType);
   const incomeExpense = useIncomeVsExpense(params, bucket);
-  const balance = useBalanceEvolution(params);
-  const cashFlow = useCashFlow(params, bucket);
-  const comparison = useMonthComparison();
+  const balance = useBalanceEvolution(params, more);
+  const cashFlow = useCashFlow(params, bucket, more);
+  const comparison = useMonthComparison(undefined, more);
+  // Nada para mostrar no período (nem categorias, nem receitas/despesas): um único aviso em vez de um por gráfico.
+  const nothing =
+    !!categories.data && !!incomeExpense.data && categories.data.items.length === 0 && incomeExpense.data.points.every((p) => p.incomeCents === 0 && p.expenseCents === 0);
 
   const choose = (r: ReportRange) => {
     if (!advanced && !FREE_RANGES.includes(r)) return setUpsell(true);
@@ -83,7 +92,7 @@ export default function ChartsScreen() {
     if (r === "custom") setCustomOpen(true);
   };
   const refreshing = categories.isRefetching || incomeExpense.isRefetching || balance.isRefetching;
-  const refresh = () => void Promise.all([categories.refetch(), incomeExpense.refetch(), balance.refetch(), cashFlow.refetch(), comparison.refetch()]);
+  const refresh = () => void Promise.all([categories.refetch(), incomeExpense.refetch(), ...(more ? [balance.refetch(), cashFlow.refetch(), comparison.refetch()] : [])]);
 
   const header = (
     <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 12 }}>
@@ -102,12 +111,18 @@ export default function ChartsScreen() {
 
   return (
     <Screen tabs header={header} refreshing={refreshing} onRefresh={refresh}>
-      {periodLabel ? (
+      {periodLabel && !nothing ? (
         <Text variant="caption" tone="muted">
           Período: {periodLabel}
         </Text>
       ) : null}
 
+      {nothing ? (
+        <Card style={{ paddingVertical: 12 }}>
+          <EmptyState icon="chart-pie" title="Sem dados neste período" message="Registre lançamentos ou escolha outro período para ver os gráficos." action="Novo lançamento" onAction={() => router.push("/transaction/new" as never)} />
+        </Card>
+      ) : (
+        <>
       {/* Despesas por categoria */}
       <Reveal index={0}>
         <Section title={catType === "EXPENSE" ? "Despesas por categoria" : "Receitas por categoria"}>
@@ -115,8 +130,8 @@ export default function ChartsScreen() {
             {(d) => (
               <>
                 <Segmented options={[{ value: "EXPENSE", label: "Despesas", tone: "negative" }, { value: "INCOME", label: "Receitas", tone: "positive" }]} value={catType} onChange={setCatType} />
-                <View style={{ alignItems: "center" }}>
-                  <DonutChart data={d.items.map((i) => ({ value: i.totalCents, color: i.color }))} size={180} thickness={24}>
+                <View style={{ alignItems: "center", paddingVertical: 4 }}>
+                  <DonutChart data={d.items.map((i) => ({ value: i.totalCents, color: i.color }))} size={168} thickness={22}>
                     <Text variant="caption" tone="muted">
                       Total
                     </Text>
@@ -124,7 +139,7 @@ export default function ChartsScreen() {
                   </DonutChart>
                 </View>
                 <View>
-                  {d.items.map((i, idx) => (
+                  {(allCategories ? d.items : d.items.slice(0, TOP_CATEGORIES)).map((i, idx) => (
                     <View key={`${i.categoryId}-${idx}`}>
                       {idx > 0 ? <Divider /> : null}
                       <ListRow
@@ -144,6 +159,9 @@ export default function ChartsScreen() {
                     </View>
                   ))}
                 </View>
+                {d.items.length > TOP_CATEGORIES ? (
+                  <Button label={allCategories ? "Mostrar só as maiores" : `Ver todas as categorias (${d.items.length})`} variant="ghost" size="sm" onPress={() => setAllCategories((v) => !v)} />
+                ) : null}
               </>
             )}
           </ChartCard>
@@ -156,7 +174,6 @@ export default function ChartsScreen() {
           <ChartCard query={incomeExpense} empty={(d) => d.points.every((p) => p.incomeCents === 0 && p.expenseCents === 0)}>
             {(d) => (
               <>
-                <Segmented<"auto" | "week" | "month"> options={[{ value: "auto", label: "Automático" }, { value: "week", label: "Semanas" }, { value: "month", label: "Meses" }]} value={bucket ?? "auto"} onChange={(v) => setBucket(v === "auto" ? undefined : v)} />
                 <BarChart data={d.points.map((p) => ({ key: p.key, label: p.label, values: [p.incomeCents, p.expenseCents] }))} colors={[colors.positive, colors.negative]} seriesLabels={["Receitas", "Despesas"]} />
                 <Legend items={[{ color: colors.positive, label: "Receitas" }, { color: colors.negative, label: "Despesas" }]} />
               </>
@@ -164,6 +181,12 @@ export default function ChartsScreen() {
           </ChartCard>
         </Section>
       </Reveal>
+
+      <Button label={more ? "Ocultar análises extras" : "Ver mais análises"} icon={more ? "chevron-up" : "chevron-down"} variant="secondary" onPress={() => setMore((v) => !v)} />
+
+      {more ? (
+        <>
+      <Segmented<"auto" | "week" | "month"> options={[{ value: "auto", label: "Automático" }, { value: "week", label: "Semanas" }, { value: "month", label: "Meses" }]} value={bucket ?? "auto"} onChange={(v) => setBucket(v === "auto" ? undefined : v)} />
 
       {/* Gastos por semana / mês */}
       <Reveal index={2}>
@@ -255,6 +278,10 @@ export default function ChartsScreen() {
           </ChartCard>
         </Section>
       </Reveal>
+        </>
+      ) : null}
+        </>
+      )}
 
       <Sheet visible={customOpen} onClose={() => setCustomOpen(false)} title="Período personalizado">
         <View style={{ gap: 14 }}>

@@ -58,7 +58,20 @@ export async function buildDashboard(
   const month = await sumsBetween(tx, user.id, monthStart, monthEnd);
   const monthToDate = await sumsBetween(tx, user.id, monthStart, today);
   const previousToDate = await sumsBetween(tx, user.id, prevStart, prevSameDay);
-  const savingsCents = month.incomeCents - month.expenseCents;
+  const savingsCents = month.incomeCents - month.expenseCents; // saldo parcial do mês em andamento (NÃO é economia)
+  // Economia só existe em mês FECHADO: a sobra do mês anterior inteiro.
+  const closed = await sumsBetween(tx, user.id, prevStart, endOfMonth(prevStart));
+  const closedLeftover = closed.incomeCents - closed.expenseCents;
+  const previousMonth =
+    closed.incomeCents === 0 && closed.expenseCents === 0
+      ? null
+      : {
+          month: prevStart,
+          incomeCents: closed.incomeCents,
+          expenseCents: closed.expenseCents,
+          leftoverCents: closedLeftover,
+          leftoverRatePct: closed.incomeCents > 0 ? Math.round((closedLeftover / closed.incomeCents) * 1000) / 10 : null,
+        };
 
   // ---- últimas transações (até hoje)
   const recent = await tx.transaction.findMany({
@@ -145,8 +158,7 @@ export async function buildDashboard(
   }
   const insights = buildInsights({
     today,
-    incomeCents: month.incomeCents,
-    expenseCents: month.expenseCents,
+    previousMonth: previousMonth && { month: previousMonth.month, incomeCents: previousMonth.incomeCents, expenseCents: previousMonth.expenseCents },
     expenseToDateCents: monthToDate.expenseCents,
     previousExpenseToDateCents: previousToDate.expenseCents,
     categories: [...catMap.values()],
@@ -167,6 +179,7 @@ export async function buildDashboard(
       expenseCents: month.expenseCents,
       savingsCents,
       savingsRatePct: month.incomeCents > 0 ? Math.round((savingsCents / month.incomeCents) * 1000) / 10 : null,
+      previousMonth,
       previousIncomeCents: previousToDate.incomeCents,
       previousExpenseCents: previousToDate.expenseCents,
       // Nos primeiros dias do mês a comparação é ruído (um boleto vira "+600%"): só mostramos depois.

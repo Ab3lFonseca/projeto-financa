@@ -44,7 +44,7 @@ describe("GET /v1/dashboard", () => {
     expect(res.body).toMatchObject({
       today: "2026-10-04",
       totalBalanceCents: 0,
-      month: { month: "2026-10-01", incomeCents: 0, expenseCents: 0, savingsCents: 0, savingsRatePct: null, expenseChangePct: null },
+      month: { month: "2026-10-01", incomeCents: 0, expenseCents: 0, savingsCents: 0, savingsRatePct: null, previousMonth: null, expenseChangePct: null },
       recentTransactions: [],
       spendingByCategory: [],
       budgetAlerts: [],
@@ -66,8 +66,11 @@ describe("GET /v1/dashboard", () => {
       month: "2026-10-01",
       incomeCents: 720_000,
       expenseCents: 55_000, // a despesa de 20/out está PENDING
+      // saldo PARCIAL do mês em andamento (receitas − despesas até agora): não é economia, o mês não fechou
       savingsCents: 665_000,
       savingsRatePct: 92.4,
+      // economia só existe no mês FECHADO: setembro recebeu 700.000 e gastou 90.000, então sobraram 610.000 (87,1%)
+      previousMonth: { month: "2026-09-01", incomeCents: 700_000, expenseCents: 90_000, leftoverCents: 610_000, leftoverRatePct: 87.1 },
       // mesmo período do mês anterior (1–4/set): despesas 60.000, receita 0 (o salário caiu em 5/set)
       previousExpenseCents: 60_000,
       previousIncomeCents: 0,
@@ -133,7 +136,9 @@ describe("GET /v1/dashboard", () => {
       const messages = d.insights.map((i: any) => i.message) as string[];
       // mês até hoje: 65.000 × mês anterior até o dia 10: 80.000 → −18,75%
       expect(messages).toContain("Suas despesas caíram 19% em relação ao mês passado.");
-      expect(messages).toContain("Você economizou R$ 6.350,00 este mês.");
+      // setembro (mês fechado) só teve despesas (80.000) e nenhuma receita: gastou a mais do que recebeu. A receita de outubro não entra na conta.
+      expect(messages).toContain("Em setembro você gastou R$ 800,00 a mais do que recebeu.");
+      expect(messages.some((m) => /economizou|sobraram/.test(m))).toBe(false);
       expect(messages.some((m) => m.startsWith("Você está próximo de ultrapassar seu orçamento de Lazer"))).toBe(true);
       expect(messages.some((m) => /menos com Alimentação este mês\.$/.test(m))).toBe(true);
       expect(d.budgetAlerts).toHaveLength(1);
@@ -150,13 +155,81 @@ describe("GET /v1/dashboard", () => {
     const d = (await w.user.get("/v1/dashboard")).body;
     const messages = d.insights.map((i: any) => i.message) as string[];
     expect(messages.some((m) => /em relação ao mês passado/.test(m))).toBe(false);
-    expect(messages).toContain("Você economizou R$ 6.650,00 este mês.");
+    expect(messages).toContain("Em setembro sobraram R$ 6.100,00 do que você recebeu."); // 700.000 − 90.000 do mês fechado
+    expect(messages.some((m) => /economizou/.test(m))).toBe(false); // o salário de outubro não é "economia"
     // o dashboard também omite os percentuais; os números seguem disponíveis na tela de relatórios
     expect(d.month.expenseChangePct).toBeNull();
     expect(d.month.incomeChangePct).toBeNull();
     expect(d.month.previousExpenseCents).toBe(60_000);
     const cmp = (await w.user.get("/v1/reports/month-comparison")).body;
     expect(cmp.expenseChangePct).toBe(-8.3);
+  });
+
+  describe("economia só existe no mês fechado", () => {
+    it("lançar o salário no mês em andamento NÃO gera economia: nem aviso, nem sobra de mês fechado", async () => {
+      const w = await createWorld(env, { opening: 0 });
+      await w.income({ amountCents: 500_000, occurredOn: "2026-10-03" }); // o salário entrou, ainda sem despesas
+      const d = (await w.user.get("/v1/dashboard")).body;
+      expect(d.month.incomeCents).toBe(500_000);
+      expect(d.month.previousMonth).toBeNull(); // setembro não teve lançamentos: não há mês fechado para falar de sobra
+      expect(d.insights.map((i: any) => i.message).join("|")).not.toMatch(/economiz|sobraram|gastou/);
+      expect(d.insights.some((i: any) => i.kind === "SAVINGS_POSITIVE" || i.kind === "SAVINGS_NEGATIVE")).toBe(false);
+    });
+
+    it("o mês fechado com sobra aparece com o valor e a porcentagem; o mês que gastou demais também aparece (negativo)", async () => {
+      const sobra = await createWorld(env, { opening: 0 });
+      await sobra.income({ amountCents: 400_000, occurredOn: "2026-09-05" });
+      await sobra.expense({ amountCents: 300_000, occurredOn: "2026-09-10" });
+      expect((await sobra.user.get("/v1/dashboard")).body.month.previousMonth).toEqual({
+        month: "2026-09-01", incomeCents: 400_000, expenseCents: 300_000, leftoverCents: 100_000, leftoverRatePct: 25,
+      });
+      const falta = await createWorld(env, { opening: 0 });
+      await falta.income({ amountCents: 100_000, occurredOn: "2026-09-05" });
+      await falta.expense({ amountCents: 130_000, occurredOn: "2026-09-10" });
+      expect((await falta.user.get("/v1/dashboard")).body.month.previousMonth).toMatchObject({ leftoverCents: -30_000, leftoverRatePct: -30 });
+    });
+
+    it("despesa lançada neste mês não mexe na sobra do mês fechado (cada mês tem a sua conta)", async () => {
+      const w = await createWorld(env, { opening: 0 });
+      await w.income({ amountCents: 400_000, occurredOn: "2026-09-05" });
+      await w.expense({ amountCents: 300_000, occurredOn: "2026-09-10" });
+      const before = (await w.user.get("/v1/dashboard")).body.month.previousMonth;
+      await w.expense({ amountCents: 90_000, occurredOn: "2026-10-02" });
+      await w.income({ amountCents: 800_000, occurredOn: "2026-10-01" });
+      expect((await w.user.get("/v1/dashboard")).body.month.previousMonth).toEqual(before);
+    });
+
+    it("depois do dia 10 o aviso de sobra some (mas os números do mês fechado continuam no resumo)", async () => {
+      const clock = await createTestEnv();
+      try {
+        clock.setNow("2026-10-16T15:00:00.000Z");
+        const w = await createWorld(clock, { opening: 0 });
+        await w.income({ amountCents: 400_000, occurredOn: "2026-09-05" });
+        await w.expense({ amountCents: 300_000, occurredOn: "2026-09-10" });
+        const d = (await w.user.get("/v1/dashboard")).body;
+        expect(d.insights.some((i: any) => i.kind === "SAVINGS_POSITIVE")).toBe(false);
+        expect(d.month.previousMonth.leftoverCents).toBe(100_000);
+      } finally {
+        await clock.close();
+      }
+    });
+
+    it("na virada do mês, o mês que acabou de fechar passa a ser o 'mês fechado' (e o novo começa sem economia)", async () => {
+      const clock = await createTestEnv();
+      try {
+        clock.setNow("2026-10-30T15:00:00.000Z");
+        const w = await createWorld(clock, { opening: 0 });
+        await w.income({ amountCents: 600_000, occurredOn: "2026-10-05" });
+        await w.expense({ amountCents: 450_000, occurredOn: "2026-10-12" });
+        expect((await w.user.get("/v1/dashboard")).body.month.previousMonth).toBeNull(); // outubro ainda não fechou
+        clock.setNow("2026-11-02T15:00:00.000Z");
+        const d = (await w.user.get("/v1/dashboard")).body;
+        expect(d.month.previousMonth).toMatchObject({ month: "2026-10-01", leftoverCents: 150_000, leftoverRatePct: 25 });
+        expect(d.insights.map((i: any) => i.message)).toContain("Em outubro sobraram R$ 1.500,00 do que você recebeu.");
+      } finally {
+        await clock.close();
+      }
+    });
   });
 
   it("mostra fatura a vencer, próximas contas e metas", async () => {

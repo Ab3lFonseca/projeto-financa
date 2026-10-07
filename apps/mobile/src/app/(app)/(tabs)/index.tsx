@@ -15,6 +15,7 @@ import { Money } from "@/components/ui/Money";
 import { Text } from "@/components/ui/Text";
 import { useMe } from "@/lib/auth/AuthProvider";
 import { capitalize, formatDateLong, formatDateShort, formatMonth, formatPct } from "@/lib/format";
+import { closedMonthSavings } from "@/lib/savings";
 import { useDashboard, useUnreadCount } from "@/lib/hooks";
 import { usePrivacyStore } from "@/lib/privacy-store";
 import { monthShortPt } from "@app/shared";
@@ -67,6 +68,7 @@ export default function HomeScreen() {
   const noAccounts = data.accounts.length === 0;
   const m = data.month;
   const monthName = formatMonth(m.month);
+  const saved = closedMonthSavings(m.previousMonth);
 
   return (
     <View style={{ flex: 1 }}>
@@ -87,7 +89,7 @@ export default function HomeScreen() {
             <Money cents={data.totalBalanceCents} variant="display" weight="700" style={{ color: colors.onPrimary }} animate />
             <Text variant="caption" style={{ color: withAlpha(colors.onPrimary, 0.8) }}>
               {capitalize(monthName)}
-              {m.savingsRatePct !== null ? ` · você guardou ${formatPct(m.savingsRatePct)} do que recebeu` : ""}
+              {saved.summary ? ` · ${saved.summary}` : ""}
             </Text>
           </View>
           </TourTarget>
@@ -104,7 +106,8 @@ export default function HomeScreen() {
           <Row gap={10} align="flex-start">
             <SummaryTile label="Receitas" cents={m.incomeCents} change={m.incomeChangePct} tone="positive" />
             <SummaryTile label="Despesas" cents={m.expenseCents} change={m.expenseChangePct} tone="negative" goodWhenDown />
-            <SummaryTile label="Economia" cents={m.savingsCents} tone="primary" />
+            {/* Economia só existe em mês fechado: a sobra do mês passado, nunca o saldo do mês em andamento (um salário lançado hoje não é economia). */}
+            <SummaryTile label={saved.label} cents={saved.cents} hint={saved.hint} tone="primary" />
           </Row>
         </Reveal>
 

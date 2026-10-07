@@ -3,8 +3,7 @@ import { buildInsights, type InsightInput } from "../src/modules/dashboard/insig
 
 const base: InsightInput = {
   today: "2026-10-10",
-  incomeCents: 0,
-  expenseCents: 0,
+  previousMonth: null,
   expenseToDateCents: 0,
   previousExpenseToDateCents: 0,
   categories: [],
@@ -40,16 +39,38 @@ describe("motor de insights", () => {
     expect(
       messages({ ...early, categories: [{ categoryId: "a", name: "Alimentação", currentCents: 10_000, previousCents: 40_000 }] }),
     ).toEqual([]);
-    // economia e orçamentos continuam valendo desde o dia 1
-    expect(messages({ ...early, incomeCents: 100_000, expenseCents: 40_000 })).toEqual(["Você economizou R$ 600,00 este mês."]);
+    // a sobra do mês que fechou e os orçamentos valem desde o dia 1
+    expect(messages({ ...early, previousMonth: { month: "2026-09-01", incomeCents: 100_000, expenseCents: 40_000 } })).toEqual(["Em setembro sobraram R$ 600,00 do que você recebeu."]);
   });
 
-  it("economia positiva e negativa", () => {
-    expect(messages({ incomeCents: 720_000, expenseCents: 595_000 })).toContain("Você economizou R$ 1.250,00 este mês.");
-    expect(messages({ incomeCents: 100_000, expenseCents: 130_000 })).toContain(
-      "Você gastou R$ 300,00 a mais do que recebeu este mês.",
-    );
-    expect(messages({ incomeCents: 100_000, expenseCents: 100_000 })).toEqual([]);
+  describe("economia: só do mês FECHADO", () => {
+    const closed = (incomeCents: number, expenseCents: number) => ({ previousMonth: { month: "2026-09-01" as const, incomeCents, expenseCents } });
+
+    it("sobrou dinheiro no mês que fechou: avisa com o nome do mês; gastou a mais: avisa também", () => {
+      expect(messages(closed(720_000, 595_000))).toContain("Em setembro sobraram R$ 1.250,00 do que você recebeu.");
+      expect(messages(closed(100_000, 130_000))).toContain("Em setembro você gastou R$ 300,00 a mais do que recebeu.");
+      expect(messages(closed(100_000, 100_000))).toEqual([]); // zerou: nada a dizer
+    });
+
+    it("receita lançada no mês em andamento NUNCA vira economia (sem mês fechado, nada de economia)", () => {
+      // o salário caiu hoje e ainda não há despesas: antes isso aparecia como "você economizou o salário inteiro"
+      expect(messages({ previousMonth: null, expenseToDateCents: 0 })).toEqual([]);
+      for (const m of messages({ previousMonth: null, expenseToDateCents: 30_000, previousExpenseToDateCents: 30_000 })) expect(m).not.toMatch(/economiz|sobraram/);
+    });
+
+    it("mês fechado sem nenhum lançamento não gera aviso", () => {
+      expect(messages(closed(0, 0))).toEqual([]);
+    });
+
+    it("o aviso vale só até o dia 10 do mês seguinte (depois é notícia velha)", () => {
+      expect(messages({ ...closed(720_000, 595_000), today: "2026-10-10" })).toHaveLength(1);
+      expect(messages({ ...closed(720_000, 595_000), today: "2026-10-11" })).toEqual([]);
+      expect(messages({ ...closed(100_000, 130_000), today: "2026-10-28" })).toEqual([]);
+    });
+
+    it("usa o nome do mês que fechou (janeiro/dezembro, virada de ano)", () => {
+      expect(messages({ today: "2027-01-05", previousMonth: { month: "2026-12-01", incomeCents: 500_000, expenseCents: 300_000 } })).toEqual(["Em dezembro sobraram R$ 2.000,00 do que você recebeu."]);
+    });
   });
 
   it("orçamentos: aviso e estouro, com severidade crítica no estouro", () => {
@@ -107,8 +128,7 @@ describe("motor de insights", () => {
     const category = { id: "c1", name: "X", icon: "x", color: "#000000", type: "EXPENSE" as const, deleted: false };
     const out = buildInsights({
       ...base,
-      incomeCents: 200_000,
-      expenseCents: 100_000,
+      previousMonth: { month: "2026-09-01", incomeCents: 200_000, expenseCents: 100_000 },
       expenseToDateCents: 50_000,
       previousExpenseToDateCents: 100_000,
       budgets: Array.from({ length: 5 }, (_, i) => ({

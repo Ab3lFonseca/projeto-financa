@@ -10,6 +10,19 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 
 ## [Não lançado]
 
+### Corrigido
+- **Receita lançada no mês virava "economia".** Ao lançar o salário o Início mostrava "você guardou 92% do que recebeu" e "Você economizou R$ …", mas o mês ainda estava em andamento. Agora **economia só
+  existe em mês fechado**: o painel traz `month.previousMonth` (o mês anterior inteiro, com `leftoverCents` e `leftoverRatePct`); o Início mostra **"Sobrou em <mês>"** com esse valor (ou um traço, se
+  gastou a mais ou não sobrou nada) e a frase do saldo total fala do mês fechado; o aviso "Para você" virou "Em setembro sobraram R$ X do que você recebeu" (ou "gastou R$ X a mais"), só até o dia 10 do mês
+  seguinte e nunca com dados do mês em andamento. `month.savingsCents`/`savingsRatePct` continuam na API só por compatibilidade e são o saldo PARCIAL, não economia. As insígnias de economia já usavam só
+  meses fechados. Testes: `insights.test.ts`, `dashboard-reports.test.ts`, `savings.test.ts`. Item no mural (`savings-closed-month`).
+
+### Alterado
+- **Gráficos mais limpa e faixa do teste com mais respiro.** Em *Gráficos* ficam à vista só **despesas por categoria** (as 5 maiores; "Ver todas as categorias" mostra o resto) e **receitas ×
+  despesas**; gastos por semana/mês, evolução do saldo, fluxo de caixa e comparação entre meses foram para **"Ver mais análises"** (fechado por padrão; essas consultas só são feitas ao abrir). Sem
+  lançamentos no período, **um único aviso** com o botão *Novo lançamento* (antes eram quatro cartões iguais). A faixa do teste grátis ganhou margem em cima e embaixo, mais folga por dentro e
+  botão maior, para não colar no título, nas abas e no conteúdo (um componente só, vale em todas as telas principais). Item no mural de Novidades (`cleaner-screens`).
+
 ### Adicionado
 - **Quadro de sugestões para o administrador.** Cada usuário pode **enviar sugestões** em *Mais → Enviar sugestão* (de 10 a 1.000 caracteres, no máximo 5 por dia, sem repetir o
   mesmo texto) e acompanha a situação de cada uma. O administrador tem o **Quadro de sugestões** (*Administração → Quadro de sugestões*), com abas Em análise / Válidas / Não

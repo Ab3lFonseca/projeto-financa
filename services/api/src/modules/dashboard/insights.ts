@@ -1,4 +1,4 @@
-import { diffDays, formatBRL, type BudgetDTO, type GoalDTO, type InsightDTO, type ISODate } from "@app/shared";
+import { diffDays, formatBRL, monthNamePt, type BudgetDTO, type GoalDTO, type InsightDTO, type ISODate } from "@app/shared";
 
 export type CategoryDelta = {
   categoryId: string | null;
@@ -9,9 +9,8 @@ export type CategoryDelta = {
 
 export type InsightInput = {
   today: ISODate;
-  /** Mês corrente (completo) — receitas/despesas/economia. */
-  incomeCents: number;
-  expenseCents: number;
+  /** O último mês FECHADO (inteiro), ou null se não teve lançamentos. Economia só existe aqui, nunca no mês em andamento. */
+  previousMonth: { month: ISODate; incomeCents: number; expenseCents: number } | null;
   /** Comparativo justo: mês corrente até hoje × mês anterior até o mesmo dia. */
   expenseToDateCents: number;
   previousExpenseToDateCents: number;
@@ -29,6 +28,9 @@ const pct = (n: number) => `${Math.abs(Math.round(n))}%`;
 
 /** Dia do mês a partir do qual comparações com o mês anterior passam a ser mostradas. */
 export const MIN_DAYS_FOR_COMPARISON = 7;
+
+/** O aviso "sobraram R$ X em <mês passado>" aparece só até este dia do mês (depois disso é notícia velha). */
+export const CLOSED_MONTH_INSIGHT_DAYS = 10;
 
 /**
  * Insights em português a partir dos dados reais do usuário. Regras determinísticas
@@ -64,24 +66,27 @@ export function buildInsights(input: InsightInput): InsightDTO[] {
     }
   }
 
-  // --- economia do mês
-  const savings = input.incomeCents - input.expenseCents;
-  if (input.incomeCents > 0 || input.expenseCents > 0) {
-    if (savings > 0) {
+  // --- economia: SÓ do mês que já fechou, e só nos primeiros dias do mês seguinte (depois disso a notícia é velha).
+  // Receita lançada no mês em andamento (o salário, por exemplo) nunca vira "economia": o mês ainda não acabou.
+  const closed = input.previousMonth;
+  if (closed && (closed.incomeCents > 0 || closed.expenseCents > 0) && Number(input.today.slice(8, 10)) <= CLOSED_MONTH_INSIGHT_DAYS) {
+    const leftover = closed.incomeCents - closed.expenseCents;
+    const name = monthNamePt(closed.month);
+    if (leftover > 0) {
       out.push({
         id: "savings-positive",
         kind: "SAVINGS_POSITIVE",
         severity: "positive",
-        message: `Você economizou ${formatBRL(savings)} este mês.`,
-        data: { savingsCents: savings },
+        message: `Em ${name} sobraram ${formatBRL(leftover)} do que você recebeu.`,
+        data: { savingsCents: leftover, month: closed.month },
       });
-    } else if (savings < 0) {
+    } else if (leftover < 0) {
       out.push({
         id: "savings-negative",
         kind: "SAVINGS_NEGATIVE",
         severity: "warning",
-        message: `Você gastou ${formatBRL(-savings)} a mais do que recebeu este mês.`,
-        data: { savingsCents: savings },
+        message: `Em ${name} você gastou ${formatBRL(-leftover)} a mais do que recebeu.`,
+        data: { savingsCents: leftover, month: closed.month },
       });
     }
   }

@@ -32,10 +32,28 @@ export const monthSummaryDTO = z.object({
   month: isoDate,
   incomeCents: z.number().int(),
   expenseCents: z.number().int(),
-  /** Receitas − despesas do mês. */
+  /**
+   * Receitas − despesas do mês EM ANDAMENTO (saldo parcial). **Não é economia**: o mês ainda não fechou (o salário entra e não "sobrou" nada ainda). O app
+   * não mostra mais isto como economia; a economia é a sobra do último mês fechado, em `previousMonth`. Mantido só por compatibilidade com versões antigas do app.
+   */
   savingsCents: z.number().int(),
-  /** Economia ÷ receitas (0–100), null sem receitas. */
+  /** Saldo parcial ÷ receitas (0–100), null sem receitas. Mesma observação de `savingsCents`. */
   savingsRatePct: z.number().nullable(),
+  /**
+   * O ÚLTIMO MÊS FECHADO (o mês anterior ao de hoje, inteiro). Aqui, e só aqui, existe economia: se receitas − despesas do mês fechado foi positivo, sobrou
+   * (`leftoverCents > 0`). `null` quando o mês fechado não teve nenhum lançamento.
+   */
+  previousMonth: z
+    .object({
+      month: isoDate,
+      incomeCents: z.number().int(),
+      expenseCents: z.number().int(),
+      /** Receitas − despesas do mês fechado (pode ser negativo: gastou mais do que recebeu). */
+      leftoverCents: z.number().int(),
+      /** Sobra ÷ receitas do mês fechado (0–100, pode ser negativa), null sem receitas. */
+      leftoverRatePct: z.number().nullable(),
+    })
+    .nullable(),
   previousIncomeCents: z.number().int(),
   previousExpenseCents: z.number().int(),
   incomeChangePct: z.number().nullable(),

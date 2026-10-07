@@ -33,7 +33,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     target: "home-balance",
     icon: "wallet",
     title: "Seu saldo, num relance",
-    body: "Aqui fica a soma de todas as suas contas e quanto você guardou do que recebeu no mês. Logo abaixo, receitas, despesas e economia.",
+    body: "Aqui fica a soma de todas as suas contas. Logo abaixo, as receitas e as despesas do mês e quanto sobrou do mês passado: a economia só conta quando o mês fecha.",
     why: "Abriu o app, já sabe como está o seu dinheiro. O olho no topo esconde os valores quando houver alguém por perto.",
   },
   {

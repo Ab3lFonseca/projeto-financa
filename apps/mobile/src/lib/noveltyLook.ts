@@ -48,6 +48,8 @@ export const FLIGHTS = [
   { id: "zap-diag", icon: "zap", motion: "diag-down", spin: false, tint: "#FEF9C3" },
   { id: "bulb-rise", icon: "lightbulb", motion: "rise", spin: false, tint: "#FEF08A" },
   { id: "film-rtl", icon: "film", motion: "rtl", spin: false, tint: "#E9D5FF" },
+  { id: "chart-rise", icon: "chart-pie", motion: "rise", spin: false, tint: "#BAE6FD" },
+  { id: "piggy-fall", icon: "piggy-bank", motion: "fall", spin: false, tint: "#FBCFE8" },
 ] as const satisfies readonly FlightKind[];
 
 export type FlightId = (typeof FLIGHTS)[number]["id"];

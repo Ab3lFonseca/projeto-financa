@@ -226,8 +226,11 @@ const GOAL_ICON: Record<Goal["kind"], string> = {
 };
 export { GOAL_ICON };
 
-/** Número do mês (Receitas / Despesas / Economia) com variação. */
-export function SummaryTile({ label, cents, change, tone, goodWhenDown }: { label: string; cents: number; change?: number | null; tone: "positive" | "negative" | "primary"; goodWhenDown?: boolean }) {
+/**
+ * Número do mês (Receitas / Despesas) com variação, ou a sobra do mês fechado (`cents = null` mostra "—" e a `hint` explica, em vez de um valor
+ * inventado).
+ */
+export function SummaryTile({ label, cents, change, tone, goodWhenDown, hint }: { label: string; cents: number | null; change?: number | null; tone: "positive" | "negative" | "primary"; goodWhenDown?: boolean; hint?: string }) {
   const { colors } = useTheme();
   const good = change === null || change === undefined ? null : goodWhenDown ? change <= 0 : change >= 0;
   return (
@@ -238,8 +241,18 @@ export function SummaryTile({ label, cents, change, tone, goodWhenDown }: { labe
           {label}
         </Text>
       </Row>
-      <Money cents={cents} variant="bodySm" weight="700" hideZeroCents style={{ fontSize: 17 }} animate />
-      {change !== null && change !== undefined ? (
+      {cents === null ? (
+        <Text weight="700" tone="muted" style={{ fontSize: 17 }}>
+          —
+        </Text>
+      ) : (
+        <Money cents={cents} variant="bodySm" weight="700" hideZeroCents style={{ fontSize: 17 }} animate />
+      )}
+      {hint ? (
+        <Text variant="caption" tone="faint">
+          {hint}
+        </Text>
+      ) : change !== null && change !== undefined ? (
         <Text variant="caption" tone={good ? "positive" : "negative"} weight="600">
           {formatPct(change, { signed: true })} <Text variant="caption" tone="faint">vs mês anterior</Text>
         </Text>

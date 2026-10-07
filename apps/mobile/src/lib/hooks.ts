@@ -173,12 +173,13 @@ export const useCategoryBreakdown = (p: ReportParams, type: "EXPENSE" | "INCOME"
   useQuery({ queryKey: ["report", "categories", p, type], queryFn: () => api.reports.categoryBreakdown({ ...p, type }), placeholderData: keepPreviousData, retry: planRetry });
 export const useIncomeVsExpense = (p: ReportParams, granularity?: "week" | "month") =>
   useQuery({ queryKey: ["report", "income-vs-expense", p, granularity], queryFn: () => api.reports.incomeVsExpense({ ...p, granularity }), placeholderData: keepPreviousData, retry: planRetry });
-export const useBalanceEvolution = (p: ReportParams) =>
-  useQuery({ queryKey: ["report", "balance", p], queryFn: () => api.reports.balanceEvolution(p), placeholderData: keepPreviousData, retry: planRetry });
-export const useCashFlow = (p: ReportParams, granularity?: "week" | "month") =>
-  useQuery({ queryKey: ["report", "cash-flow", p, granularity], queryFn: () => api.reports.cashFlow({ ...p, granularity }), placeholderData: keepPreviousData, retry: planRetry });
-export const useMonthComparison = (month?: string) =>
-  useQuery({ queryKey: ["report", "month-comparison", month], queryFn: () => api.reports.monthComparison(month) });
+/** `enabled = false` não busca nada (as análises extras de Gráficos só são pedidas quando a pessoa as abre). */
+export const useBalanceEvolution = (p: ReportParams, enabled = true) =>
+  useQuery({ queryKey: ["report", "balance", p], queryFn: () => api.reports.balanceEvolution(p), placeholderData: keepPreviousData, retry: planRetry, enabled });
+export const useCashFlow = (p: ReportParams, granularity?: "week" | "month", enabled = true) =>
+  useQuery({ queryKey: ["report", "cash-flow", p, granularity], queryFn: () => api.reports.cashFlow({ ...p, granularity }), placeholderData: keepPreviousData, retry: planRetry, enabled });
+export const useMonthComparison = (month?: string, enabled = true) =>
+  useQuery({ queryKey: ["report", "month-comparison", month], queryFn: () => api.reports.monthComparison(month), enabled });
 
 /** 402 (recurso Premium) não adianta repetir. */
 function planRetry(count: number, error: unknown) {

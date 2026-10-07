@@ -67,7 +67,7 @@ function TrialMeterBar({ meter, big = false }: { meter: TrialMeter; big?: boolea
   const drops = reduce ? 0 : Math.round(meter.sweat * DROPS + (meter.sweat > 0 ? 0.4 : 0));
   const period = 1900 - 900 * meter.sweat;
   return (
-    <Animated.View style={[{ height, marginTop: big ? 12 : 8 }, shakeStyle]} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(meter.progress * 100) }} accessibilityLabel="Progresso do teste grátis">
+    <Animated.View style={[{ height, marginTop: big ? 12 : 10 }, shakeStyle]} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(meter.progress * 100) }} accessibilityLabel="Progresso do teste grátis">
       <View style={{ height, borderRadius: height / 2, backgroundColor: withAlpha(colors.text, 0.12), overflow: "hidden" }}>
         <View style={{ width: `${fill * 100}%`, height, borderRadius: height / 2, backgroundColor: meter.color }} />
       </View>
@@ -126,21 +126,22 @@ export function TrialStrip({ variant = "strip" }: { variant?: "strip" | "hero" }
       accessibilityRole="button"
       accessibilityLabel={`${info.text}. ${info.cta}`}
       onPress={subscribe}
-      style={{ marginHorizontal: 16, marginBottom: info.meter ? 10 : 4, paddingTop: 8, paddingBottom: info.meter ? 14 : 8, paddingLeft: 12, paddingRight: 8, borderRadius: radius.md, backgroundColor: palette.bg }}
+      // Respiro em volta: não cola no título/abas de cima nem no conteúdo de baixo, e por dentro o texto, o botão e a barra têm folga.
+      style={{ marginHorizontal: 16, marginTop: 14, marginBottom: 10, paddingTop: 14, paddingBottom: info.meter ? 18 : 14, paddingHorizontal: 16, borderRadius: radius.lg, backgroundColor: palette.bg }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <Icon name={info.icon} size={16} color={palette.fg} />
-        <Text variant="bodySm" weight="600" style={{ flex: 1, color: palette.fg }} numberOfLines={2}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Icon name={info.icon} size={18} color={palette.fg} />
+        <Text variant="bodySm" weight="600" style={{ flex: 1, color: palette.fg, lineHeight: 20 }} numberOfLines={2}>
           {info.text}
         </Text>
-        <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: palette.fg }}>
+        <View style={{ paddingHorizontal: 16, paddingVertical: 9, borderRadius: radius.pill, backgroundColor: palette.fg }}>
           <Text variant="caption" weight="700" style={{ color: colors.onPrimary }}>
             {info.cta}
           </Text>
         </View>
       </View>
       {info.meter ? (
-        <View style={{ paddingRight: 4 }}>
+        <View style={{ marginTop: 6 }}>
           <TrialMeterBar meter={info.meter} />
         </View>
       ) : null}
