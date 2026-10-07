@@ -11,6 +11,9 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Novidades virou um mural de atualizações.** Tudo o que chegou aparece em ordem, do mais recente para o mais antigo, com o dia e o selo "Novo" na
+  última semana (insígnias, temas, fundo em cubos, verificação em duas etapas, Minha conta, comemorações, aviso do teste grátis, suporte e textos legais).
+  O que ainda vem por aí (Rendimentos, bancos, assinatura anual/mensal) segue sem data. Regra: toda mudança perceptível entra em `content/roadmap.ts`.
 - **Insígnias.** 53 conquistas em 8 assuntos (constância, lançamentos, economia, planejamento, metas, cartões, organização e segurança), cada uma com **6
   níveis: Bronze, Prata, Ouro, Platina, Diamante e Mestre** (roxo profundo, com brasão, coroa e asas), desenhadas em SVG com uma silhueta própria por nível.
   Aparecem **na tela na hora em que são conquistadas** (ao abrir, ao voltar e depois de salvar algo), e **criar a conta já dá a insígnia de Boas-vindas**

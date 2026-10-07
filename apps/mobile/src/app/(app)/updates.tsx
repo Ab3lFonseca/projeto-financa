@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/Button";
 import { Reveal, Screen, ScreenHeader } from "@/components/ui/Layout";
 import { Sheet } from "@/components/ui/Sheet";
 import { Text } from "@/components/ui/Text";
-import { itemsByStatus, ROADMAP_SECTIONS, roadmapItem, type RoadmapItem, type RoadmapStatus } from "@/content/roadmap";
+import { todayIn } from "@app/shared";
+import { itemsByStatus, isRecent, ROADMAP_SECTIONS, roadmapItem, type RoadmapItem, type RoadmapStatus } from "@/content/roadmap";
+import { useMe } from "@/lib/auth/AuthProvider";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const STATUS_LOOK: Record<RoadmapStatus, { tone: BannerTone; badge: string; rocket: boolean }> = {
@@ -16,10 +18,11 @@ const STATUS_LOOK: Record<RoadmapStatus, { tone: BannerTone; badge: string; rock
   done: { tone: "positive", badge: "Já disponível", rocket: false },
 };
 
-const monthLabel = (since: string) => {
-  const [y, m] = since.split("-");
+/** "7 de outubro de 2026" a partir de AAAA-MM-DD. */
+const dayLabel = (since: string) => {
+  const [y, m, d] = since.split("-");
   const names = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-  return `${names[Number(m) - 1]} de ${y}`;
+  return `${Number(d)} de ${names[Number(m) - 1]} de ${y}`;
 };
 
 /** Mural de novidades em banners: degradê, mensagem centralizada, brilhos que piscam e foguete no que está sendo construído agora. */
@@ -34,10 +37,11 @@ export default function UpdatesScreen() {
   }, [params.item]);
 
   const open = roadmapItem(openId ?? undefined);
+  const today = todayIn(useMe().profile.timezone);
   let order = 0;
   return (
-    <Screen header={<ScreenHeader title="Novidades" subtitle="O que já chegou e o que vem por aí" />}>
-      <HeroBanner tone="slate" icon="rocket" badge="Mural do Finança" title="Estamos sempre construindo" subtitle="Veja o que já chegou e o que vem por aí. Sem datas marcadas: preferimos lançar quando estiver bom." rocket />
+    <Screen header={<ScreenHeader title="Novidades" subtitle="Mural de atualizações do Finança" />}>
+      <HeroBanner tone="slate" icon="rocket" badge="Mural de atualizações" title="Estamos sempre construindo" subtitle="Tudo o que é novo aparece aqui, com a data, do mais recente para o mais antigo. O que ainda vem por aí não tem data marcada: preferimos lançar quando estiver bom." rocket />
 
       {ROADMAP_SECTIONS.map((section) => {
         const items = itemsByStatus(section.status);
@@ -61,7 +65,7 @@ export default function UpdatesScreen() {
                   compact
                   tone={look.tone}
                   icon={item.icon}
-                  badge={item.status === "done" && item.since ? `${look.badge} · ${monthLabel(item.since)}` : look.badge}
+                  badge={item.status === "done" && item.since ? `${isRecent(item.since, today) ? "Novo" : look.badge} · ${dayLabel(item.since)}` : look.badge}
                   title={item.title}
                   subtitle={item.summary}
                   rocket={look.rocket}
