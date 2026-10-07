@@ -1,6 +1,6 @@
 import type { AccessDTO } from "@app/shared";
 import { describe, expect, it } from "vitest";
-import { accessBadge, accessStrip, accessSummary, dateText, daysText, defaultInterval, formatMoneyCents, formatPrice, GRANT_DURATIONS, PAYMENT_MODE_OPTIONS, paymentModeHint, planOffers } from "./access";
+import { accessBadge, accessStrip, billingWithDefaults, accessSummary, dateText, daysText, defaultInterval, formatMoneyCents, formatPrice, GRANT_DURATIONS, PAYMENT_MODE_OPTIONS, paymentModeHint, planOffers } from "./access";
 
 const base: AccessDTO = { state: "trial", allowed: true, expiresAt: "2026-11-03T12:00:00.000Z", daysLeft: 12, cancelAtPeriodEnd: false, features: { investments: true } };
 const access = (over: Partial<AccessDTO>): AccessDTO => ({ ...base, ...over });
@@ -72,6 +72,25 @@ describe("resumo da situação", () => {
     expect(s.badge.tone).toBe("negative");
     expect(s.detail).toMatch(/exportar/);
     expect(accessBadge(access({ state: "paid" })).label).toBe("Premium");
+  });
+});
+
+describe("resposta antiga de /billing (cache do aparelho ou API na versão anterior)", () => {
+  const base = { access: { state: "trial" }, enforced: true, trialDays: 30, provider: "dev", checkoutAvailable: true, investmentsAvailable: true, canManage: false, hasInvestmentsAddon: false, interval: null, prices: { basic: { month: null, year: null }, investments: { month: null, year: null } } };
+
+  it("sem o campo `discount` (e sem `autoRenew`), preenche o padrão em vez de deixar a tela quebrar", () => {
+    const b = billingWithDefaults(base as never) as never as { discount: { percent: number; capPercent: number; nextPercent: number | null }; autoRenew: boolean | null };
+    expect(b.discount.percent).toBe(0);
+    expect(b.discount.capPercent).toBe(15);
+    expect(b.discount.nextPercent).toBe(5);
+    expect(b.autoRenew).toBeNull();
+  });
+
+  it("não mexe no que a API já mandou", () => {
+    const discount = { qualifying: 7, percent: 5, capPercent: 15, badgesPerStep: 5, stepPercent: 5, nextPercent: 10, badgesToNext: 3 };
+    const b = billingWithDefaults({ ...base, discount, autoRenew: false } as never) as never as { discount: unknown; autoRenew: boolean | null };
+    expect(b.discount).toEqual(discount);
+    expect(b.autoRenew).toBe(false);
   });
 });
 

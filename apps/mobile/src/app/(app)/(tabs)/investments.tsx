@@ -10,7 +10,7 @@ import { Money } from "@/components/ui/Money";
 import { Text } from "@/components/ui/Text";
 import { api } from "@/lib/api/endpoints";
 import { formatAgo, formatPct } from "@/lib/format";
-import { useBankConnections, useBankEntry, useInvestments, useSyncStaleConnections } from "@/lib/hooks";
+import { useBankConnections, useBankEntry, useInvestments, useOpenFinanceStatus, useSyncStaleConnections } from "@/lib/hooks";
 import { toast } from "@/lib/ui-store";
 import { COLOR_CHOICES } from "@/theme/tokens";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -23,10 +23,13 @@ export default function InvestmentsScreen() {
   const { colors } = useTheme();
   const qc = useQueryClient();
   const bank = useBankEntry();
-  const connections = useBankConnections();
-  const inv = useInvestments();
+  const status = useOpenFinanceStatus();
+  // Open Finance desligado (ou sem resposta): é só a tela padrão "em breve", sem buscar conexões nem investimentos (era isso que deixava a aba lenta).
+  const live = bank.enabled;
+  const connections = useBankConnections(live);
+  const inv = useInvestments(live);
   const [refreshing, setRefreshing] = useState(false);
-  useSyncStaleConnections(30);
+  useSyncStaleConnections(30, live);
 
   const conns = connections.data?.data ?? [];
   const lastSync = conns.map((c) => c.lastSyncAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
@@ -57,7 +60,8 @@ export default function InvestmentsScreen() {
     </Row>
   );
 
-  const loading = (inv.isLoading && !inv.data) || (connections.isLoading && !connections.data);
+  // Só espera a rede quando o Open Finance está ligado; antes de saber se está, espera apenas a resposta rápida do status.
+  const loading = live ? (inv.isLoading && !inv.data) || (connections.isLoading && !connections.data) : status.isLoading && !status.data;
   const data = inv.data;
 
   return (

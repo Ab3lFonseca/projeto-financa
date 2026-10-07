@@ -82,7 +82,7 @@ export default function SubscriptionScreen() {
   const enforced = b?.enforced ?? me.entitlements.billingEnforced;
   const autoRenew = b?.autoRenew ?? null;
   const summary = accessSummary(access, autoRenew);
-  const discountPercent = b?.discount.percent ?? 0;
+  const discountPercent = b?.discount?.percent ?? 0;
   const offers = planOffers(b?.prices.basic, discountPercent);
   const isPaid = access.state === "paid";
   // Quem pagou uma vez (não renova sozinho) pode pagar de novo para estender o prazo.
@@ -214,7 +214,7 @@ export default function SubscriptionScreen() {
                       <Text variant="caption" tone="muted" style={{ flex: 1 }}>
                         {discountPercent > 0
                           ? `Desconto de ${discountPercent}% das suas insígnias aplicado. Veja como ganhar mais.`
-                          : `Ganhe de 5% a ${b.discount.capPercent}% de desconto com insígnias no nível Ouro ou acima. Veja como.`}
+                          : `Ganhe de 5% a ${b.discount?.capPercent ?? 15}% de desconto com insígnias no nível Ouro ou acima. Veja como.`}
                       </Text>
                     </Pressable>
                   ) : null}

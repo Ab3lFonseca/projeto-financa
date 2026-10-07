@@ -97,6 +97,26 @@ export const ROADMAP: readonly RoadmapItem[] = [
     },
   },
   {
+    id: "fixes-subscription-investments",
+    title: "Assinatura sem erro e Investir mais rápido",
+    summary: "A tela de Assinatura voltou a abrir sem o aviso de erro, a aba Investir aparece na hora e o aviso de erro ganhou um botão para voltar ao Início.",
+    icon: "wrench",
+    status: "done",
+    since: "2026-10-07",
+    preview: {
+      purpose: "Corrigir três coisas que atrapalhavam o uso: a Assinatura mostrava “Algo deu errado”, a aba Investir demorava para aparecer e, depois de um erro, era fácil ficar preso entre telas.",
+      how: [
+        "A Assinatura quebrava quando o aparelho ainda tinha guardada uma versão antiga dos dados. Agora o app entende dados antigos e novos, e descarta o que ficou guardado de versões anteriores.",
+        "Em Investir, quando a conexão automática com bancos ainda não está liberada, o app mostra direto a tela “em breve”, sem esperar respostas que não viriam. Foi isso que deixava a aba lenta.",
+        "Na tela “Algo deu errado” há agora o botão Ir para o início, além de Tentar de novo.",
+      ],
+      expect: [
+        "Seus dados não foram afetados: era só a forma de mostrar a tela.",
+        "Se aparecer o aviso de erro, use Ir para o início; se continuar acontecendo, fale com a gente em Mais → Ajuda e suporte.",
+      ],
+    },
+  },
+  {
     id: "badge-discount",
     title: "Desconto na assinatura com insígnias",
     summary: "A cada 5 insígnias no nível Ouro ou acima você ganha 5% de desconto na assinatura, mensal ou anual, até 15%.",

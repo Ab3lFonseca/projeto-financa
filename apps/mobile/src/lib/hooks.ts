@@ -3,6 +3,7 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import { useEffect, useRef } from "react";
 import { randomUUID } from "expo-crypto";
 import { errorText } from "@/components/ui/ApiErrorMessage";
+import { billingWithDefaults } from "./access";
 import { ApiError } from "./api/client";
 import { api, type CreateTransactionInput, type ReportParams, type TransactionFilters } from "./api/endpoints";
 import { useAuth } from "./auth/AuthProvider";
@@ -75,7 +76,7 @@ export const useConsents = () => useQuery({ queryKey: ["consents"], queryFn: api
 
 /** Assinatura: estado, preços e o que dá para fazer. `poll` relê de 2 em 2 s (volta do pagamento, enquanto o provedor confirma). */
 export const useBilling = (poll = false) =>
-  useQuery({ queryKey: ["billing"], queryFn: api.billing.get, refetchInterval: poll ? 2_000 : false, retry: planRetry });
+  useQuery({ queryKey: ["billing"], queryFn: api.billing.get, refetchInterval: poll ? 2_000 : false, retry: planRetry, select: billingWithDefaults });
 
 // ------------------------------------------------------------------ administração (só para administradores)
 
@@ -102,7 +103,8 @@ export const useAdminAudit = (enabled = true) =>
   });
 export const useAdminUser = (id: string | null) => useQuery({ queryKey: ["admin", "user", id], queryFn: () => api.admin.user(id!), enabled: !!id });
 
-export const useOpenFinanceStatus = () => useQuery({ queryKey: ["of-status"], queryFn: api.openFinance.status });
+/** Sem insistir: se o servidor não responder, a tela segue como "Open Finance desligado" em vez de ficar carregando (1 nova tentativa só). */
+export const useOpenFinanceStatus = () => useQuery({ queryKey: ["of-status"], queryFn: api.openFinance.status, retry: 1, retryDelay: 800 });
 
 /**
  * Para onde levar quem toca em "conectar banco": a tela real só quando o recurso está ligado no servidor; senão, a explicação "em breve"
@@ -112,14 +114,15 @@ export function useBankEntry(): { enabled: boolean; href: string } {
   const enabled = useOpenFinanceStatus().data?.enabled === true;
   return { enabled, href: enabled ? "/open-finance" : "/updates?item=bank-connection" };
 }
-export const useBankConnections = () => useQuery({ queryKey: ["of-connections"], queryFn: api.openFinance.connections });
+/** `enabled = false` não faz chamada nenhuma (ex.: o Open Finance está desligado, então não há conexões para buscar). */
+export const useBankConnections = (enabled = true) => useQuery({ queryKey: ["of-connections"], queryFn: api.openFinance.connections, enabled });
 
 /**
  * Investimentos vindos do banco. Relê do servidor a cada minuto enquanto a tela está aberta: o servidor já
  * atualiza sozinho (webhook do provedor + rotina periódica), então isto só traz o que ele já guardou.
  */
-export const useInvestments = () =>
-  useQuery({ queryKey: ["of-investments"], queryFn: () => api.openFinance.investments(), refetchInterval: 60_000 });
+export const useInvestments = (enabled = true) =>
+  useQuery({ queryKey: ["of-investments"], queryFn: () => api.openFinance.investments(), refetchInterval: enabled ? 60_000 : false, enabled });
 export const useInvestment = (id: string | undefined) =>
   useQuery({ queryKey: ["of-investment", id], queryFn: () => api.openFinance.investment(id!), enabled: !!id, refetchInterval: 60_000 });
 /** Saldo, limite e fatura informados pelo banco para as contas/cartões já vinculados. */
@@ -129,9 +132,9 @@ export const useBankOverview = () => useQuery({ queryKey: ["of-overview"], query
  * Ao abrir a tela, pede ao servidor uma releitura das conexões cujos dados estão velhos (mais de `maxAgeMinutes`).
  * É só leitura do que o provedor já guardou (não consome a cota mensal do Open Finance) e roda uma vez por abertura.
  */
-export function useSyncStaleConnections(maxAgeMinutes = 30) {
+export function useSyncStaleConnections(maxAgeMinutes = 30, enabled = true) {
   const qc = useQueryClient();
-  const connections = useBankConnections();
+  const connections = useBankConnections(enabled);
   const done = useRef(false);
   useEffect(() => {
     const list = connections.data?.data;

@@ -194,6 +194,14 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   A CSP completa fica para depois de testar com o widget do Pluggy.
 
 ### Corrigido
+- **A tela de Assinatura quebrava com "Algo deu errado".** Causa: o campo novo `discount` da resposta de `/billing` era lido sem checar; um aparelho com a
+  resposta ANTIGA guardada no cache (ou uma API ainda na versão anterior) derrubava a tela com `Cannot read properties of undefined (reading 'percent')`.
+  Agora `useBilling` completa os campos que faltam (`billingWithDefaults`), a tela lê com segurança e o cache guardado ganhou nova versão (descarta o antigo).
+  Reproduzido simulando a resposta antiga e conferido depois da correção.
+- **A aba Investir demorava para abrir.** Com o Open Finance desligado, o app ainda pedia conexões e investimentos ao servidor, que respondia erro, e as
+  repetições automáticas seguravam o carregamento por vários segundos. Agora, se o status diz que está desligado (ou não responde), mostra direto a tela
+  "em breve", sem essas chamadas.
+- **Depois de um erro de tela só havia "Tentar de novo"**, que repetia o mesmo erro. A tela de erro ganhou **Ir para o início**.
 - **Ao voltar da página de pagamento, o "voltar" do navegador caía de novo no Stripe.** O app trocava a mesma aba pelo Stripe e o histórico ficava com a
   página de pagamento antes do retorno. Agora o pagamento (e o portal da assinatura) abre numa **aba separada**, reservada no toque para o navegador não
   bloquear, e o app continua aberto esperando a confirmação (a tela atualiza sozinha e comemora quando o acesso aparece). Se o navegador bloquear a aba nova,

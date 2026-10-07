@@ -1,7 +1,15 @@
 import { trialMeter, type TrialMeter } from "./trialMeter";
-import { discountedCents, perMonthCents, yearlySavingsPercent, type AccessDTO, type BillingIntervalName, type BillingModeName, type BillingPrice, type PricesByInterval } from "@app/shared";
+import { badgeDiscount, discountedCents, perMonthCents, yearlySavingsPercent, type AccessDTO, type BadgeDiscount, type BillingIntervalName, type BillingModeName, type BillingPrice, type PricesByInterval } from "@app/shared";
 
 type Tone = "default" | "positive" | "negative" | "warning" | "primary";
+
+/**
+ * Resposta de `/billing` com os campos que chegaram depois já preenchidos. Uma resposta guardada no aparelho (cache) ou de uma API ainda na versão
+ * anterior pode não trazer `discount`; sem isto a tela de Assinatura quebrava ("Algo deu errado") ao ler `discount.percent`.
+ */
+export function billingWithDefaults<T extends { discount?: BadgeDiscount | null; autoRenew?: boolean | null }>(b: T): T & { discount: BadgeDiscount; autoRenew: boolean | null } {
+  return { ...b, discount: b.discount ?? badgeDiscount([]), autoRenew: b.autoRenew ?? null };
+}
 
 /** "R$ 9,90 / mês" a partir do preço lido do provedor de pagamento; `null` quando o preço não está disponível. */
 export function formatPrice(price: BillingPrice | null | undefined): string | null {

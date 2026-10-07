@@ -1,7 +1,7 @@
 import NetInfo from "@react-native-community/netinfo";
 import { focusManager, onlineManager } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { Stack, usePathname, type ErrorBoundaryProps } from "expo-router";
+import { router, Stack, usePathname, type ErrorBoundaryProps } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
@@ -150,6 +150,17 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
       >
         <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 16 }}>Tentar de novo</Text>
       </Pressable>
+      {/* Se a mesma tela quebrar de novo, "tentar de novo" não adianta: volta para o Início, que sempre abre. */}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          router.replace("/" as never);
+          retry();
+        }}
+        style={{ paddingHorizontal: 24, paddingVertical: 12 }}
+      >
+        <Text style={{ color: "#4F46E5", fontWeight: "700", fontSize: 15 }}>Ir para o início</Text>
+      </Pressable>
     </View>
   );
 }
@@ -159,7 +170,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: PERSIST_MAX_AGE, buster: "1" }}>
+          <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: PERSIST_MAX_AGE, buster: "2" }}>
             <AuthProvider>
               <Shell />
             </AuthProvider>
