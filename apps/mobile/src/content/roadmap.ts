@@ -78,15 +78,16 @@ export const ROADMAP: readonly RoadmapItem[] = [
   {
     id: "plans",
     title: "Assinatura: plano anual ou mensal",
-    summary: "Quando a cobrança começar, você escolhe pagar por ano (com desconto) ou por mês, e pode incluir o Rendimentos.",
+    summary: "Quando a cobrança começar, você escolhe pagar por ano (com desconto) ou por mês, que renova sozinho ou é pago uma vez só, com Pix, e pode incluir o Rendimentos.",
     icon: "crown",
     status: "soon",
     preview: {
-      purpose: "Dar a escolha entre pagar uma vez por ano, saindo mais barato, ou todo mês, com mais flexibilidade. Você sempre vê o valor antes de pagar.",
+      purpose: "Dar a escolha entre pagar por ano, saindo mais barato, ou todo mês, com mais flexibilidade, e entre renovar sozinho ou pagar só um período fechado. Você sempre vê o valor antes de pagar.",
       how: [
         "Em Mais → Assinatura você vê os dois planos lado a lado, com o valor de cada um. O anual aparece primeiro, já com a economia calculada.",
-        "O pagamento acontece numa página segura do provedor de pagamento: o Finança nunca vê nem guarda os dados do seu cartão.",
-        "Pelo mesmo lugar você troca o cartão, vê as faturas e cancela quando quiser.",
+        "Você escolhe: “Renova sozinha” (cartão, cobrado a cada ciclo) ou “Pagar uma vez” (30 dias ou 1 ano, com Pix ou cartão, sem renovação automática).",
+        "O pagamento acontece numa página segura, aberta em outra aba: o Finança nunca vê nem guarda os dados do seu cartão, e a tela confirma sozinha quando o pagamento cair.",
+        "Quem pagou uma vez renova quando quiser, e o prazo novo soma ao que ainda restava. Quem assina troca o cartão, vê as faturas e cancela quando quiser.",
       ],
       expect: [
         "Você tem 30 dias de teste grátis, com tudo liberado, antes de qualquer cobrança.",

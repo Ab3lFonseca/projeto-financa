@@ -1,9 +1,11 @@
-import type { BillingIntervalName, BillingPrice } from "@app/shared";
+import type { BillingIntervalName, BillingModeName, BillingPrice } from "@app/shared";
 
 export type BillingProviderName = "stripe" | "dev";
 
 /** Ciclo de cobrança: todo mês ou todo ano. */
 export type BillingInterval = BillingIntervalName;
+/** Como paga: assinatura que renova ou pagamento avulso por um período fechado. */
+export type BillingMode = BillingModeName;
 
 /** Preço de um item em cada ciclo; `null` = o provedor não tem esse preço configurado. */
 export type PricesByInterval = { month: BillingPrice | null; year: BillingPrice | null };
@@ -50,6 +52,19 @@ export type ParsedWebhook = {
   type: string;
   subscriptionId: string | null;
   userId: string | null;
+  /** Pagamento avulso (uma vez): a sessão de pagamento a conferir no provedor. Nulo nos demais eventos. */
+  prepaidSessionId: string | null;
+};
+
+/** Pagamento avulso lido do provedor (o que o servidor gravou ao abrir o pagamento, e se já foi pago). */
+export type PrepaidPayment = {
+  sessionId: string;
+  userId: string;
+  interval: BillingInterval;
+  investments: boolean;
+  /** O dinheiro já entrou? Pix aguarda a pessoa pagar: antes disso, `false`. */
+  paid: boolean;
+  customerId: string | null;
 };
 
 export interface BillingProvider {
@@ -64,9 +79,13 @@ export interface BillingProvider {
     customerId: string | null;
     interval: BillingInterval;
     investments: boolean;
+    /** `recurring` (padrão) = assinatura que renova; `once` = paga uma vez por um período fechado (aceita Pix). */
+    mode?: BillingMode;
     successUrl: string;
     cancelUrl: string;
   }): Promise<{ url: string }>;
+  /** Lê um pagamento avulso (sessão de pagamento) no provedor. `null` se não for um pagamento avulso nosso. */
+  fetchPrepaidSession(sessionId: string): Promise<PrepaidPayment | null>;
   createPortal(input: { customerId: string; returnUrl: string }): Promise<{ url: string }>;
   /** O adicional segue o ciclo da assinatura (o provedor exige o mesmo ciclo em todos os itens), por isso `interval` é o dela. */
   setInvestmentsAddon(input: { subscriptionId: string; itemId: string | null; enabled: boolean; interval: BillingInterval }): Promise<void>;

@@ -54,6 +54,9 @@ services:
         sync: false
       - key: STRIPE_PRODUCT_ID_INVESTMENTS_YEARLY
         sync: false
+      # Pix recorrente (Pix Automático) na assinatura mensal: só com o recurso habilitado na conta Stripe. O "Pagar uma vez" (Pix e cartão) funciona sem isto.
+      - key: STRIPE_PIX_RECURRING
+        value: "false"
       - key: APP_WEB_URL # endereço do site (https://financa-web.onrender.com): para onde o pagamento volta
         sync: false
       # Ligue (true) depois de cadastrar PLUGGY_CLIENT_ID, PLUGGY_CLIENT_SECRET e o endereço de retorno web.

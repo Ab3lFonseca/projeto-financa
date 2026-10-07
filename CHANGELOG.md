@@ -11,6 +11,13 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Pagar uma vez (Pix e cartão), sem renovar.** Além da assinatura que renova sozinha, a tela de assinatura oferece o **pagamento único por um período
+  fechado** (30 dias no mensal, 1 ano no anual), no mesmo preço lido do Stripe. É o caminho do **Pix**, que o Stripe não mostra em assinatura comum (por isso
+  ele "sumia" mesmo habilitado). O acesso só é liberado depois que o servidor **confere a sessão no Stripe** (`paid`); no Pix, o aviso inicial chega pendente e
+  o `checkout.session.async_payment_succeeded` libera, uma única vez por sessão. Pagar de novo soma ao prazo restante; quem tem assinatura que renova não abre
+  pagamento único; o painel não conta o pagamento único como receita recorrente; o texto da tela e o aviso falam em "pago até" e "renovar", não em "cancelada".
+  **Pix recorrente (Pix Automático)** na assinatura mensal é opcional (`STRIPE_PIX_RECURRING`, desligado por padrão; exige recurso e versão de API na conta
+  Stripe; o anual não envia, valor não confirmado). Nada disso foi exercitado com o Stripe real, só com o de teste da suíte. Ver [docs/assinatura.md](docs/assinatura.md).
 - **Novidades virou um mural de atualizações.** Tudo o que chegou aparece em ordem, do mais recente para o mais antigo, com o dia e o selo "Novo" na
   última semana (insígnias, temas, fundo em cubos, verificação em duas etapas, Minha conta, comemorações, aviso do teste grátis, suporte e textos legais).
   O que ainda vem por aí (Rendimentos, bancos, assinatura anual/mensal) segue sem data. Regra: toda mudança perceptível entra em `content/roadmap.ts`.
@@ -154,6 +161,10 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
   A CSP completa fica para depois de testar com o widget do Pluggy.
 
 ### Corrigido
+- **Ao voltar da página de pagamento, o "voltar" do navegador caía de novo no Stripe.** O app trocava a mesma aba pelo Stripe e o histórico ficava com a
+  página de pagamento antes do retorno. Agora o pagamento (e o portal da assinatura) abre numa **aba separada**, reservada no toque para o navegador não
+  bloquear, e o app continua aberto esperando a confirmação (a tela atualiza sozinha e comemora quando o acesso aparece). Se o navegador bloquear a aba nova,
+  troca a aba atual sem deixar a página do app no histórico. A página de retorno ganhou "Fechar esta aba".
 - **O QR code da verificação em duas etapas vinha quebrado.** A imagem pronta do provedor não escalava direito na tela e o código ficava ilegível. Agora o
   app desenha o QR a partir do endereço `otpauth://`, com a margem exigida e módulos de tamanho inteiro; um teste decodifica o desenho de volta.
 - **Em Privacidade, desligar o Open Finance fazia a opção sumir** (não dava para religar). A linha agora fica sempre que o recurso existe: ligar leva à

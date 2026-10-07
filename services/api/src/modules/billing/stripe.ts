@@ -1,7 +1,17 @@
 import type { BillingPrice } from "@app/shared";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Config } from "../../config";
-import { BillingProviderError, type BillingCatalog, type BillingInterval, type BillingProvider, type NormalizedSubscription, type ParsedWebhook, type PricesByInterval } from "./provider";
+import {
+  BillingProviderError,
+  type BillingCatalog,
+  type BillingInterval,
+  type BillingMode,
+  type BillingProvider,
+  type NormalizedSubscription,
+  type ParsedWebhook,
+  type PrepaidPayment,
+  type PricesByInterval,
+} from "./provider";
 
 /**
  * De onde sai o preço de um plano: um preço (`price_...`) ou um produto (`prod_...`), de que o servidor descobre o preço ativo. `interval` é o ciclo
@@ -17,6 +27,8 @@ export type StripeConfig = {
   basic: StripePlanSource[];
   /** Fontes do adicional Rendimentos, na mesma lógica. */
   investments: StripePlanSource[];
+  /** Pix Automático (Pix que renova) na assinatura mensal. Desligado por padrão: só ligue com o Pix recorrente liberado na sua conta. */
+  pixRecurring?: boolean;
   log?: { warn: (obj: object, msg: string) => void };
 };
 
@@ -216,28 +228,52 @@ export class StripeProvider implements BillingProvider {
 
   // ------------------------------------------------------------------------------------------------ pagamento
 
-  async createCheckout(input: { userId: string; email: string; customerId: string | null; interval: BillingInterval; investments: boolean; successUrl: string; cancelUrl: string }) {
+  async createCheckout(input: { userId: string; email: string; customerId: string | null; interval: BillingInterval; investments: boolean; mode?: BillingMode; successUrl: string; cancelUrl: string }) {
     const r = await this.resolved();
     const basic = r.basic[input.interval];
     if (!basic) throw new BillingProviderError("PLAN_NOT_CONFIGURED", "Plano sem preço configurado para este ciclo");
+    const addon = input.investments ? r.investments[input.interval] : undefined;
+    // O Stripe exige o mesmo ciclo em todos os itens da assinatura: o adicional é o do ciclo escolhido.
+    if (input.investments && !addon) throw new BillingProviderError("ADDON_NOT_CONFIGURED", "Adicional sem preço configurado para este ciclo");
+
     const form: Record<string, string> = {
-      mode: "subscription",
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
       client_reference_id: input.userId,
-      "line_items[0][price]": basic.priceId,
-      "line_items[0][quantity]": "1",
-      "subscription_data[metadata][user_id]": input.userId,
       "metadata[user_id]": input.userId,
       locale: "pt-BR",
       allow_promotion_codes: "true",
     };
-    if (input.investments) {
-      // O Stripe exige o mesmo ciclo em todos os itens da assinatura: o adicional é o do ciclo escolhido.
-      const addon = r.investments[input.interval];
-      if (!addon) throw new BillingProviderError("ADDON_NOT_CONFIGURED", "Adicional sem preço configurado para este ciclo");
-      form["line_items[1][price]"] = addon.priceId;
-      form["line_items[1][quantity]"] = "1";
+    if ((input.mode ?? "recurring") === "once") {
+      // Pagamento avulso, por um período fechado (sem renovação). O valor é o MESMO do plano no ciclo escolhido, lido do provedor; a sessão
+      // leva o que o servidor precisa para conceder o acesso quando o dinheiro entrar (Pix pode demorar: o aviso vem depois).
+      form.mode = "payment";
+      form["metadata[kind]"] = "prepaid";
+      form["metadata[interval]"] = input.interval;
+      form["metadata[investments]"] = addon ? "true" : "false";
+      [basic, ...(addon ? [addon] : [])].forEach((item, i) => {
+        form[`line_items[${i}][quantity]`] = "1";
+        form[`line_items[${i}][price_data][currency]`] = item.price.currency.toLowerCase();
+        form[`line_items[${i}][price_data][unit_amount]`] = String(item.price.amountCents);
+        if (item.productId) form[`line_items[${i}][price_data][product]`] = item.productId;
+        else form[`line_items[${i}][price_data][product_data][name]`] = i === 0 ? "Finança" : "Finança Rendimentos";
+      });
+    } else {
+      form.mode = "subscription";
+      form["line_items[0][price]"] = basic.priceId;
+      form["line_items[0][quantity]"] = "1";
+      form["subscription_data[metadata][user_id]"] = input.userId;
+      if (addon) {
+        form["line_items[1][price]"] = addon.priceId;
+        form["line_items[1][quantity]"] = "1";
+      }
+      // Pix Automático (Pix recorrente), só se ligado na configuração e só no mensal: o valor aceito para o ciclo anual não foi confirmado na
+      // documentação do provedor. O teto autorizado fica folgado (o dobro do valor, no mínimo R$ 400) para aguentar reajuste de preço.
+      if (this.cfg.pixRecurring && input.interval === "month") {
+        const total = basic.price.amountCents + (addon?.price.amountCents ?? 0);
+        form["payment_method_options[pix][mandate_options][amount]"] = String(Math.max(40_000, total * 2));
+        form["payment_method_options[pix][mandate_options][payment_schedule]"] = "monthly";
+      }
     }
     // Com cliente já existente o Stripe reaproveita o cartão salvo; sem ele, cria o cliente a partir do e-mail.
     if (input.customerId) form.customer = input.customerId;
@@ -245,6 +281,22 @@ export class StripeProvider implements BillingProvider {
     const session = await this.call<{ url?: string }>("POST", "checkout/sessions", form);
     if (!session.url || !session.url.startsWith("https://")) throw new BillingProviderError("NO_CHECKOUT_URL", "O provedor não devolveu a página de pagamento");
     return { url: session.url };
+  }
+
+  async fetchPrepaidSession(sessionId: string): Promise<PrepaidPayment | null> {
+    const s = await this.call<{
+      id?: string;
+      mode?: string;
+      payment_status?: string;
+      client_reference_id?: string | null;
+      customer?: string | { id?: string } | null;
+      metadata?: Record<string, string>;
+    }>("GET", `checkout/sessions/${enc(sessionId)}`);
+    const interval = s.metadata?.interval;
+    const userId = s.metadata?.user_id ?? s.client_reference_id ?? null;
+    // Só vale o que foi aberto por este servidor como pagamento avulso (mode=payment e a marca nos metadados).
+    if (s.mode !== "payment" || s.metadata?.kind !== "prepaid" || !userId || (interval !== "month" && interval !== "year")) return null;
+    return { sessionId, userId, interval, investments: s.metadata?.investments === "true", paid: s.payment_status === "paid", customerId: idOf(s.customer) };
   }
 
   async createPortal(input: { customerId: string; returnUrl: string }) {
@@ -335,15 +387,18 @@ export class StripeProvider implements BillingProvider {
 
     let subscriptionId: string | null = null;
     let userId: string | null = null;
+    let prepaidSessionId: string | null = null;
     if (type.startsWith("customer.subscription.")) {
       subscriptionId = str(object.id);
       userId = str((object.metadata as Record<string, unknown> | undefined)?.user_id);
     } else if (type === "checkout.session.completed" || type === "checkout.session.async_payment_succeeded") {
       subscriptionId = str(object.subscription);
       userId = str(object.client_reference_id) ?? str((object.metadata as Record<string, unknown> | undefined)?.user_id);
+      // Pagamento avulso: sem assinatura; a sessão é conferida no provedor antes de liberar qualquer acesso.
+      if (object.mode === "payment") prepaidSessionId = str(object.id);
     } else if (type === "invoice.paid" || type === "invoice.payment_failed" || type === "invoice.payment_succeeded") {
       subscriptionId = str(object.subscription) ?? str((object.parent as { subscription_details?: { subscription?: unknown } } | undefined)?.subscription_details?.subscription);
     }
-    return { id: event.id, type, subscriptionId, userId };
+    return { id: event.id, type, subscriptionId, userId, prepaidSessionId };
   }
 }

@@ -244,6 +244,116 @@ describe("Stripe: pagamento hospedado", () => {
   });
 });
 
+describe("Stripe: pagamento avulso (uma vez, período fechado)", () => {
+  const input = { userId: USER, email: "pessoa@email.com", customerId: null, interval: "month" as const, investments: false, successUrl: "https://app.test/ok", cancelUrl: "https://app.test/no" };
+
+  it("abre o Checkout em modo PAGAMENTO (Pix e cartão), com o mesmo valor do plano lido do provedor e a marca de pagamento avulso", async () => {
+    const { stripe, provider } = make();
+    await provider.createCheckout({ ...input, mode: "once" });
+    const f = stripe.lastSession().form;
+    expect(f.get("mode")).toBe("payment");
+    expect(f.get("line_items[0][price_data][currency]")).toBe("brl");
+    expect(f.get("line_items[0][price_data][unit_amount]")).toBe("1000"); // o mesmo valor do plano mensal
+    expect(f.get("line_items[0][price_data][product]")).toBe("prod_basic");
+    expect(f.get("line_items[0][price]")).toBeNull(); // não usa o preço recorrente
+    expect(f.get("metadata[kind]")).toBe("prepaid");
+    expect(f.get("metadata[interval]")).toBe("month");
+    expect(f.get("metadata[investments]")).toBe("false");
+    expect(f.get("metadata[user_id]")).toBe(USER);
+    expect(f.get("client_reference_id")).toBe(USER);
+    expect(f.get("subscription_data[metadata][user_id]")).toBeNull();
+    expect(f.get("line_items[1][quantity]")).toBeNull();
+  });
+
+  it("no anual cobra o preço anual, e o adicional entra como segundo item, também no valor anual", async () => {
+    const { stripe, provider } = make();
+    await provider.createCheckout({ ...input, interval: "year", investments: true, mode: "once" });
+    const f = stripe.lastSession().form;
+    expect(f.get("line_items[0][price_data][unit_amount]")).toBe("10000");
+    expect(f.get("line_items[1][price_data][unit_amount]")).toBe("5000");
+    expect(f.get("line_items[1][price_data][product]")).toBe("prod_inv_year");
+    expect(f.get("metadata[investments]")).toBe("true");
+    expect(f.get("metadata[interval]")).toBe("year");
+  });
+
+  it("sem produto conhecido para o preço, descreve o produto pelo nome (nunca abre pagamento sem item)", async () => {
+    const { stripe, provider } = make({ basic: [{ kind: "price", id: "price_sem_produto", interval: "month" }] });
+    stripe.prices.set("price_sem_produto", { unit_amount: 1500, currency: "brl", recurring: { interval: "month", interval_count: 1 } });
+    await provider.createCheckout({ ...input, mode: "once" });
+    const f = stripe.lastSession().form;
+    expect(f.get("line_items[0][price_data][product]")).toBeNull();
+    expect(f.get("line_items[0][price_data][product_data][name]")).toBe("Finança");
+    expect(f.get("line_items[0][price_data][unit_amount]")).toBe("1500");
+  });
+
+  it("lê a sessão no Stripe: paga ou não (Pix ainda aguardando), e só aceita as que este servidor abriu como pagamento avulso", async () => {
+    const { stripe, provider } = make();
+    await provider.createCheckout({ ...input, interval: "year", investments: true, mode: "once" });
+    const id = stripe.lastSession().id;
+    expect(await provider.fetchPrepaidSession(id)).toEqual({ sessionId: id, userId: USER, interval: "year", investments: true, paid: false, customerId: null });
+    stripe.pay(id);
+    expect((await provider.fetchPrepaidSession(id))?.paid).toBe(true);
+
+    // sessão de ASSINATURA (não é pagamento avulso): ignorada
+    await provider.createCheckout({ ...input, mode: "recurring" });
+    expect(await provider.fetchPrepaidSession(stripe.lastSession().id)).toBeNull();
+    // sessão de outro sistema (sem a marca nos metadados): ignorada
+    stripe.sessions.set("cs_alheia", { id: "cs_alheia", form: new URLSearchParams({ mode: "payment", client_reference_id: USER }), paid: true });
+    expect(await provider.fetchPrepaidSession("cs_alheia")).toBeNull();
+    // sessão que não existe: erro do provedor (o webhook será reenviado)
+    await expect(provider.fetchPrepaidSession("cs_nao_existe")).rejects.toMatchObject({ code: "PROVIDER_RESOURCE_MISSING" });
+  });
+
+  it("o aviso de pagamento concluído em modo pagamento aponta a sessão a conferir (e a assinatura continua sem ser lida)", () => {
+    const { provider } = make();
+    const parse = (type: string, object: Record<string, unknown>) => {
+      const b = stripeEvent("evt_p", type, object);
+      return provider.verifyWebhook(Buffer.from(b), signStripe(WHSEC, b, NOW), NOW);
+    };
+    expect(parse("checkout.session.completed", { id: "cs_9", mode: "payment", client_reference_id: USER })).toMatchObject({ prepaidSessionId: "cs_9", subscriptionId: null, userId: USER });
+    expect(parse("checkout.session.async_payment_succeeded", { id: "cs_9", mode: "payment", client_reference_id: USER })).toMatchObject({ prepaidSessionId: "cs_9" });
+    expect(parse("checkout.session.completed", { id: "cs_8", mode: "subscription", subscription: "sub_8", client_reference_id: USER })).toMatchObject({ prepaidSessionId: null, subscriptionId: "sub_8" });
+  });
+});
+
+describe("Stripe: Pix recorrente (Pix Automático), opt-in", () => {
+  const input = { userId: USER, email: "p@e.com", customerId: null, investments: false, successUrl: "https://app.test/ok", cancelUrl: "https://app.test/no" };
+  const withPix = (on: boolean) => {
+    const stripe = new FakeStripe();
+    const provider = new StripeProvider({ secretKey: SECRET, webhookSecret: WHSEC, apiBase: "https://api.stripe.test", basic: BY_PRODUCT.basic, investments: BY_PRODUCT.investments, pixRecurring: on }, stripe.fetch);
+    return { stripe, provider };
+  };
+
+  it("desligado (padrão): a assinatura não leva nenhuma opção de Pix", async () => {
+    const { stripe, provider } = withPix(false);
+    await provider.createCheckout({ ...input, interval: "month" });
+    expect([...stripe.lastSession().form.keys()].some((k) => k.includes("pix"))).toBe(false);
+  });
+
+  it("ligado: só na assinatura MENSAL, com teto folgado (o dobro do valor, no mínimo R$ 400) e cobrança mensal", async () => {
+    const { stripe, provider } = withPix(true);
+    await provider.createCheckout({ ...input, interval: "month" });
+    const f = stripe.lastSession().form;
+    expect(f.get("payment_method_options[pix][mandate_options][amount]")).toBe("40000");
+    expect(f.get("payment_method_options[pix][mandate_options][payment_schedule]")).toBe("monthly");
+
+    // com o adicional e planos caros, o teto acompanha (2 × total)
+    stripe.prices.set("price_basic", { unit_amount: 30_000, currency: "brl", product: "prod_basic", recurring: { interval: "month", interval_count: 1 } });
+    const caro = withPix(true);
+    caro.stripe.prices.set("price_basic", { unit_amount: 30_000, currency: "brl", product: "prod_basic", recurring: { interval: "month", interval_count: 1 } });
+    await caro.provider.createCheckout({ ...input, interval: "month" });
+    expect(caro.stripe.lastSession().form.get("payment_method_options[pix][mandate_options][amount]")).toBe("60000");
+  });
+
+  it("o anual nunca leva opção de Pix recorrente (o valor aceito para esse ciclo não foi confirmado) e o pagamento avulso também não", async () => {
+    const { stripe, provider } = withPix(true);
+    await provider.createCheckout({ ...input, interval: "year" });
+    expect([...stripe.lastSession().form.keys()].some((k) => k.includes("pix"))).toBe(false);
+    await provider.createCheckout({ ...input, interval: "month", mode: "once" });
+    expect([...stripe.lastSession().form.keys()].some((k) => k.includes("pix"))).toBe(false);
+  });
+});
+
 describe("Stripe: erros do provedor", () => {
   it("devolve só um código estável; o texto livre do Stripe (que pode ter dados do cartão) nunca é repassado", async () => {
     const { stripe, provider } = make();
@@ -358,7 +468,7 @@ describe("Stripe: assinatura do webhook", () => {
 
   it("aceita o pedido com assinatura válida e devolve o evento", () => {
     const parsed = provider.verifyWebhook(Buffer.from(raw), signStripe(WHSEC, raw, NOW), NOW);
-    expect(parsed).toEqual({ id: "evt_1", type: "customer.subscription.updated", subscriptionId: "sub_1", userId: USER });
+    expect(parsed).toEqual({ id: "evt_1", type: "customer.subscription.updated", subscriptionId: "sub_1", userId: USER, prepaidSessionId: null });
   });
 
   it("recusa sem cabeçalho, mal formado, com segredo errado ou com o corpo adulterado", () => {
@@ -492,6 +602,13 @@ describe("configuração do pagamento", () => {
       ],
     });
     expect(stripePlanSources(loadConfig(dev))).toEqual({ basic: [], investments: [] });
+  });
+
+  it("o Pix recorrente é opcional e vem desligado; só liga com true", () => {
+    expect(loadConfig(dev).STRIPE_PIX_RECURRING).toBe(false);
+    expect(loadConfig({ ...dev, ...stripeVars }).STRIPE_PIX_RECURRING).toBe(false);
+    expect(loadConfig({ ...dev, ...stripeVars, STRIPE_PIX_RECURRING: "true" }).STRIPE_PIX_RECURRING).toBe(true);
+    expect(loadConfig({ ...dev, ...stripeVars, STRIPE_PIX_RECURRING: "false" }).STRIPE_PIX_RECURRING).toBe(false);
   });
 
   it("o provedor de desenvolvimento (assina sem pagar) é proibido em produção", () => {

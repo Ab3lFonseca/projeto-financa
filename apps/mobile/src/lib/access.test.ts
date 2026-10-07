@@ -1,6 +1,6 @@
 import type { AccessDTO } from "@app/shared";
 import { describe, expect, it } from "vitest";
-import { accessBadge, accessBanner, accessSummary, dateText, daysText, defaultInterval, formatMoneyCents, formatPrice, GRANT_DURATIONS, planOffers } from "./access";
+import { accessBadge, accessBanner, accessSummary, dateText, daysText, defaultInterval, formatMoneyCents, formatPrice, GRANT_DURATIONS, PAYMENT_MODE_OPTIONS, paymentModeHint, planOffers } from "./access";
 
 const base: AccessDTO = { state: "trial", allowed: true, expiresAt: "2026-11-03T12:00:00.000Z", daysLeft: 12, cancelAtPeriodEnd: false, features: { investments: true } };
 const access = (over: Partial<AccessDTO>): AccessDTO => ({ ...base, ...over });
@@ -51,6 +51,18 @@ describe("resumo da situação", () => {
     expect(accessSummary(access({ state: "paid", cancelAtPeriodEnd: true })).detail).toMatch(/Cancelada: vale até/);
     expect(accessSummary(access({ state: "paid", cancelAtPeriodEnd: false })).detail).toMatch(/Renova em/);
   });
+  it("plano pago uma vez (sem renovação): fala em 'pago até', nunca em cancelada nem em renova", () => {
+    const s = accessSummary(access({ state: "paid", cancelAtPeriodEnd: true }), false);
+    expect(s.title).toBe("Plano ativo");
+    expect(s.detail).toMatch(/Pago até/);
+    expect(s.detail).toMatch(/sem renovação automática/);
+    expect(s.detail).not.toMatch(/Cancelada|Renova em/);
+    expect(s.badge.label).toBe("Premium");
+    expect(accessSummary(access({ state: "paid", expiresAt: null, daysLeft: null }), false).detail).toMatch(/sem renovação/);
+    // sem a informação (ou assinatura que renova), o texto continua o de sempre
+    expect(accessSummary(access({ state: "paid", cancelAtPeriodEnd: false }), true).detail).toMatch(/Renova em/);
+    expect(accessSummary(access({ state: "paid", cancelAtPeriodEnd: false }), null).detail).toMatch(/Renova em/);
+  });
   it("cortesia sem prazo e com prazo", () => {
     expect(accessSummary(access({ state: "complimentary", expiresAt: null, daysLeft: null })).detail).toMatch(/sem data/);
     expect(accessSummary(access({ state: "complimentary" })).detail).toMatch(/até/);
@@ -60,6 +72,20 @@ describe("resumo da situação", () => {
     expect(s.badge.tone).toBe("negative");
     expect(s.detail).toMatch(/exportar/);
     expect(accessBadge(access({ state: "paid" })).label).toBe("Premium");
+  });
+});
+
+describe("forma de pagar", () => {
+  it("oferece as duas: renova sozinha (padrão da assinatura) e pagar uma vez", () => {
+    expect(PAYMENT_MODE_OPTIONS.map((o) => o.value)).toEqual(["recurring", "once"]);
+  });
+  it("explica o pagamento único com o período certo e que aceita Pix; a assinatura fala em cobrança automática", () => {
+    expect(paymentModeHint("once", "month")).toMatch(/30 dias/);
+    expect(paymentModeHint("once", "year")).toMatch(/1 ano/);
+    expect(paymentModeHint("once", "month")).toMatch(/Pix/);
+    expect(paymentModeHint("once", "month")).toMatch(/sem renovação automática/);
+    expect(paymentModeHint("recurring", "month")).toMatch(/automaticamente/);
+    expect(paymentModeHint("recurring", "month")).not.toMatch(/Pix/);
   });
 });
 

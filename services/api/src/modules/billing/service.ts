@@ -7,7 +7,8 @@ import { audit } from "../../lib/audit";
 import { Errors } from "../../lib/errors";
 import type { AuthUser } from "../../types";
 import type { UserDirectory } from "../users/directory";
-import { BillingProviderError, EMPTY_CATALOG, type BillingCatalog, type BillingInterval, type BillingProvider, type NormalizedSubscription } from "./provider";
+import { PREPAID_DAYS } from "@app/shared";
+import { BillingProviderError, EMPTY_CATALOG, type BillingCatalog, type BillingInterval, type BillingMode, type BillingProvider, type NormalizedSubscription } from "./provider";
 
 const DAY_MS = 86_400_000;
 /** Duração do "período pago" do provedor de desenvolvimento (que não cobra nada). */
@@ -77,6 +78,8 @@ export class BillingService {
       hasInvestmentsAddon: user.access.state === "paid" && user.access.features.investments,
       // Só mostra o ciclo de quem paga pelo app (teste, cortesia e administrador não têm).
       interval: user.access.state === "paid" && sub?.store === "WEB" ? asInterval(sub.billingInterval) : null,
+      // Pagou uma vez (sem vínculo de assinatura) = não renova; com vínculo = renova sozinha.
+      autoRenew: user.access.state === "paid" && sub?.store === "WEB" ? sub.externalId !== null : null,
       prices,
     };
   }
@@ -84,11 +87,14 @@ export class BillingService {
   // ------------------------------------------------------------------------------------------------ pagamento
 
   /** Abre o pagamento no provedor (ou, só em desenvolvimento, ativa a assinatura na hora). */
-  async checkout(user: AuthUser, body: { investments: boolean; interval: BillingInterval }, ip: string): Promise<{ url: string | null; activated: boolean }> {
+  async checkout(user: AuthUser, body: { investments: boolean; interval: BillingInterval; mode: BillingMode }, ip: string): Promise<{ url: string | null; activated: boolean }> {
     const provider = this.requireProvider();
     const { config, prisma, now } = this.deps;
     if (!config.BILLING_ENFORCED) throw Errors.conflict("A cobrança ainda não começou: por enquanto o app é gratuito para todos.", "BILLING_NOT_ENFORCED");
-    if (user.access.state === "paid" || user.access.state === "complimentary" || user.access.state === "admin") {
+    const current = await this.subscriptionOf(user.id);
+    // Quem pagou uma vez (sem renovação) pode pagar de novo para estender o prazo; quem tem assinatura que renova, cortesia ou é administrador, não.
+    const renewingPrepaid = user.access.state === "paid" && body.mode === "once" && current?.store === "WEB" && current.externalId === null;
+    if ((user.access.state === "paid" && !renewingPrepaid) || user.access.state === "complimentary" || user.access.state === "admin") {
       throw Errors.conflict("Você já tem acesso. Para trocar o cartão ou cancelar, use o gerenciamento da assinatura.", "ALREADY_ACTIVE");
     }
     // O ciclo (e o adicional nele) precisam ter preço no provedor: nunca abre um pagamento para um plano que não existe.
@@ -96,24 +102,28 @@ export class BillingService {
     if (!catalog.basic[body.interval]) throw Errors.unprocessable("Este plano ainda não está disponível. Escolha outra opção.", "INTERVAL_UNAVAILABLE");
     if (body.investments && !catalog.investments[body.interval]) throw Errors.unprocessable("O adicional Rendimentos ainda não está disponível para contratar neste plano.", "ADDON_UNAVAILABLE");
 
-    await audit(prisma, config.IP_HASH_PEPPER, { actorId: user.id, action: "billing.checkout.started", entity: "user", entityId: user.id, ip, metadata: { investments: body.investments, interval: body.interval, provider: provider.name } }, this.deps.log);
+    await audit(prisma, config.IP_HASH_PEPPER, { actorId: user.id, action: "billing.checkout.started", entity: "user", entityId: user.id, ip, metadata: { investments: body.investments, interval: body.interval, mode: body.mode, provider: provider.name } }, this.deps.log);
 
     if (provider.name === "dev") {
-      const end = new Date(now().getTime() + DEV_PERIOD_DAYS[body.interval] * DAY_MS);
-      await this.writeSubscription(user.id, {
-        status: "ACTIVE",
-        store: "WEB",
-        externalId: `dev_${user.id}`,
-        providerCustomerId: `dev_${user.id}`,
-        currentPeriodEnd: end,
-        cancelAtPeriodEnd: false,
-        billingInterval: body.interval,
-        investmentsAddon: body.investments,
-      });
+      if (body.mode === "once") {
+        await this.grantPrepaidPeriod(user.id, { interval: body.interval, investments: body.investments, customerId: null });
+      } else {
+        const end = new Date(now().getTime() + DEV_PERIOD_DAYS[body.interval] * DAY_MS);
+        await this.writeSubscription(user.id, {
+          status: "ACTIVE",
+          store: "WEB",
+          externalId: `dev_${user.id}`,
+          providerCustomerId: `dev_${user.id}`,
+          currentPeriodEnd: end,
+          cancelAtPeriodEnd: false,
+          billingInterval: body.interval,
+          investmentsAddon: body.investments,
+        });
+      }
       return { url: null, activated: true };
     }
 
-    const sub = await this.subscriptionOf(user.id);
+    const sub = current;
     const base = config.APP_WEB_URL!.replace(/\/+$/, "");
     const session = await this.viaProvider(() =>
       provider.createCheckout({
@@ -122,6 +132,7 @@ export class BillingService {
         customerId: sub?.providerCustomerId ?? null,
         interval: body.interval,
         investments: body.investments,
+        mode: body.mode,
         successUrl: `${base}/subscription/return?status=success`,
         cancelUrl: `${base}/subscription/return?status=cancel`,
       }),
@@ -148,7 +159,8 @@ export class BillingService {
     if (provider.name === "dev") {
       await this.writeSubscription(user.id, { status: "ACTIVE", store: "WEB", externalId: sub.externalId, providerCustomerId: sub.providerCustomerId, currentPeriodEnd: sub.currentPeriodEnd, cancelAtPeriodEnd: sub.cancelAtPeriodEnd, billingInterval: asInterval(sub.billingInterval), investmentsAddon: enabled });
     } else {
-      if (!sub.externalId) throw Errors.conflict("Assinatura sem vínculo com o provedor.", "NO_PAID_SUBSCRIPTION");
+      // Pagamento avulso não tem item para somar: o adicional entra na hora de pagar de novo.
+      if (!sub.externalId) throw Errors.conflict("Este plano foi pago uma vez e não renova. Para incluir o Rendimentos, pague de novo escolhendo a opção com ele.", "PREPAID_NO_ADDON");
       const externalId = sub.externalId;
       const current = await this.viaProvider(() => provider.fetchSubscription(externalId));
       // O adicional segue o ciclo da assinatura (o provedor exige o mesmo ciclo em todos os itens). Sem ciclo mensal/anual simples, não dá.
@@ -192,7 +204,9 @@ export class BillingService {
     }
 
     try {
-      if (parsed.subscriptionId) {
+      if (parsed.prepaidSessionId) {
+        await this.confirmPrepaid(parsed.prepaidSessionId);
+      } else if (parsed.subscriptionId) {
         const subscriptionId = parsed.subscriptionId;
         const normalized = await this.viaProvider(() => provider.fetchSubscription(subscriptionId));
         await this.apply(normalized, parsed.userId);
@@ -203,6 +217,55 @@ export class BillingService {
       throw err;
     }
     return { duplicate: false };
+  }
+
+  /**
+   * Pagamento avulso (uma vez, período fechado): confere a sessão no provedor (nunca confia no corpo do evento) e, se o dinheiro já entrou, concede o
+   * período. Pix só confirma depois que a pessoa paga: o primeiro aviso chega "não pago" e o seguinte (async_payment_succeeded) libera. Cada sessão
+   * concede UMA vez, mesmo que os dois avisos cheguem.
+   */
+  private async confirmPrepaid(sessionId: string): Promise<void> {
+    const provider = this.requireProvider();
+    const { prisma, now, log, config } = this.deps;
+    const payment = await this.viaProvider(() => provider.fetchPrepaidSession(sessionId));
+    if (!payment || !payment.paid) return;
+    const exists = await prisma.user.findUnique({ where: { id: payment.userId }, select: { id: true } });
+    if (!exists) {
+      log.warn("pagamento avulso de usuário que não existe mais; ignorado");
+      return;
+    }
+    const marker = `prepaid:${sessionId}`.slice(0, 128);
+    try {
+      await prisma.billingEvent.create({ data: { provider: provider.name, eventId: marker, eventType: "prepaid.granted", processedAt: now() } });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return; // esta sessão já concedeu o período
+      throw err;
+    }
+    try {
+      await this.grantPrepaidPeriod(payment.userId, payment);
+      await audit(prisma, config.IP_HASH_PEPPER, { actorId: payment.userId, action: "billing.prepaid.granted", entity: "user", entityId: payment.userId, metadata: { interval: payment.interval, investments: payment.investments } }, log);
+    } catch (err) {
+      await prisma.billingEvent.deleteMany({ where: { eventId: marker } }).catch(() => undefined); // não concedeu: o reenvio do provedor tenta de novo
+      throw err;
+    }
+  }
+
+  /** Concede (ou estende) um período fechado: 30 dias no mensal, 365 no anual, a partir do fim do período atual se ele ainda não acabou. Não renova sozinho. */
+  private async grantPrepaidPeriod(userId: string, p: { interval: BillingInterval; investments: boolean; customerId: string | null }): Promise<void> {
+    const { now } = this.deps;
+    const existing = await this.subscriptionOf(userId);
+    const stillValid = existing?.plan === "PREMIUM" && existing.status === "ACTIVE" && existing.currentPeriodEnd !== null && existing.currentPeriodEnd > now();
+    const from = stillValid ? existing!.currentPeriodEnd!.getTime() : now().getTime();
+    await this.writeSubscription(userId, {
+      status: "ACTIVE",
+      store: "WEB",
+      externalId: null, // sem vínculo de assinatura: é o que diferencia "pagou uma vez" de "renova sozinha"
+      providerCustomerId: existing?.providerCustomerId ?? p.customerId,
+      currentPeriodEnd: new Date(from + PREPAID_DAYS[p.interval] * DAY_MS),
+      cancelAtPeriodEnd: true, // termina no fim do período (e o app avisa perto do fim)
+      billingInterval: p.interval,
+      investmentsAddon: p.investments,
+    });
   }
 
   /** Grava no banco o estado atual da assinatura lido do provedor. */

@@ -61,6 +61,7 @@ function buildBillingProvider(config: Config, log: { warn: (obj: object, msg: st
       secretKey: config.STRIPE_SECRET_KEY!,
       webhookSecret: config.STRIPE_WEBHOOK_SECRET!,
       apiBase: config.STRIPE_API_BASE,
+      pixRecurring: config.STRIPE_PIX_RECURRING,
       ...stripePlanSources(config),
       log,
     });

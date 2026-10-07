@@ -54,6 +54,18 @@ export class FakeStripe {
     ["prod_inv", { default_price: "price_inv" }],
     ["prod_inv_year", { default_price: "price_inv_year" }],
   ]);
+  /** Sessões de pagamento abertas (o que o servidor enviou) e se a pessoa já pagou. */
+  readonly sessions = new Map<string, { id: string; form: URLSearchParams; paid: boolean }>();
+  /** A pessoa pagou a sessão (cartão na hora; Pix quando o dinheiro cai). */
+  pay(sessionId: string): void {
+    const s = this.sessions.get(sessionId);
+    if (!s) throw new Error(`sessão ${sessionId} não existe`);
+    s.paid = true;
+  }
+  /** Última sessão aberta. */
+  lastSession(): { id: string; form: URLSearchParams; paid: boolean } {
+    return [...this.sessions.values()].at(-1)!;
+  }
   /** Quantas das próximas chamadas devem falhar com HTTP 500. */
   failNext = 0;
   /** Resposta de erro do provedor para a próxima chamada (ex.: cartão recusado). */
@@ -98,7 +110,19 @@ export class FakeStripe {
     }
     if (method === "POST" && path === "checkout/sessions") {
       this.seq++;
-      return reply({ id: `cs_test_${this.seq}`, url: `https://checkout.stripe.com/c/pay/cs_test_${this.seq}` });
+      const id = `cs_test_${this.seq}`;
+      this.sessions.set(id, { id, form: new URLSearchParams(bodyText ?? ""), paid: false });
+      return reply({ id, url: `https://checkout.stripe.com/c/pay/${id}` });
+    }
+    if (method === "GET" && (m = path.match(/^checkout\/sessions\/([\w-]+)$/))) {
+      const s = this.sessions.get(m[1]!);
+      if (!s) return missing();
+      const metadata: Record<string, string> = {};
+      for (const [k, v] of s.form) {
+        const meta = k.match(/^metadata\[(\w+)\]$/);
+        if (meta) metadata[meta[1]!] = v;
+      }
+      return reply({ id: s.id, mode: s.form.get("mode"), payment_status: s.paid ? "paid" : "unpaid", client_reference_id: s.form.get("client_reference_id"), customer: s.form.get("customer"), metadata });
     }
     if (method === "POST" && path === "billing_portal/sessions") return reply({ url: "https://billing.stripe.com/p/session/test_portal" });
     if (method === "GET" && (m = path.match(/^subscriptions\/([\w-]+)$/))) {

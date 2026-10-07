@@ -81,7 +81,9 @@ Segurança do desenho:
    `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.created`, `customer.subscription.updated`,
    `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`. Copie o **segredo de assinatura** (`whsec_...`) → `STRIPE_WEBHOOK_SECRET`.
 5. **Portal do cliente:** *Settings → Billing → Customer portal*: permita atualizar forma de pagamento, ver faturas e **cancelar assinatura**.
-6. **Meios de pagamento:** *Settings → Payment methods*. Cartão vem ativo; Pix e boleto dependem da disponibilidade para a sua conta.
+6. **Meios de pagamento:** *Settings → Payment methods*. Cartão vem ativo; Pix e boleto dependem da disponibilidade para a sua conta. **Ative o Pix aqui**
+   (e confirme que ele vale para o seu domínio/conta): o app só deixa a pessoa escolher Pix quando o Stripe o oferece na página de pagamento. Veja a
+   seção "Formas de pagar e Pix" abaixo: **Pix não funciona em assinatura comum**, por isso o app tem o "Pagar uma vez".
 7. **Chave secreta:** *Developers → API keys* → `STRIPE_SECRET_KEY` (começa com `sk_`; uma chave **restrita** `rk_` também serve). **Nunca** a publicável (`pk_`):
    a API recusa subir com ela. **A chave publicável não é usada em lugar nenhum** (o pagamento é a página hospedada do Stripe; nada de cartão passa pelo
    app). **Nunca** cole chaves em conversa, e-mail ou no repositório: só no painel do Render. Se uma chave já foi exposta, role-a no Stripe.
@@ -95,9 +97,40 @@ Segurança do desenho:
 Conferir: com as variáveis certas a API sobe; com alguma faltando ela **recusa subir** e diz qual. Com o provedor ligado (ainda com
 `BILLING_ENFORCED=false`), `GET /v1/billing` já devolve os preços lidos do Stripe, o que confirma que a chave e os `price_` estão certos.
 
+### Formas de pagar e Pix
+
+A tela de assinatura oferece duas formas, com o mesmo preço lido do Stripe:
+
+| Forma | O que é | Meios aceitos | Renova? |
+|---|---|---|---|
+| **Renova sozinha** | Assinatura (Checkout em modo `subscription`) | Cartão (Pix só com o Pix Automático, abaixo) | Sim, a cada ciclo, até cancelar |
+| **Pagar uma vez** | Pagamento único por um período fechado (Checkout em modo `payment`): **30 dias** no mensal, **1 ano** no anual | **Pix e cartão** | Não: no fim o app volta a somente leitura e avisa; a pessoa paga de novo |
+
+- **Por que o Pix não aparecia:** o Pix é um meio de pagamento **avulso**. O Stripe só o mostra em pagamentos únicos; em assinatura ele some, mesmo com o Pix
+  habilitado no painel. Por isso o "Pagar uma vez" existe: é o caminho do Pix.
+- **Como o acesso é liberado:** o servidor **nunca confia no corpo do aviso**. Ao receber `checkout.session.completed` ou
+  `checkout.session.async_payment_succeeded` de um pagamento único, ele lê a sessão no Stripe e só libera se `payment_status` for `paid`. No cartão isso é
+  imediato; no **Pix** o primeiro aviso chega com o pagamento ainda pendente (a pessoa ainda vai pagar o QR Code) e o `async_payment_succeeded` libera depois.
+  Cada sessão concede o período **uma vez só**, mesmo que os dois avisos cheguem (idempotência em `billing_events`, marcador `prepaid:<sessão>`).
+- **Pagar de novo antes de acabar soma** ao fim do prazo atual (não perde dias). Quem tem assinatura que renova sozinha não abre pagamento único (evita pagar
+  em dobro) e quem pagou uma vez não tem "gerenciar assinatura" (não há assinatura). O adicional Rendimentos de um plano pago uma vez entra na hora de pagar de
+  novo (não dá para ligar depois, porque não há item de assinatura para somar).
+- **Receita mensal estimada do painel** não conta quem pagou uma vez (não é recorrente).
+- **Pix recorrente (Pix Automático), opcional:** o Stripe suporta mandato de Pix em assinaturas a partir da versão de API `2026-04-22.dahlia`, e exige que o
+  recurso esteja **habilitado na sua conta** e que a **versão da API da conta** (Workbench → versão da API) seja essa ou mais nova: o servidor não fixa
+  versão, usa a da conta. Para tentar, defina `STRIPE_PIX_RECURRING=true` no Render: a assinatura **mensal** passa a enviar o mandato
+  (teto de R$ 400, ou o dobro do valor, o que for maior; cobrança mensal). **O anual não envia nada de Pix**: o valor aceito para esse ciclo não foi confirmado
+  e um valor errado faria o Stripe recusar a criação do pagamento. Se o Stripe recusar (conta sem o recurso), o pagamento da assinatura **não abre**: nesse caso
+  desligue a variável. Ela vem **desligada** de propósito e **não foi testada com o Stripe real**.
+- **Testar o Pix no modo de teste:** escolha "Pagar uma vez", na página do Stripe selecione Pix; no ambiente de teste o próprio Stripe oferece o botão para simular
+  o pagamento. Se o Stripe pedir CPF, o de teste é `000.000.000-00`.
+
 ### Testar localmente
 
 - **Sem Stripe:** `BILLING_PROVIDER=dev` assina na hora (preços fictícios), para testar teste → somente leitura → assinatura.
+- **A página do Stripe abre numa aba separada** (na web) e o app continua aberto, esperando a confirmação e atualizando sozinho. Antes ela abria na mesma aba,
+  o que enchia o histórico e fazia o "voltar" do navegador cair de novo na página de pagamento. Se o navegador bloquear a aba nova, o app cai no jeito
+  antigo (troca a aba, sem deixar a página do app no histórico).
 - **Com Stripe em modo de teste:** [Stripe CLI](https://docs.stripe.com/stripe-cli) com `stripe listen --forward-to localhost:3000/v1/webhooks/stripe`
   (ele imprime o `whsec_` daquela sessão) e o cartão de teste `4242 4242 4242 4242` com qualquer validade futura e CVC.
 

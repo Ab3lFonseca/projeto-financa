@@ -38,6 +38,9 @@ export class DevBillingProvider implements BillingProvider {
   async fetchSubscription(): Promise<NormalizedSubscription> {
     return this.unsupported();
   }
+  async fetchPrepaidSession(): Promise<never> {
+    return this.unsupported();
+  }
   /** Não há cliente externo para apagar. */
   async deleteCustomer(): Promise<void> {}
   verifyWebhook(): ParsedWebhook {

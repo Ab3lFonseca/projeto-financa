@@ -1,4 +1,4 @@
-import { perMonthCents, yearlySavingsPercent, type AccessDTO, type BillingIntervalName, type BillingPrice, type PricesByInterval } from "@app/shared";
+import { perMonthCents, yearlySavingsPercent, type AccessDTO, type BillingIntervalName, type BillingModeName, type BillingPrice, type PricesByInterval } from "@app/shared";
 
 type Tone = "default" | "positive" | "negative" | "warning" | "primary";
 
@@ -60,8 +60,11 @@ export function dateText(iso: string): string {
 
 export type AccessSummary = { badge: { label: string; tone: Tone }; title: string; detail: string };
 
-/** Como a situação da pessoa aparece na tela de assinatura e no cartão de perfil. */
-export function accessSummary(access: AccessDTO): AccessSummary {
+/**
+ * Como a situação da pessoa aparece na tela de assinatura e no cartão de perfil. `autoRenew === false` = pagou uma vez por um período fechado
+ * (não renova sozinho): o texto fala em "pago até", nunca em "cancelada".
+ */
+export function accessSummary(access: AccessDTO, autoRenew?: boolean | null): AccessSummary {
   switch (access.state) {
     case "beta":
       return { badge: { label: "Beta", tone: "primary" }, title: "Acesso liberado", detail: "Durante o lançamento todos os recursos estão liberados para você." };
@@ -72,6 +75,15 @@ export function accessSummary(access: AccessDTO): AccessSummary {
         detail: access.expiresAt ? `Termina em ${dateText(access.expiresAt)} (${access.daysLeft === 0 ? "hoje" : `faltam ${daysText(access.daysLeft ?? 0)}`}). Tudo está liberado.` : "Tudo está liberado.",
       };
     case "paid":
+      if (autoRenew === false) {
+        return {
+          badge: { label: "Premium", tone: "positive" },
+          title: "Plano ativo",
+          detail: access.expiresAt
+            ? `Pago até ${dateText(access.expiresAt)}, sem renovação automática. Depois disso o app fica somente leitura; renove quando quiser.`
+            : "Plano pago, sem renovação automática.",
+        };
+      }
       return {
         badge: { label: "Premium", tone: "positive" },
         title: "Assinatura ativa",
@@ -115,7 +127,7 @@ export function accessBanner(access: AccessDTO, enforced: boolean): AccessBanner
     return { tone: days <= 5 ? "warning" : "info", icon: "clock", text: `Seu teste grátis ${when}. Toque para ver o plano.` };
   }
   if (access.state === "paid" && access.cancelAtPeriodEnd && days !== null && days <= 7) {
-    return { tone: "warning", icon: "calendar-clock", text: `Sua assinatura ${days === 0 ? "termina hoje" : `termina em ${daysText(days)}`}. Toque para reativar.` };
+    return { tone: "warning", icon: "calendar-clock", text: `Seu plano ${days === 0 ? "termina hoje" : `termina em ${daysText(days)}`}. Toque para renovar.` };
   }
   return null;
 }
@@ -123,6 +135,20 @@ export function accessBanner(access: AccessDTO, enforced: boolean): AccessBanner
 /** Etiqueta curta do cartão de perfil (aba Mais) e das listas. */
 export function accessBadge(access: AccessDTO): { label: string; tone: Tone } {
   return accessSummary(access).badge;
+}
+
+/** As duas formas de pagar: assinatura que renova sozinha (cartão) ou pagamento único por um período fechado (aceita Pix). */
+export const PAYMENT_MODE_OPTIONS: { value: BillingModeName; label: string }[] = [
+  { value: "recurring", label: "Renova sozinha" },
+  { value: "once", label: "Pagar uma vez" },
+];
+
+/** Explicação curta, embaixo da escolha, do que cada forma de pagar significa. */
+export function paymentModeHint(mode: BillingModeName, interval: BillingIntervalName): string {
+  const period = interval === "year" ? "1 ano" : "30 dias";
+  return mode === "once"
+    ? `Você paga uma vez e usa por ${period}, sem renovação automática e sem cobrança surpresa. Aceita Pix e cartão. Quando acabar, é só pagar de novo.`
+    : "O cartão é cobrado automaticamente a cada ciclo. Você cancela quando quiser, sem multa.";
 }
 
 /** Duração da cortesia que o administrador escolhe. `days: null` = sem data para acabar. */

@@ -232,7 +232,7 @@ export const api = {
   // Assinatura: estado, pagamento (página do provedor), portal, adicional. Preços vêm do provedor, nunca do app.
   billing: {
     get: () => http.get<Billing>(`${v1}/billing`),
-    checkout: (investments: boolean, interval: S.BillingIntervalName) => http.post<Checkout>(`${v1}/billing/checkout`, { investments, interval }),
+    checkout: (investments: boolean, interval: S.BillingIntervalName, mode: S.BillingModeName = "recurring") => http.post<Checkout>(`${v1}/billing/checkout`, { investments, interval, mode }),
     portal: () => http.post<{ url: string }>(`${v1}/billing/portal`),
     addon: (enabled: boolean) => http.post<Billing>(`${v1}/billing/addon`, { enabled }),
   },

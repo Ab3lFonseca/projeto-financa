@@ -30,8 +30,10 @@ describe("valor por mês e economia do plano anual", () => {
 
 describe("contrato de cobrança", () => {
   it("o pedido de pagamento sem ciclo vale o MENSAL (nunca cobra o anual sem a pessoa escolher)", () => {
-    expect(checkoutBody.parse({})).toEqual({ investments: false, interval: "month" });
-    expect(checkoutBody.parse({ interval: "year", investments: true })).toEqual({ investments: true, interval: "year" });
+    expect(checkoutBody.parse({})).toEqual({ investments: false, interval: "month", mode: "recurring" });
+    expect(checkoutBody.parse({ interval: "year", investments: true })).toEqual({ investments: true, interval: "year", mode: "recurring" });
+    expect(checkoutBody.parse({ mode: "once", interval: "year" })).toEqual({ investments: false, interval: "year", mode: "once" });
+    expect(checkoutBody.safeParse({ mode: "weekly" }).success).toBe(false);
     expect(checkoutBody.safeParse({ interval: "week" }).success).toBe(false);
     expect(checkoutBody.safeParse({ interval: "year", extra: 1 }).success).toBe(false);
   });
@@ -47,6 +49,7 @@ describe("contrato de cobrança", () => {
       canManage: true,
       hasInvestmentsAddon: false,
       interval: "year",
+      autoRenew: false,
       prices: { basic: { month: price(1000, "month"), year: price(10000, "year") }, investments: { month: price(500, "month"), year: null } },
     });
     expect(ok.success).toBe(true);

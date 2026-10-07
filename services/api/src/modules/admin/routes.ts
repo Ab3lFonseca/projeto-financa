@@ -352,14 +352,15 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       }
 
       // Assinaturas (como estariam com a cobrança ligada). Carrega só o mínimo de cada conta e conta em memória.
-      const everyone = await prisma.user.findMany({ select: { role: true, createdAt: true, subscription: { select: { ...subscriptionAccessSelect, billingInterval: true } } } });
+      const everyone = await prisma.user.findMany({ select: { role: true, createdAt: true, subscription: { select: { ...subscriptionAccessSelect, billingInterval: true, externalId: true } } } });
       const billing = { enforced: config.BILLING_ENFORCED, trial: 0, paid: 0, complimentary: 0, admin: 0, expired: 0, investmentsAddon: 0 };
       let paidWithAddon = 0;
+      // Receita RECORRENTE: quem pagou uma vez (sem vínculo de assinatura) não renova sozinho, então não entra na estimativa mensal.
       const payers: { interval: BillingInterval | null; addon: boolean }[] = [];
       for (const u of everyone) {
         const a = accessOf(u);
         if (a.state === "trial") billing.trial++;
-        else if (a.state === "paid") { billing.paid++; if (a.features.investments) paidWithAddon++; payers.push({ interval: asInterval(u.subscription?.billingInterval), addon: a.features.investments }); }
+        else if (a.state === "paid") { billing.paid++; if (a.features.investments) paidWithAddon++; if (u.subscription?.externalId !== null) payers.push({ interval: asInterval(u.subscription?.billingInterval), addon: a.features.investments }); }
         else if (a.state === "complimentary") { billing.complimentary++; if (a.features.investments) billing.investmentsAddon++; }
         else if (a.state === "admin") billing.admin++;
         else if (a.state === "expired") billing.expired++;

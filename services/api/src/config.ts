@@ -142,6 +142,11 @@ const schema = z
     STRIPE_PRICE_ID_INVESTMENTS_MONTHLY: stripePriceId(),
     STRIPE_PRICE_ID_INVESTMENTS_YEARLY: stripePriceId(),
     STRIPE_PRICE_ID_INVESTMENTS: stripePriceId(),
+    /**
+     * Pix Automático (Pix que renova sozinho) na assinatura MENSAL. Desligado por padrão: precisa estar liberado na sua conta do Stripe (se não
+     * estiver, abrir o pagamento falha). O pagamento avulso por período fechado aceita Pix sem isso.
+     */
+    STRIPE_PIX_RECURRING: bool(false),
     STRIPE_API_BASE: z.url().default("https://api.stripe.com"),
     /** Endereço do site (ex.: https://financa-web.onrender.com): o pagamento volta para ele. Nunca vem do cliente (sem redirecionamento aberto). */
     APP_WEB_URL: optionalText(z.url()),

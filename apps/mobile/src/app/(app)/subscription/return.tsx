@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/Button";
 import { Card, Screen, ScreenHeader } from "@/components/ui/Layout";
@@ -34,18 +34,26 @@ export default function SubscriptionReturnScreen() {
   }, [paid, refreshMe]);
 
   const home = () => router.replace("/" as never);
+  const onWeb = Platform.OS === "web" && typeof window !== "undefined";
+  // O pagamento abre numa aba separada: ao terminar, a pessoa fecha esta e volta para o app, que continua aberto na aba de origem.
+  const closeTab = () => {
+    window.close();
+    setTimeout(home, 300); // se o navegador não deixar fechar (aba não aberta pelo app), segue para o início
+  };
 
   let body;
   if (!success) {
     body = (
       <Result icon="circle-x" tint={colors.textMuted} title="Pagamento cancelado" message="Nada foi cobrado. Você pode assinar quando quiser.">
-        <Button label="Voltar à assinatura" onPress={() => router.replace("/subscription" as never)} />
+        {onWeb ? <Button label="Fechar esta aba" onPress={closeTab} /> : null}
+        <Button label="Voltar à assinatura" variant={onWeb ? "ghost" : "primary"} onPress={() => router.replace("/subscription" as never)} />
       </Result>
     );
   } else if (paid) {
     body = (
-      <Result icon="circle-check" tint={colors.positive} title="Pagamento confirmado" message="Obrigado! Sua assinatura está ativa e tudo está liberado.">
-        <Button label="Continuar" onPress={home} />
+      <Result icon="circle-check" tint={colors.positive} title="Pagamento confirmado" message="Obrigado! Seu acesso está liberado.">
+        {onWeb ? <Button label="Fechar esta aba e voltar ao app" onPress={closeTab} /> : null}
+        <Button label="Continuar aqui" variant={onWeb ? "ghost" : "primary"} onPress={home} />
       </Result>
     );
   } else if (polling) {
@@ -56,7 +64,7 @@ export default function SubscriptionReturnScreen() {
     );
   } else {
     body = (
-      <Result icon="clock" tint={colors.warning} title="Ainda aguardando a confirmação" message="Alguns meios de pagamento levam alguns minutos para confirmar. Assim que confirmar, seu acesso é liberado automaticamente.">
+      <Result icon="clock" tint={colors.warning} title="Ainda aguardando a confirmação" message="Alguns meios de pagamento, como o Pix, levam alguns instantes para confirmar. Assim que confirmar, seu acesso é liberado automaticamente.">
         <Button
           label="Verificar de novo"
           onPress={() => {
@@ -64,6 +72,7 @@ export default function SubscriptionReturnScreen() {
             setPolling(true);
           }}
         />
+        {onWeb ? <Button label="Fechar esta aba" variant="ghost" onPress={closeTab} /> : null}
         <Button label="Voltar ao início" variant="ghost" onPress={home} />
       </Result>
     );

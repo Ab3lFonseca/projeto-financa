@@ -697,6 +697,195 @@ describe("assinatura com Stripe (cobrança ligada)", () => {
   });
 });
 
+// =========================================================================================================== pagamento avulso
+
+describe("pagamento avulso (uma vez, sem renovar, aceita Pix)", () => {
+  let env: TestEnv;
+  let stripe: FakeStripe;
+  let hook: ReturnType<typeof webhooks>;
+  beforeAll(async () => {
+    stripe = new FakeStripe();
+    env = await envWith(stripeProvider(stripe));
+    hook = webhooks(env);
+  });
+  afterAll(async () => {
+    await env.close();
+  });
+
+  /** A pessoa abre o pagamento avulso e o servidor devolve o endereço do Stripe; devolve o id da sessão aberta. */
+  async function open(u: TestUser, body: Record<string, unknown> = {}): Promise<string> {
+    const res = await u.post("/v1/billing/checkout", { mode: "once", ...body });
+    expect(res.status).toBe(200);
+    expect(res.body.url).toMatch(/^https:\/\/checkout\.stripe\.com\//);
+    return stripe.lastSession().id;
+  }
+  /** O Stripe avisa que a sessão terminou (cartão: já paga; Pix: ainda aguardando). */
+  const completed = (sessionId: string, userId: string, type = "checkout.session.completed") => hook.deliver(type, { id: sessionId, mode: "payment", client_reference_id: userId });
+
+  it("pagar uma vez libera o período fechado (30 dias), sem vínculo de assinatura, e o estado mostra que NÃO renova", async () => {
+    const u = await member(env, { expired: true });
+    expect((await tryWrite(u)).status).toBe(402);
+    const id = await open(u);
+    stripe.pay(id);
+    expect((await completed(id, u.id)).status).toBe(200);
+
+    const state = (await u.get("/v1/billing")).body;
+    expect(state).toMatchObject({ interval: "month", autoRenew: false, access: { state: "paid", allowed: true } });
+    expect(state.access.daysLeft).toBe(30);
+    expect(state.access.cancelAtPeriodEnd).toBe(true);
+    expect((await tryWrite(u)).status).toBe(201);
+    const row = await env.prisma.subscription.findUnique({ where: { userId: u.id } });
+    expect(row).toMatchObject({ plan: "PREMIUM", status: "ACTIVE", externalId: null, billingInterval: "month" });
+    expect(await env.prisma.auditLog.count({ where: { actorId: u.id, action: "billing.prepaid.granted" } })).toBe(1);
+  });
+
+  it("anual com Rendimentos: 365 dias e o adicional vem junto", async () => {
+    const u = await member(env, { expired: true });
+    const id = await open(u, { interval: "year", investments: true });
+    stripe.pay(id);
+    await completed(id, u.id);
+    const state = (await u.get("/v1/billing")).body;
+    expect(state).toMatchObject({ interval: "year", autoRenew: false, hasInvestmentsAddon: true });
+    expect(state.access.daysLeft).toBe(365);
+  });
+
+  it("Pix: o primeiro aviso chega com o pagamento ainda pendente e NÃO libera; só o aviso de pagamento confirmado libera", async () => {
+    const u = await member(env, { expired: true });
+    const id = await open(u);
+    expect((await completed(id, u.id)).status).toBe(200); // sessão concluída, Pix ainda não pago
+    expect((await u.get("/v1/billing")).body.access.state).toBe("expired");
+    expect((await tryWrite(u)).status).toBe(402);
+
+    stripe.pay(id); // a pessoa pagou o Pix
+    expect((await completed(id, u.id, "checkout.session.async_payment_succeeded")).status).toBe(200);
+    expect((await u.get("/v1/billing")).body).toMatchObject({ autoRenew: false, access: { state: "paid" } });
+  });
+
+  it("cartão: os dois avisos (concluída e pagamento confirmado) concedem UMA vez só, e o reenvio do mesmo aviso é ignorado", async () => {
+    const u = await member(env, { expired: true });
+    const id = await open(u);
+    stripe.pay(id);
+    await completed(id, u.id);
+    await completed(id, u.id, "checkout.session.async_payment_succeeded");
+    const first = (await hook.deliver("checkout.session.completed", { id, mode: "payment", client_reference_id: u.id }, { id: "evt_repetido" })).status;
+    const dup = await hook.deliver("checkout.session.completed", { id, mode: "payment", client_reference_id: u.id }, { id: "evt_repetido" });
+    expect(first).toBe(200);
+    expect(dup.status).toBe(200);
+    expect((await u.get("/v1/billing")).body.access.daysLeft).toBe(30); // não somou 60/90
+    expect(await env.prisma.auditLog.count({ where: { actorId: u.id, action: "billing.prepaid.granted" } })).toBe(1);
+  });
+
+  it("nunca confia no corpo do aviso: sessão não paga no Stripe não libera, ainda que o aviso diga o contrário", async () => {
+    const u = await member(env, { expired: true });
+    const id = await open(u);
+    await hook.deliver("checkout.session.completed", { id, mode: "payment", payment_status: "paid", client_reference_id: u.id });
+    expect((await u.get("/v1/billing")).body.access.state).toBe("expired");
+  });
+
+  it("sessão que não é pagamento avulso nosso (sem a marca) não libera nada", async () => {
+    const u = await member(env, { expired: true });
+    stripe.sessions.set("cs_de_outro_sistema", { id: "cs_de_outro_sistema", form: new URLSearchParams({ mode: "payment", client_reference_id: u.id }), paid: true });
+    expect((await completed("cs_de_outro_sistema", u.id)).status).toBe(200);
+    expect((await u.get("/v1/billing")).body.access.state).toBe("expired");
+  });
+
+  it("falha ao consultar o Stripe devolve erro (o Stripe reenvia) e não deixa a sessão marcada como concedida", async () => {
+    const u = await member(env, { expired: true });
+    const id = await open(u);
+    stripe.pay(id);
+    stripe.failNext = 1;
+    expect((await completed(id, u.id)).status).toBeGreaterThanOrEqual(500);
+    expect((await u.get("/v1/billing")).body.access.state).toBe("expired");
+    // o Stripe reenvia o mesmo evento: agora o provedor responde e o período é concedido
+    expect((await completed(id, u.id)).status).toBe(200);
+    expect((await u.get("/v1/billing")).body.access.state).toBe("paid");
+  });
+
+  it("pagar de novo antes de acabar ESTENDE a partir do fim atual (não perde dias) e dá para trocar para o anual", async () => {
+    const u = await member(env, { expired: true });
+    const a = await open(u);
+    stripe.pay(a);
+    await completed(a, u.id);
+    expect((await u.get("/v1/billing")).body.access.daysLeft).toBe(30);
+
+    const b = await open(u); // permitido: quem pagou uma vez pode renovar
+    stripe.pay(b);
+    await completed(b, u.id);
+    expect((await u.get("/v1/billing")).body.access.daysLeft).toBe(60);
+  });
+
+  it("quem tem assinatura que renova sozinha não abre pagamento avulso (nem paga em dobro)", async () => {
+    const u = await member(env, { expired: true });
+    stripe.setActive("sub_renova", { userId: u.id, customer: "cus_renova", periodEnd: new Date(env.now().getTime() + 30 * DAY) });
+    await hook.deliver("checkout.session.completed", { subscription: "sub_renova", client_reference_id: u.id });
+    expect((await u.get("/v1/billing")).body).toMatchObject({ autoRenew: true, access: { state: "paid" } });
+    const res = await u.post("/v1/billing/checkout", { mode: "once" });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("ALREADY_ACTIVE");
+  });
+
+  it("quem pagou uma vez só pode renovar pagando de novo avulso (assinar com renovação continua exigindo o gerenciamento)", async () => {
+    const u = await member(env, { expired: true });
+    const id = await open(u);
+    stripe.pay(id);
+    await completed(id, u.id);
+    expect((await u.post("/v1/billing/checkout", { mode: "recurring" })).body.error.code).toBe("ALREADY_ACTIVE");
+    // sem vínculo de assinatura não há adicional para ligar depois
+    const addon = await u.post("/v1/billing/addon", { enabled: true });
+    expect(addon.status).toBe(409);
+    expect(addon.body.error.code).toBe("PREPAID_NO_ADDON");
+  });
+
+  it("o pagamento avulso respeita o catálogo: ciclo ou adicional sem preço não abre pagamento", async () => {
+    const mensal = new FakeStripe();
+    const e = await envWith(stripeProvider(mensal, "month"));
+    try {
+      const u = await member(e, { expired: true });
+      const res = await u.post("/v1/billing/checkout", { mode: "once", interval: "year", investments: true });
+      expect(res.status).toBe(422);
+      expect(mensal.sessions.size).toBe(0);
+      expect((await u.post("/v1/billing/checkout", { mode: "once", interval: "month", investments: true })).status).toBe(200);
+    } finally {
+      await e.close();
+    }
+  });
+
+  it("o corpo do pedido é validado (modo desconhecido é recusado) e exige login", async () => {
+    const u = await member(env, { expired: true });
+    expect((await u.post("/v1/billing/checkout", { mode: "boleto" })).status).toBe(422);
+    expect((await env.anon.post("/v1/billing/checkout", { mode: "once" })).status).toBe(401);
+  });
+
+  it("quando o prazo acaba, o acesso volta a somente leitura (não renova sozinho)", async () => {
+    const u = await member(env, { expired: true });
+    const id = await open(u);
+    stripe.pay(id);
+    await completed(id, u.id);
+    expect((await tryWrite(u)).status).toBe(201);
+    await env.prisma.subscription.update({ where: { userId: u.id }, data: { currentPeriodEnd: new Date(env.now().getTime() - 1000) } });
+    env.app.users.invalidate(u.id);
+    expect((await u.get("/v1/billing")).body.access.state).toBe("expired");
+    expect((await tryWrite(u)).status).toBe(402);
+    // e pode pagar de novo
+    const again = await open(u);
+    stripe.pay(again);
+    await completed(again, u.id);
+    expect((await u.get("/v1/billing")).body.access.state).toBe("paid");
+  });
+
+  it("a receita mensal estimada do painel não conta quem pagou uma vez (não é recorrente)", async () => {
+    const admin = await makeAdmin(env);
+    const before = (await admin.get("/v1/admin/stats")).body.billing.monthlyRevenueCents as number;
+    const u = await member(env, { expired: true });
+    const id = await open(u, { investments: true });
+    stripe.pay(id);
+    await completed(id, u.id);
+    const after = (await admin.get("/v1/admin/stats")).body.billing;
+    expect(after.monthlyRevenueCents).toBe(before);
+    expect(after.paid).toBeGreaterThanOrEqual(1);
+  });
+});
+
 // =========================================================================================================== desenvolvimento
 
 describe("provedor de desenvolvimento (assina na hora, sem pagar)", () => {
@@ -752,6 +941,22 @@ describe("provedor de desenvolvimento (assina na hora, sem pagar)", () => {
     const monthly = await member(env, { expired: true });
     await monthly.post("/v1/billing/checkout", {});
     expect((await monthly.get("/v1/billing")).body).toMatchObject({ interval: "month" });
+  });
+
+  it("pagar uma vez (sem renovar): ativa pelo período fechado, sem vínculo, e dá para pagar de novo para estender", async () => {
+    const u = await member(env, { expired: true });
+    expect((await u.post("/v1/billing/checkout", { mode: "once" })).body).toEqual({ url: null, activated: true });
+    const state = (await u.get("/v1/billing")).body;
+    expect(state).toMatchObject({ interval: "month", autoRenew: false, access: { state: "paid" } });
+    expect(state.access.daysLeft).toBe(30);
+    expect((await u.post("/v1/billing/checkout", { mode: "once", interval: "year" })).body.activated).toBe(true);
+    expect((await u.get("/v1/billing")).body.access.daysLeft).toBe(395); // 30 + 365
+    expect((await u.post("/v1/billing/checkout", { mode: "recurring" })).body.error.code).toBe("ALREADY_ACTIVE");
+
+    const recurring = await member(env, { expired: true });
+    await recurring.post("/v1/billing/checkout", {});
+    expect((await recurring.get("/v1/billing")).body).toMatchObject({ autoRenew: true });
+    expect((await recurring.post("/v1/billing/checkout", { mode: "once" })).body.error.code).toBe("ALREADY_ACTIVE");
   });
 
   it("mostra os dois ciclos, para o plano e para o adicional", async () => {

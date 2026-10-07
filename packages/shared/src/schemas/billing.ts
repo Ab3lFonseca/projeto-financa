@@ -65,17 +65,29 @@ export const billingDTO = z.object({
   hasInvestmentsAddon: z.boolean(),
   /** Ciclo da assinatura paga atual (mensal ou anual). `null` = sem assinatura paga pelo app (teste, cortesia, administrador). */
   interval: BillingInterval.nullable(),
+  /** `true` = renova sozinha; `false` = paga uma vez, por um período fechado (vale até a data e não renova); `null` = sem pagamento pelo app. */
+  autoRenew: z.boolean().nullable(),
   /** Preços lidos do provedor de pagamento, por ciclo (nunca ficam escritos no app). `null` = não oferecido. */
   prices: z.object({ basic: pricesByInterval, investments: pricesByInterval }),
 });
 export type BillingDTO = z.infer<typeof billingDTO>;
 export type BillingPrice = z.infer<typeof priceDTO>;
 
+/** Como pagar: `recurring` renova sozinha (assinatura); `once` paga uma vez por um período fechado, sem renovação (aceita Pix). */
+export const billingModes = ["recurring", "once"] as const;
+export const BillingMode = z.enum(billingModes);
+export type BillingModeName = z.infer<typeof BillingMode>;
+
+/** Quantos dias vale um pagamento avulso: mensal = 30 dias, anual = 365 dias. */
+export const PREPAID_DAYS: Record<BillingIntervalName, number> = { month: 30, year: 365 };
+
 export const checkoutBody = z.strictObject({
   /** Já começar com o adicional Rendimentos. */
   investments: z.boolean().default(false),
   /** Ciclo escolhido. Sem informar, vale o mensal (nunca cobra o anual sem a pessoa pedir). */
   interval: BillingInterval.default("month"),
+  /** Sem informar, vale a assinatura que renova (o jeito de sempre). */
+  mode: BillingMode.default("recurring"),
 });
 
 /** O que o plano custa por mês, em centavos: o anual dividido por 12 (arredondado). */
