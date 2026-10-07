@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { badgeDiscountDTO } from "../badges";
 import { timestamp } from "./common";
 
 /**
@@ -69,6 +70,8 @@ export const billingDTO = z.object({
   autoRenew: z.boolean().nullable(),
   /** Preços lidos do provedor de pagamento, por ciclo (nunca ficam escritos no app). `null` = não oferecido. */
   prices: z.object({ basic: pricesByInterval, investments: pricesByInterval }),
+  /** Desconto ganho com insígnias (Ouro ou acima), aplicado na assinatura. O servidor é quem calcula; o app só mostra. */
+  discount: badgeDiscountDTO,
 });
 export type BillingDTO = z.infer<typeof billingDTO>;
 export type BillingPrice = z.infer<typeof priceDTO>;

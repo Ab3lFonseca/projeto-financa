@@ -352,15 +352,15 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       }
 
       // Assinaturas (como estariam com a cobrança ligada). Carrega só o mínimo de cada conta e conta em memória.
-      const everyone = await prisma.user.findMany({ select: { role: true, createdAt: true, subscription: { select: { ...subscriptionAccessSelect, billingInterval: true, externalId: true } } } });
+      const everyone = await prisma.user.findMany({ select: { role: true, createdAt: true, subscription: { select: { ...subscriptionAccessSelect, billingInterval: true, externalId: true, discountPercent: true } } } });
       const billing = { enforced: config.BILLING_ENFORCED, trial: 0, paid: 0, complimentary: 0, admin: 0, expired: 0, investmentsAddon: 0 };
       let paidWithAddon = 0;
       // Receita RECORRENTE: quem pagou uma vez (sem vínculo de assinatura) não renova sozinho, então não entra na estimativa mensal.
-      const payers: { interval: BillingInterval | null; addon: boolean }[] = [];
+      const payers: { interval: BillingInterval | null; addon: boolean; discountPercent: number }[] = [];
       for (const u of everyone) {
         const a = accessOf(u);
         if (a.state === "trial") billing.trial++;
-        else if (a.state === "paid") { billing.paid++; if (a.features.investments) paidWithAddon++; if (u.subscription?.externalId !== null) payers.push({ interval: asInterval(u.subscription?.billingInterval), addon: a.features.investments }); }
+        else if (a.state === "paid") { billing.paid++; if (a.features.investments) paidWithAddon++; if (u.subscription?.externalId !== null) payers.push({ interval: asInterval(u.subscription?.billingInterval), addon: a.features.investments, discountPercent: u.subscription?.discountPercent ?? 0 }); }
         else if (a.state === "complimentary") { billing.complimentary++; if (a.features.investments) billing.investmentsAddon++; }
         else if (a.state === "admin") billing.admin++;
         else if (a.state === "expired") billing.expired++;
@@ -377,10 +377,11 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
           monthlyRevenueCents = 0;
           for (const p of payers) {
             const interval = p.interval ?? fallback;
+            // O desconto de insígnias vale no total da assinatura (plano + adicional), então reduz a receita estimada dessa pessoa.
             const plan = catalog.basic[interval];
-            if (plan) monthlyRevenueCents += perMonthCents(plan);
             const addon = p.addon ? catalog.investments[interval] : null;
-            if (addon) monthlyRevenueCents += perMonthCents(addon);
+            const gross = (plan ? perMonthCents(plan) : 0) + (addon ? perMonthCents(addon) : 0);
+            monthlyRevenueCents += Math.round((gross * (100 - p.discountPercent)) / 100);
           }
           currency = (catalog.basic.month ?? catalog.basic.year)!.currency;
         }

@@ -26,6 +26,24 @@ O que **não** conta, de propósito: lançamentos gerados sozinhos pelas recorr�
 pessoa registrou. Dias sem gastar só valem em meses fechados em que ela acompanhou de verdade (10 dias ou mais com movimento). Orçamento e economia só
 contam **meses fechados** (o mês corrente ainda pode virar).
 
+## Desconto na assinatura
+
+As insígnias dão **desconto na assinatura** (mensal e anual): **a cada 5 insígnias no nível Ouro ou acima, 5%; teto de 15%**.
+
+| Insígnias em Ouro ou acima | Desconto |
+|---|---|
+| 0 a 4 | 0% |
+| 5 a 9 | 5% |
+| 10 a 14 | 10% |
+| 15 ou mais | **15% (teto)** |
+
+- Conta o **nível mais alto de cada insígnia**: Ouro, Platina, Diamante e Mestre valem; Bronze e Prata não. Níveis ganhos nunca saem, então o desconto **só cresce**.
+- As regras estão em um lugar só, `badgeDiscount` em `packages/shared/src/badges.ts` (constantes `DISCOUNT_MIN_LEVEL`, `DISCOUNT_BADGES_PER_STEP`,
+  `DISCOUNT_STEP_PERCENT`, `DISCOUNT_CAP_PERCENT`). Mudar os números é mudar essas quatro constantes (e o texto da novidade em `content/roadmap.ts`).
+- **Quem calcula é o servidor.** O pedido de pagamento não aceita percentual nem cupom (o corpo é estrito); a API avalia as insígnias da pessoa na hora e
+  aplica o degrau. O app só mostra o progresso (Mais → Minhas insígnias) e os preços com desconto (Assinatura).
+- Como o desconto chega ao Stripe, o que acontece com quem já assina e o que o painel considera: veja [assinatura.md](assinatura.md#desconto-por-insígnias).
+
 ## Privacidade
 
 `user_badges` guarda só *quem ganhou o quê e quando*: nenhum valor financeiro. A pessoa só lê as próprias linhas (RLS); quem grava é o servidor. Entra na

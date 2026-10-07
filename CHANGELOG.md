@@ -11,6 +11,16 @@ Todas as mudanças relevantes do projeto ficam aqui. O formato segue o
 ## [Não lançado]
 
 ### Adicionado
+- **Desconto na assinatura com insígnias.** A cada **5 insígnias no nível Ouro ou acima, 5% de desconto**, até **15%**, no mensal e no anual. Em *Mais → Minhas insígnias*
+  um cartão mostra quantas já contam, quantas faltam para o próximo degrau e o teto; na tela de Assinatura os planos mostram o preço cheio riscado e o valor final
+  (e, no anual, quanto dá por mês). O servidor calcula tudo (o pedido de pagamento não aceita percentual), cria os cupons `financa-badges-5/10/15` no Stripe e
+  aplica no pagamento (assinatura e pagamento único). Quem já assina recebe o degrau novo nas próximas cobranças. O painel desconta o percentual da receita
+  estimada. Migration aditiva `20261009000200_discount_percent`. Detalhes em [docs/assinatura.md](docs/assinatura.md#desconto-por-insígnias). Não exercitado com o Stripe real.
+- **Toda novidade já lançada agora tem a sua caixinha explicativa.** No mural de Novidades, cada item de "Já chegou" abre uma caixa com **O que aconteceu**, **O que mudou
+  e como usar** e **Bom saber** (antes só os itens que ainda vêm por aí tinham). Um teste garante a regra: item "done" sem caixinha quebra a suíte. A regra
+  (toda mudança perceptível pelo cliente, visual ou de funcionalidade, entra no mural com a caixinha) está no cabeçalho de `content/roadmap.ts`.
+- **Foguetes nas Novidades.** Toda vez que o mural abre, de **3 a 5 foguetes** cruzam o fundo do quadro de cima, bem rápido, um depois do outro, e somem na borda (por trás
+  do texto). Sorteio em `lib/rocketFlyby.ts` (testado), animação em `components/art/RocketFlyby.tsx`; com "reduzir movimento" ligado não aparecem.
 - **Cartão grande do teste grátis no Início.** No alto do Início, no lugar da faixa fina, aparece um cartão que chama atenção: "Faltam 12 dias de teste
   grátis", a data em que termina e o que acontece depois, a **barra de progressão mais grossa** (com o mesmo tremor e suor, um pouco maiores) e o botão
   cheio **Assinar agora**. As outras telas principais seguem com a faixa fina. No modo somente leitura e no plano pago uma vez perto do fim o cartão

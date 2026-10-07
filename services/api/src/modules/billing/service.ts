@@ -1,11 +1,12 @@
-import { Prisma, type PrismaClient } from "@app/database";
-import type { BillingDTO } from "@app/shared";
+import { Prisma, withUser, type PrismaClient } from "@app/database";
+import { badgeDiscount, type BadgeDiscount, type BillingDTO } from "@app/shared";
 import type { FastifyBaseLogger } from "fastify";
 import type { Config } from "../../config";
 import { toAccessDTO } from "../../lib/access";
 import { audit } from "../../lib/audit";
 import { Errors } from "../../lib/errors";
 import type { AuthUser } from "../../types";
+import { evaluateBadges } from "../badges/service";
 import type { UserDirectory } from "../users/directory";
 import { PREPAID_DAYS } from "@app/shared";
 import { BillingProviderError, EMPTY_CATALOG, type BillingCatalog, type BillingInterval, type BillingMode, type BillingProvider, type NormalizedSubscription } from "./provider";
@@ -53,6 +54,31 @@ export class BillingService {
     return this.deps.prisma.subscription.findUnique({ where: { userId } });
   }
 
+  /** Desconto que a pessoa ganhou com insígnias (Ouro ou acima), calculado agora no servidor: o app e o pedido de pagamento nunca o informam. */
+  async discountOf(user: { id: string; timezone: string }): Promise<BadgeDiscount> {
+    const { prisma, now } = this.deps;
+    const badges = await withUser(prisma, user.id, (tx) => evaluateBadges(tx, prisma, user, now()));
+    return badgeDiscount(badges.items.map((i) => i.level));
+  }
+
+  /**
+   * A pessoa ganhou um novo degrau de desconto: passa para a assinatura que já existe (vale nas próximas cobranças). Só sobe, nunca desce (níveis
+   * ganhos não saem). Melhor esforço: falha aqui não pode derrubar quem chamou (a leitura das insígnias); o próximo avaliar tenta de novo.
+   */
+  async syncDiscount(userId: string, percent: number): Promise<void> {
+    const { provider, prisma, log, config } = this.deps;
+    try {
+      const sub = await this.subscriptionOf(userId);
+      const live = sub && sub.plan === "PREMIUM" && sub.store === "WEB" && sub.externalId && (sub.status === "ACTIVE" || sub.status === "TRIALING" || sub.status === "PAST_DUE");
+      if (!provider || !sub || !live || percent <= sub.discountPercent) return;
+      await provider.setSubscriptionDiscount({ subscriptionId: sub.externalId!, percent });
+      await prisma.subscription.update({ where: { userId }, data: { discountPercent: percent } });
+      await audit(prisma, config.IP_HASH_PEPPER, { actorId: userId, action: "billing.discount.synced", entity: "user", entityId: userId, metadata: { percent, was: sub.discountPercent } }, log);
+    } catch (err) {
+      log.warn({ code: err instanceof BillingProviderError ? err.code : "UNKNOWN" }, "não foi possível aplicar o desconto de insígnias na assinatura");
+    }
+  }
+
   // ------------------------------------------------------------------------------------------------ estado
 
   async state(user: AuthUser): Promise<BillingDTO> {
@@ -81,6 +107,7 @@ export class BillingService {
       // Pagou uma vez (sem vínculo de assinatura) = não renova; com vínculo = renova sozinha.
       autoRenew: user.access.state === "paid" && sub?.store === "WEB" ? sub.externalId !== null : null,
       prices,
+      discount: await this.discountOf(user),
     };
   }
 
@@ -102,11 +129,13 @@ export class BillingService {
     if (!catalog.basic[body.interval]) throw Errors.unprocessable("Este plano ainda não está disponível. Escolha outra opção.", "INTERVAL_UNAVAILABLE");
     if (body.investments && !catalog.investments[body.interval]) throw Errors.unprocessable("O adicional Rendimentos ainda não está disponível para contratar neste plano.", "ADDON_UNAVAILABLE");
 
-    await audit(prisma, config.IP_HASH_PEPPER, { actorId: user.id, action: "billing.checkout.started", entity: "user", entityId: user.id, ip, metadata: { investments: body.investments, interval: body.interval, mode: body.mode, provider: provider.name } }, this.deps.log);
+    // O desconto das insígnias é calculado AGORA, no servidor, e é o que vale (o pedido do app não traz percentual algum).
+    const { percent: discountPercent } = await this.discountOf(user);
+    await audit(prisma, config.IP_HASH_PEPPER, { actorId: user.id, action: "billing.checkout.started", entity: "user", entityId: user.id, ip, metadata: { investments: body.investments, interval: body.interval, mode: body.mode, provider: provider.name, discountPercent } }, this.deps.log);
 
     if (provider.name === "dev") {
       if (body.mode === "once") {
-        await this.grantPrepaidPeriod(user.id, { interval: body.interval, investments: body.investments, customerId: null });
+        await this.grantPrepaidPeriod(user.id, { interval: body.interval, investments: body.investments, customerId: null, discountPercent });
       } else {
         const end = new Date(now().getTime() + DEV_PERIOD_DAYS[body.interval] * DAY_MS);
         await this.writeSubscription(user.id, {
@@ -118,6 +147,7 @@ export class BillingService {
           cancelAtPeriodEnd: false,
           billingInterval: body.interval,
           investmentsAddon: body.investments,
+          discountPercent,
         });
       }
       return { url: null, activated: true };
@@ -133,6 +163,7 @@ export class BillingService {
         interval: body.interval,
         investments: body.investments,
         mode: body.mode,
+        discountPercent,
         successUrl: `${base}/subscription/return?status=success`,
         cancelUrl: `${base}/subscription/return?status=cancel`,
       }),
@@ -157,7 +188,7 @@ export class BillingService {
     if (!provider.supportsInvestments) throw Errors.unprocessable("O adicional Rendimentos ainda não está disponível para contratar.", "ADDON_UNAVAILABLE");
 
     if (provider.name === "dev") {
-      await this.writeSubscription(user.id, { status: "ACTIVE", store: "WEB", externalId: sub.externalId, providerCustomerId: sub.providerCustomerId, currentPeriodEnd: sub.currentPeriodEnd, cancelAtPeriodEnd: sub.cancelAtPeriodEnd, billingInterval: asInterval(sub.billingInterval), investmentsAddon: enabled });
+      await this.writeSubscription(user.id, { status: "ACTIVE", store: "WEB", externalId: sub.externalId, providerCustomerId: sub.providerCustomerId, currentPeriodEnd: sub.currentPeriodEnd, cancelAtPeriodEnd: sub.cancelAtPeriodEnd, billingInterval: asInterval(sub.billingInterval), investmentsAddon: enabled, discountPercent: sub.discountPercent });
     } else {
       // Pagamento avulso não tem item para somar: o adicional entra na hora de pagar de novo.
       if (!sub.externalId) throw Errors.conflict("Este plano foi pago uma vez e não renova. Para incluir o Rendimentos, pague de novo escolhendo a opção com ele.", "PREPAID_NO_ADDON");
@@ -251,7 +282,7 @@ export class BillingService {
   }
 
   /** Concede (ou estende) um período fechado: 30 dias no mensal, 365 no anual, a partir do fim do período atual se ele ainda não acabou. Não renova sozinho. */
-  private async grantPrepaidPeriod(userId: string, p: { interval: BillingInterval; investments: boolean; customerId: string | null }): Promise<void> {
+  private async grantPrepaidPeriod(userId: string, p: { interval: BillingInterval; investments: boolean; customerId: string | null; discountPercent?: number }): Promise<void> {
     const { now } = this.deps;
     const existing = await this.subscriptionOf(userId);
     const stillValid = existing?.plan === "PREMIUM" && existing.status === "ACTIVE" && existing.currentPeriodEnd !== null && existing.currentPeriodEnd > now();
@@ -265,6 +296,7 @@ export class BillingService {
       cancelAtPeriodEnd: true, // termina no fim do período (e o app avisa perto do fim)
       billingInterval: p.interval,
       investmentsAddon: p.investments,
+      discountPercent: p.discountPercent ?? 0,
     });
   }
 
@@ -300,6 +332,7 @@ export class BillingService {
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
       billingInterval: sub.interval,
       investmentsAddon: sub.investmentsAddon,
+      discountPercent: sub.discountPercent,
     });
     await audit(prisma, this.deps.config.IP_HASH_PEPPER, {
       action: "billing.subscription.synced",
@@ -311,7 +344,7 @@ export class BillingService {
 
   private async writeSubscription(
     userId: string,
-    s: { status: NormalizedSubscription["status"]; store: "WEB" | "MANUAL"; externalId: string | null; providerCustomerId: string | null; currentPeriodEnd: Date | null; cancelAtPeriodEnd: boolean; billingInterval: BillingInterval | null; investmentsAddon: boolean },
+    s: { status: NormalizedSubscription["status"]; store: "WEB" | "MANUAL"; externalId: string | null; providerCustomerId: string | null; currentPeriodEnd: Date | null; cancelAtPeriodEnd: boolean; billingInterval: BillingInterval | null; investmentsAddon: boolean; discountPercent?: number },
   ): Promise<void> {
     const status = s.status === "INCOMPLETE" ? "EXPIRED" : s.status;
     const data = {
@@ -324,6 +357,7 @@ export class BillingService {
       cancelAtPeriodEnd: s.cancelAtPeriodEnd,
       billingInterval: s.billingInterval,
       investmentsAddon: s.investmentsAddon,
+      discountPercent: s.discountPercent ?? 0,
       canceledAt: status === "CANCELED" ? this.deps.now() : null,
     };
     await this.deps.prisma.subscription.upsert({ where: { userId }, create: { userId, ...data }, update: data });

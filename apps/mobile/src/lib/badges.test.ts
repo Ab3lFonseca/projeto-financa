@@ -1,6 +1,41 @@
-import { BADGES, type BadgeStateDTO } from "@app/shared";
+import { badgeDiscount, BADGES, type BadgeStateDTO } from "@app/shared";
 import { describe, expect, it } from "vitest";
-import { filterBadges, nextGoals, planCelebrations, tierName } from "./badges";
+import { discountSummary, filterBadges, nextGoals, planCelebrations, tierName } from "./badges";
+
+describe("cartão de desconto na assinatura", () => {
+  const gold = (n: number) => Array.from({ length: BADGES.length }, (_, i) => (i < n ? 3 : 0));
+
+  it("sem Ouro: convida a ganhar o primeiro desconto e mostra o caminho", () => {
+    const s = discountSummary(badgeDiscount(gold(0)));
+    expect(s.title).toBe("Ganhe desconto na assinatura");
+    expect(s.detail).toBe("Nenhuma insígnia no nível Ouro ou acima. Faltam 5 para 5% (a cada 5, até 15%).");
+    expect(s.progressPct).toBe(0);
+    expect(s.atCap).toBe(false);
+  });
+
+  it("no meio do degrau: diz quantas contam, quantas faltam e preenche a barra", () => {
+    const s = discountSummary(badgeDiscount(gold(3)));
+    expect(s.detail).toBe("3 insígnias no nível Ouro ou acima. Faltam 2 para 5% (a cada 5, até 15%).");
+    expect(s.progressPct).toBe(60);
+    expect(discountSummary(badgeDiscount(gold(1))).detail).toMatch(/^1 insígnia no nível/); // singular
+  });
+
+  it("com desconto: mostra o percentual e o próximo degrau (a barra recomeça a cada degrau)", () => {
+    const s = discountSummary(badgeDiscount(gold(7)));
+    expect(s.title).toBe("Você tem 5% de desconto na assinatura");
+    expect(s.detail).toBe("7 insígnias no nível Ouro ou acima. Faltam 3 para 10% (a cada 5, até 15%).");
+    expect(s.progressPct).toBe(40);
+    expect(discountSummary(badgeDiscount(gold(10))).progressPct).toBe(0);
+  });
+
+  it("no teto: 15%, barra cheia e sem próximo degrau", () => {
+    const s = discountSummary(badgeDiscount(gold(20)));
+    expect(s.title).toBe("Você tem 15% de desconto na assinatura");
+    expect(s.detail).toBe("Desconto máximo de 15%, com 20 insígnias no nível Ouro ou acima.");
+    expect(s.progressPct).toBe(100);
+    expect(s.atCap).toBe(true);
+  });
+});
 
 const state = (id: string, over: Partial<BadgeStateDTO> = {}): BadgeStateDTO => ({ id, value: 0, level: 0, earnedAt: [null, null, null, null, null, null], unseen: [], ...over });
 const earned = (id: string, level: number, over: Partial<BadgeStateDTO> = {}): BadgeStateDTO =>

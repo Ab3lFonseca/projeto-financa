@@ -36,7 +36,7 @@ function PlanCard({ offer, selected, disabled, onPress }: { offer: PlanOffer; se
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ checked: selected, disabled }}
-      accessibilityLabel={`Plano ${offer.label}: ${offer.total}`}
+      accessibilityLabel={`Plano ${offer.label}: ${offer.discountedTotal ? `${offer.discountedTotal}, com desconto das insígnias` : offer.total}`}
       disabled={disabled}
       onPress={onPress}
       style={{ padding: 14, gap: 4, borderRadius: radius.lg, borderWidth: selected ? 2 : 1, borderColor: selected ? colors.accent : colors.border, backgroundColor: selected ? colors.primarySoft : colors.surface, opacity: disabled && !selected ? 0.5 : 1 }}
@@ -45,10 +45,20 @@ function PlanCard({ offer, selected, disabled, onPress }: { offer: PlanOffer; se
         <Text weight="700">{offer.label}</Text>
         {offer.savings !== null ? <Badge label={`Economize ${offer.savings}%`} tone="positive" /> : null}
       </Row>
-      <Text variant="title">{offer.total}</Text>
+      {offer.discountedTotal ? (
+        <>
+          {/* com desconto de insígnias: o preço cheio riscado e o valor final em destaque */}
+          <Text variant="caption" tone="muted" style={{ textDecorationLine: "line-through" }}>
+            {offer.total}
+          </Text>
+          <Text variant="title">{offer.discountedTotal}</Text>
+        </>
+      ) : (
+        <Text variant="title">{offer.total}</Text>
+      )}
       {offer.perMonth ? (
         <Text variant="caption" tone="muted">
-          Equivale a {offer.perMonth}
+          Equivale a {offer.discountedPerMonth ?? offer.perMonth}
         </Text>
       ) : null}
     </Pressable>
@@ -72,7 +82,8 @@ export default function SubscriptionScreen() {
   const enforced = b?.enforced ?? me.entitlements.billingEnforced;
   const autoRenew = b?.autoRenew ?? null;
   const summary = accessSummary(access, autoRenew);
-  const offers = planOffers(b?.prices.basic);
+  const discountPercent = b?.discount.percent ?? 0;
+  const offers = planOffers(b?.prices.basic, discountPercent);
   const isPaid = access.state === "paid";
   // Quem pagou uma vez (não renova sozinho) pode pagar de novo para estender o prazo.
   const renewable = enforced && isPaid && autoRenew === false && !!b?.checkoutAvailable;
@@ -197,6 +208,16 @@ export default function SubscriptionScreen() {
                   ) : (
                     <Text variant="title">{offers[0]!.total}</Text>
                   )}
+                  {b ? (
+                    <Pressable accessibilityRole="button" onPress={() => go("/badges")} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Icon name="percent" size={16} color={colors.positive} />
+                      <Text variant="caption" tone="muted" style={{ flex: 1 }}>
+                        {discountPercent > 0
+                          ? `Desconto de ${discountPercent}% das suas insígnias aplicado. Veja como ganhar mais.`
+                          : `Ganhe de 5% a ${b.discount.capPercent}% de desconto com insígnias no nível Ouro ou acima. Veja como.`}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                   {canSubscribe && waiting === null ? (
                     <View style={{ gap: 6 }}>
                       <Segmented options={PAYMENT_MODE_OPTIONS} value={mode} onChange={setMode} />

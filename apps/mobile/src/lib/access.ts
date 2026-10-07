@@ -1,5 +1,5 @@
 import { trialMeter, type TrialMeter } from "./trialMeter";
-import { perMonthCents, yearlySavingsPercent, type AccessDTO, type BillingIntervalName, type BillingModeName, type BillingPrice, type PricesByInterval } from "@app/shared";
+import { discountedCents, perMonthCents, yearlySavingsPercent, type AccessDTO, type BillingIntervalName, type BillingModeName, type BillingPrice, type PricesByInterval } from "@app/shared";
 
 type Tone = "default" | "positive" | "negative" | "warning" | "primary";
 
@@ -11,7 +11,17 @@ export function formatPrice(price: BillingPrice | null | undefined): string | nu
 }
 
 /** Uma opção de plano na tela de assinatura (mensal ou anual), já com os textos prontos. */
-export type PlanOffer = { interval: BillingIntervalName; label: string; price: BillingPrice; total: string; perMonth: string | null; savings: number | null };
+export type PlanOffer = {
+  interval: BillingIntervalName;
+  label: string;
+  price: BillingPrice;
+  total: string;
+  perMonth: string | null;
+  savings: number | null;
+  /** Com desconto de insígnias: o valor final ("R$ 95,00 / ano") e, no anual, quanto dá por mês. `null` = sem desconto. */
+  discountedTotal: string | null;
+  discountedPerMonth: string | null;
+};
 
 const money = (cents: number, currency: string) => new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(cents / 100);
 
@@ -19,22 +29,27 @@ const money = (cents: number, currency: string) => new Intl.NumberFormat("pt-BR"
  * Opções de plano que existem de verdade no provedor, com o anual primeiro. A economia do anual só aparece quando os dois preços existem e o anual
  * sai mais barato (calculada, nunca escrita à mão). `null` em um ciclo = não oferecido.
  */
-export function planOffers(prices: PricesByInterval | null | undefined): PlanOffer[] {
+export function planOffers(prices: PricesByInterval | null | undefined, discountPercent = 0): PlanOffer[] {
   if (!prices) return [];
   const savings = yearlySavingsPercent(prices);
-  const make = (interval: BillingIntervalName, price: BillingPrice | null): PlanOffer[] =>
-    price
-      ? [
-          {
-            interval,
-            label: interval === "year" ? "Anual" : "Mensal",
-            price,
-            total: `${money(price.amountCents, price.currency)} / ${interval === "year" ? "ano" : "mês"}`,
-            perMonth: interval === "year" ? `${money(perMonthCents(price), price.currency)} por mês` : null,
-            savings: interval === "year" ? savings : null,
-          },
-        ]
-      : [];
+  const off = discountPercent > 0;
+  const make = (interval: BillingIntervalName, price: BillingPrice | null): PlanOffer[] => {
+    if (!price) return [];
+    const per = interval === "year" ? "ano" : "mês";
+    const discounted = discountedCents(price.amountCents, discountPercent);
+    return [
+      {
+        interval,
+        label: interval === "year" ? "Anual" : "Mensal",
+        price,
+        total: `${money(price.amountCents, price.currency)} / ${per}`,
+        perMonth: interval === "year" ? `${money(perMonthCents(price), price.currency)} por mês` : null,
+        savings: interval === "year" ? savings : null,
+        discountedTotal: off ? `${money(discounted, price.currency)} / ${per}` : null,
+        discountedPerMonth: off && interval === "year" ? `${money(perMonthCents({ ...price, amountCents: discounted }), price.currency)} por mês` : null,
+      },
+    ];
+  };
   return [...make("year", prices.year), ...make("month", prices.month)];
 }
 

@@ -1,4 +1,4 @@
-import { badgesResponse, markBadgesSeenBody, okResponse } from "@app/shared";
+import { badgeDiscount, badgesResponse, markBadgesSeenBody, okResponse } from "@app/shared";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { runAs } from "../../lib/db";
 import { evaluateBadges, markBadgesSeen } from "./service";
@@ -11,7 +11,13 @@ export const badgeRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     "/",
     { config: { rateLimit: { max: 60, timeWindow: "1 minute" } }, schema: { tags: ["badges"], response: { 200: badgesResponse } } },
-    async (req) => runAs(req, (tx, user) => evaluateBadges(tx, app.prisma, user, app.clock())),
+    async (req) => {
+      const res = await runAs(req, (tx, user) => evaluateBadges(tx, app.prisma, user, app.clock()));
+      // Ganhou um novo degrau de desconto? Passa para a assinatura que já existe (melhor esforço: nunca derruba a leitura das insígnias).
+      const { percent } = badgeDiscount(res.items.map((i) => i.level));
+      if (percent > 0) await app.billing.syncDiscount(req.user!.id, percent);
+      return res;
+    },
   );
 
   app.post(

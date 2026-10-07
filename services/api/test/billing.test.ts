@@ -1,3 +1,4 @@
+import { BADGES } from "@app/shared";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DevBillingProvider } from "../src/modules/billing/dev";
@@ -883,6 +884,175 @@ describe("pagamento avulso (uma vez, sem renovar, aceita Pix)", () => {
     const after = (await admin.get("/v1/admin/stats")).body.billing;
     expect(after.monthlyRevenueCents).toBe(before);
     expect(after.paid).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// =========================================================================================================== desconto por insígnias
+
+describe("desconto na assinatura por insígnias (Ouro ou acima)", () => {
+  let env: TestEnv;
+  let stripe: FakeStripe;
+  let hook: ReturnType<typeof webhooks>;
+  beforeAll(async () => {
+    stripe = new FakeStripe();
+    env = await envWith(stripeProvider(stripe));
+    hook = webhooks(env);
+  });
+  afterAll(async () => {
+    await env.close();
+  });
+
+  /** Dá a `n` insígnias o nível Ouro (níveis 1 a 3 ganhos), como se a pessoa as tivesse conquistado. `level` muda o nível (1 = Bronze). */
+  async function earnGold(u: TestUser, n: number, o: { from?: number; level?: number } = {}) {
+    const level = o.level ?? 3;
+    const rows = BADGES.slice(o.from ?? 0, (o.from ?? 0) + n).flatMap((b) => Array.from({ length: level }, (_, i) => ({ userId: u.id, badgeId: b.id, tier: i + 1, earnedAt: env.now() })));
+    await env.prisma.userBadge.createMany({ data: rows, skipDuplicates: true });
+  }
+  const discountOf = async (u: TestUser) => (await u.get("/v1/billing")).body.discount;
+  const subscriptionPosts = (id: string) => stripe.calls.filter((c) => c.method === "POST" && c.path === `subscriptions/${id}`);
+  const dbPercent = async (u: TestUser) => (await env.prisma.subscription.findUnique({ where: { userId: u.id } }))?.discountPercent;
+
+  it("sem insígnias de Ouro: nenhum desconto, e a resposta mostra o caminho até o primeiro degrau", async () => {
+    const u = await member(env);
+    expect(await discountOf(u)).toEqual({ qualifying: 0, percent: 0, capPercent: 15, badgesPerStep: 5, stepPercent: 5, nextPercent: 5, badgesToNext: 5 });
+  });
+
+  it("cada 5 insígnias de Ouro ou acima valem 5%, até 15%, e Prata não conta", async () => {
+    const u = await member(env);
+    await earnGold(u, 4);
+    expect(await discountOf(u)).toMatchObject({ qualifying: 4, percent: 0, badgesToNext: 1 });
+    await earnGold(u, 5, { from: 10, level: 2 }); // Prata: não conta
+    expect(await discountOf(u)).toMatchObject({ qualifying: 4, percent: 0 });
+    await earnGold(u, 1, { from: 4 });
+    expect(await discountOf(u)).toMatchObject({ qualifying: 5, percent: 5, nextPercent: 10, badgesToNext: 5 });
+    await earnGold(u, 5, { from: 5, level: 4 }); // Platina também conta
+    expect(await discountOf(u)).toMatchObject({ qualifying: 10, percent: 10, nextPercent: 15 });
+    await earnGold(u, 30, { from: 10, level: 6 });
+    expect(await discountOf(u)).toMatchObject({ percent: 15, nextPercent: null, badgesToNext: null }); // teto
+  });
+
+  it("o pedido de pagamento leva o desconto calculado NO SERVIDOR (cupom do degrau), e audita o percentual", async () => {
+    const u = await member(env, { expired: true });
+    await earnGold(u, 5);
+    expect((await u.post("/v1/billing/checkout", {})).status).toBe(200);
+    const s = stripe.lastSession().form;
+    expect(s.get("discounts[0][coupon]")).toBe("financa-badges-5");
+    expect(s.get("subscription_data[metadata][discount_percent]")).toBe("5");
+    expect(s.get("allow_promotion_codes")).toBeNull();
+    const log = await env.prisma.auditLog.findFirst({ where: { actorId: u.id, action: "billing.checkout.started" }, orderBy: { createdAt: "desc" } });
+    expect(log?.metadata).toMatchObject({ discountPercent: 5 });
+  });
+
+  it("quem não tem o degrau não leva desconto (e o campo de código promocional continua)", async () => {
+    const u = await member(env, { expired: true });
+    await u.post("/v1/billing/checkout", {});
+    const s = stripe.lastSession().form;
+    expect(s.get("discounts[0][coupon]")).toBeNull();
+    expect(s.get("allow_promotion_codes")).toBe("true");
+  });
+
+  it("o app não consegue pedir desconto: o pedido não aceita percentual nem cupom", async () => {
+    const u = await member(env, { expired: true });
+    for (const extra of [{ discountPercent: 50 }, { discount: 15 }, { coupon: "financa-badges-15" }]) {
+      expect((await u.post("/v1/billing/checkout", extra)).status, JSON.stringify(extra)).toBe(422);
+    }
+    expect(stripe.sessions.size).toBeGreaterThan(0); // (de outros testes); nenhuma sessão nova com desconto indevido
+    expect([...stripe.sessions.values()].some((s) => s.form.get("discounts[0][coupon]") === "financa-badges-15")).toBe(false);
+  });
+
+  it("pagamento único: o desconto vai na sessão e fica registrado quando o dinheiro entra", async () => {
+    const u = await member(env, { expired: true });
+    await earnGold(u, 10);
+    expect((await u.post("/v1/billing/checkout", { mode: "once", interval: "year" })).status).toBe(200);
+    const s = stripe.lastSession();
+    expect(s.form.get("discounts[0][coupon]")).toBe("financa-badges-10");
+    stripe.pay(s.id);
+    await hook.deliver("checkout.session.completed", { id: s.id, mode: "payment", client_reference_id: u.id });
+    expect(await dbPercent(u)).toBe(10);
+  });
+
+  it("assinatura criada com desconto guarda o percentual lido do provedor", async () => {
+    const u = await member(env, { expired: true });
+    stripe.setActive("sub_com_desconto", { userId: u.id, customer: "cus_cd", periodEnd: new Date(env.now().getTime() + 30 * DAY) });
+    stripe.subscriptions.get("sub_com_desconto")!.metadata = { user_id: u.id, discount_percent: "5" };
+    await hook.deliver("checkout.session.completed", { subscription: "sub_com_desconto", client_reference_id: u.id });
+    expect(await dbPercent(u)).toBe(5);
+  });
+
+  it("quem já assina e ganha um degrau novo recebe o desconto na assinatura (ao ler as insígnias), uma vez por degrau", async () => {
+    const u = await member(env, { expired: true });
+    stripe.setActive("sub_sync", { userId: u.id, customer: "cus_sync", periodEnd: new Date(env.now().getTime() + 30 * DAY) });
+    await hook.deliver("checkout.session.completed", { subscription: "sub_sync", client_reference_id: u.id });
+    expect(await dbPercent(u)).toBe(0);
+
+    await earnGold(u, 5);
+    expect((await u.get("/v1/badges")).status).toBe(200);
+    expect(stripe.subscriptionCoupons.get("sub_sync")).toBe("financa-badges-5");
+    expect(await dbPercent(u)).toBe(5);
+    expect(subscriptionPosts("sub_sync")).toHaveLength(1);
+    // o estado lido do Stripe concorda (o metadado foi atualizado junto)
+    expect((await stripe.subscriptions.get("sub_sync")!.metadata)?.discount_percent).toBe("5");
+
+    // ler de novo não chama o Stripe outra vez
+    await u.get("/v1/badges");
+    await u.get("/v1/badges");
+    expect(subscriptionPosts("sub_sync")).toHaveLength(1);
+
+    // novo degrau: troca para 10%
+    await earnGold(u, 5, { from: 5 });
+    await u.get("/v1/badges");
+    expect(stripe.subscriptionCoupons.get("sub_sync")).toBe("financa-badges-10");
+    expect(await dbPercent(u)).toBe(10);
+    expect(subscriptionPosts("sub_sync")).toHaveLength(2);
+    expect(await env.prisma.auditLog.count({ where: { actorId: u.id, action: "billing.discount.synced" } })).toBe(2);
+  });
+
+  it("o desconto nunca diminui: webhook com metadado antigo não faz a insígnia 'perder' degrau no próximo sincronismo", async () => {
+    const u = await member(env, { expired: true });
+    stripe.setActive("sub_nunca_cai", { userId: u.id, customer: "cus_nc", periodEnd: new Date(env.now().getTime() + 30 * DAY) });
+    await hook.deliver("checkout.session.completed", { subscription: "sub_nunca_cai", client_reference_id: u.id });
+    await earnGold(u, 10);
+    await u.get("/v1/badges");
+    expect(await dbPercent(u)).toBe(10);
+    // as insígnias nunca saem: o cálculo continua em 10% e não há chamada para baixar
+    await u.get("/v1/badges");
+    expect(subscriptionPosts("sub_nunca_cai")).toHaveLength(1);
+    expect(stripe.subscriptionCoupons.get("sub_nunca_cai")).toBe("financa-badges-10");
+  });
+
+  it("falha do Stripe ao aplicar o desconto não derruba a leitura das insígnias; a próxima leitura tenta de novo", async () => {
+    const u = await member(env, { expired: true });
+    stripe.setActive("sub_falha", { userId: u.id, customer: "cus_falha", periodEnd: new Date(env.now().getTime() + 30 * DAY) });
+    await hook.deliver("checkout.session.completed", { subscription: "sub_falha", client_reference_id: u.id });
+    await earnGold(u, 5);
+    stripe.failNext = 3; // cobre as chamadas do cupom
+    const res = await u.get("/v1/badges");
+    expect(res.status).toBe(200);
+    expect(await dbPercent(u)).toBe(0);
+    stripe.failNext = 0;
+    await u.get("/v1/badges");
+    expect(await dbPercent(u)).toBe(5);
+  });
+
+  it("quem não tem assinatura que renova (teste, cortesia, pagou uma vez) não gera chamada de desconto ao ler as insígnias", async () => {
+    const u = await member(env);
+    await earnGold(u, 15);
+    const before = stripe.calls.length;
+    expect((await u.get("/v1/badges")).status).toBe(200);
+    expect(stripe.calls.slice(before).filter((c) => c.method === "POST")).toHaveLength(0);
+  });
+
+  it("a receita mensal estimada do painel considera o desconto da assinatura", async () => {
+    const admin = await makeAdmin(env);
+    const before = (await admin.get("/v1/admin/stats")).body.billing.monthlyRevenueCents as number;
+    const u = await member(env, { expired: true });
+    stripe.setActive("sub_receita", { userId: u.id, customer: "cus_receita", periodEnd: new Date(env.now().getTime() + 30 * DAY) });
+    await hook.deliver("checkout.session.completed", { subscription: "sub_receita", client_reference_id: u.id });
+    const semDesconto = (await admin.get("/v1/admin/stats")).body.billing.monthlyRevenueCents as number;
+    expect(semDesconto - before).toBe(1000); // plano mensal de R$ 10,00
+    await env.prisma.subscription.update({ where: { userId: u.id }, data: { discountPercent: 15 } });
+    const comDesconto = (await admin.get("/v1/admin/stats")).body.billing.monthlyRevenueCents as number;
+    expect(comDesconto - before).toBe(850);
   });
 });
 

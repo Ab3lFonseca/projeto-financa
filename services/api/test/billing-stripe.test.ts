@@ -290,7 +290,7 @@ describe("Stripe: pagamento avulso (uma vez, período fechado)", () => {
     const { stripe, provider } = make();
     await provider.createCheckout({ ...input, interval: "year", investments: true, mode: "once" });
     const id = stripe.lastSession().id;
-    expect(await provider.fetchPrepaidSession(id)).toEqual({ sessionId: id, userId: USER, interval: "year", investments: true, paid: false, customerId: null });
+    expect(await provider.fetchPrepaidSession(id)).toEqual({ sessionId: id, userId: USER, interval: "year", investments: true, discountPercent: 0, paid: false, customerId: null });
     stripe.pay(id);
     expect((await provider.fetchPrepaidSession(id))?.paid).toBe(true);
 
@@ -313,6 +313,89 @@ describe("Stripe: pagamento avulso (uma vez, período fechado)", () => {
     expect(parse("checkout.session.completed", { id: "cs_9", mode: "payment", client_reference_id: USER })).toMatchObject({ prepaidSessionId: "cs_9", subscriptionId: null, userId: USER });
     expect(parse("checkout.session.async_payment_succeeded", { id: "cs_9", mode: "payment", client_reference_id: USER })).toMatchObject({ prepaidSessionId: "cs_9" });
     expect(parse("checkout.session.completed", { id: "cs_8", mode: "subscription", subscription: "sub_8", client_reference_id: USER })).toMatchObject({ prepaidSessionId: null, subscriptionId: "sub_8" });
+  });
+});
+
+describe("Stripe: desconto de insígnias (cupom por degrau)", () => {
+  const input = { userId: USER, email: "p@e.com", customerId: null, interval: "month" as const, investments: false, successUrl: "https://app.test/ok", cancelUrl: "https://app.test/no" };
+  const couponCalls = (stripe: FakeStripe) => stripe.calls.filter((c) => c.path.startsWith("coupons"));
+
+  it("sem desconto: nada de cupom, o campo de código promocional continua e os metadados dizem 0", async () => {
+    const { stripe, provider } = make();
+    await provider.createCheckout(input);
+    const f = stripe.lastSession().form;
+    expect(couponCalls(stripe)).toHaveLength(0);
+    expect(f.get("discounts[0][coupon]")).toBeNull();
+    expect(f.get("allow_promotion_codes")).toBe("true");
+    expect(f.get("subscription_data[metadata][discount_percent]")).toBe("0");
+  });
+
+  it("com desconto: cria o cupom do degrau (para sempre), aplica no pagamento e tira o campo de código promocional", async () => {
+    const { stripe, provider } = make();
+    await provider.createCheckout({ ...input, discountPercent: 5 });
+    expect(stripe.coupons.get("financa-badges-5")).toEqual({ percent_off: 5, duration: "forever" });
+    const create = stripe.calls.find((c) => c.method === "POST" && c.path === "coupons")!;
+    expect(create.form!.get("id")).toBe("financa-badges-5");
+    expect(create.form!.get("name")).toBe("Desconto de insígnias (5%)");
+    const f = stripe.lastSession().form;
+    expect(f.get("discounts[0][coupon]")).toBe("financa-badges-5");
+    expect(f.get("allow_promotion_codes")).toBeNull(); // o Stripe não aceita os dois juntos
+    expect(f.get("subscription_data[metadata][discount_percent]")).toBe("5");
+    expect(f.get("line_items[0][price]")).toBe("price_basic"); // o preço do plano segue o do provedor; o cupom é que reduz
+  });
+
+  it("no pagamento único o cupom e o percentual também vão na sessão (e voltam na leitura)", async () => {
+    const { stripe, provider } = make();
+    await provider.createCheckout({ ...input, discountPercent: 10, mode: "once", interval: "year" });
+    const s = stripe.lastSession();
+    expect(s.form.get("discounts[0][coupon]")).toBe("financa-badges-10");
+    expect(s.form.get("metadata[discount_percent]")).toBe("10");
+    expect(s.form.get("line_items[0][price_data][unit_amount]")).toBe("10000"); // o valor cheio; o desconto vem do cupom
+    expect((await provider.fetchPrepaidSession(s.id))?.discountPercent).toBe(10);
+  });
+
+  it("reaproveita o cupom: só consulta o Stripe na primeira vez e não cria de novo", async () => {
+    const { stripe, provider } = make();
+    await provider.createCheckout({ ...input, discountPercent: 15 });
+    await provider.createCheckout({ ...input, discountPercent: 15 });
+    expect(couponCalls(stripe).map((c) => c.method)).toEqual(["GET", "POST"]);
+    // outra instância (reinício do servidor) encontra o cupom pronto e não cria outro
+    const again = new StripeProvider({ secretKey: SECRET, webhookSecret: WHSEC, apiBase: "https://api.stripe.test", basic: BY_PRODUCT.basic, investments: BY_PRODUCT.investments }, stripe.fetch);
+    await again.createCheckout({ ...input, discountPercent: 15 });
+    expect(couponCalls(stripe).filter((c) => c.method === "POST")).toHaveLength(1);
+  });
+
+  it("recusa um cupom que já existe com OUTRO percentual (nunca cobra desconto diferente do prometido)", async () => {
+    const { stripe, provider } = make();
+    stripe.coupons.set("financa-badges-5", { percent_off: 50, duration: "forever" });
+    await expect(provider.createCheckout({ ...input, discountPercent: 5 })).rejects.toMatchObject({ code: "DISCOUNT_COUPON_MISMATCH" });
+    expect(stripe.sessions.size).toBe(0);
+  });
+
+  it("percentual inválido é recusado antes de falar com o Stripe", async () => {
+    const { stripe, provider } = make();
+    for (const bad of [-1, 101, 2.5, Number.NaN]) {
+      await expect(provider.createCheckout({ ...input, discountPercent: bad })).rejects.toMatchObject({ code: "DISCOUNT_INVALID" });
+    }
+    expect(stripe.calls).toHaveLength(0);
+  });
+
+  it("troca o desconto de uma assinatura que já existe, guardando o percentual nos metadados; a leitura devolve esse percentual", async () => {
+    const { stripe, provider } = make();
+    stripe.setActive("sub_d", { userId: USER, periodEnd: new Date(NOW + 30 * 86_400_000) });
+    expect((await provider.fetchSubscription("sub_d")).discountPercent).toBe(0);
+    await provider.setSubscriptionDiscount({ subscriptionId: "sub_d", percent: 10 });
+    expect(stripe.subscriptionCoupons.get("sub_d")).toBe("financa-badges-10");
+    expect((await provider.fetchSubscription("sub_d")).discountPercent).toBe(10);
+  });
+
+  it("metadado de percentual malformado vira 0 (nunca um desconto inventado)", async () => {
+    const { stripe, provider } = make();
+    for (const raw of ["abc", "-5", "5.5", "1000", ""]) {
+      stripe.setActive("sub_m", { userId: USER, periodEnd: new Date(NOW + 30 * 86_400_000) });
+      stripe.subscriptions.get("sub_m")!.metadata = { user_id: USER, discount_percent: raw };
+      expect((await provider.fetchSubscription("sub_m")).discountPercent, raw).toBe(0);
+    }
   });
 });
 
@@ -394,6 +477,7 @@ describe("Stripe: leitura da assinatura", () => {
       currentPeriodEnd: new Date(Math.floor(end.getTime() / 1000) * 1000),
       cancelAtPeriodEnd: false,
       interval: "month",
+      discountPercent: 0,
       investmentsAddon: true,
       investmentsItemId: "si_inv",
     });

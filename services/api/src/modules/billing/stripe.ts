@@ -110,6 +110,12 @@ const STATUS_MAP: Record<string, NormalizedSubscription["status"]> = {
 const enc = encodeURIComponent;
 const idOf = (v: string | { id?: string } | null | undefined): string | null => (typeof v === "string" ? v : (v?.id ?? null));
 
+/** Percentual gravado nos metadados ("5", "10"...): inteiro de 0 a 100, qualquer outra coisa vira 0 (sem desconto). */
+function percentOf(v: string | undefined): number {
+  const n = v !== undefined && /^\d{1,3}$/.test(v) ? Number(v) : 0;
+  return n >= 0 && n <= 100 ? n : 0;
+}
+
 /** Só vale ciclo mensal ou anual SIMPLES (a cada 1 mês ou 1 ano); "a cada 3 meses" não é oferecido, para nunca mostrar um valor errado. */
 function intervalOf(price: StripePriceRef | undefined): BillingInterval | null {
   const interval = price?.recurring?.interval;
@@ -228,7 +234,41 @@ export class StripeProvider implements BillingProvider {
 
   // ------------------------------------------------------------------------------------------------ pagamento
 
-  async createCheckout(input: { userId: string; email: string; customerId: string | null; interval: BillingInterval; investments: boolean; mode?: BillingMode; successUrl: string; cancelUrl: string }) {
+  /**
+   * Cupom do desconto de insígnias (um por degrau: `financa-badges-5`, `-10`, `-15`), criado no Stripe na primeira vez que é preciso e reaproveitado
+   * depois. Vale para sempre (`duration=forever`): numa assinatura vale em todas as renovações; no pagamento único vale na cobrança. Se um cupom com
+   * esse id já existe mas tem OUTRO percentual (ou está inválido), recusa: nunca cobra um desconto diferente do prometido.
+   */
+  private ensuredCoupons = new Set<string>();
+  private async ensureCoupon(percent: number): Promise<string> {
+    if (!Number.isInteger(percent) || percent < 1 || percent > 100) throw new BillingProviderError("DISCOUNT_INVALID", "Percentual de desconto inválido");
+    const id = `financa-badges-${percent}`;
+    if (this.ensuredCoupons.has(id)) return id;
+    type Coupon = { id?: string; percent_off?: number | null; valid?: boolean };
+    let coupon: Coupon | null = null;
+    try {
+      coupon = await this.call<Coupon>("GET", `coupons/${enc(id)}`);
+    } catch (err) {
+      if (!(err instanceof BillingProviderError && err.code === "PROVIDER_RESOURCE_MISSING")) throw err;
+    }
+    if (!coupon) {
+      try {
+        coupon = await this.call<Coupon>("POST", "coupons", { id, percent_off: String(percent), duration: "forever", name: `Desconto de insígnias (${percent}%)` });
+      } catch (err) {
+        // criado por outra requisição no mesmo instante: lê o que ficou
+        if (!(err instanceof BillingProviderError && err.status === 400)) throw err;
+        coupon = await this.call<Coupon>("GET", `coupons/${enc(id)}`);
+      }
+    }
+    if (coupon.percent_off !== percent || coupon.valid === false) throw new BillingProviderError("DISCOUNT_COUPON_MISMATCH", "O cupom de desconto no provedor não confere com o esperado");
+    this.ensuredCoupons.add(id);
+    return id;
+  }
+
+  async createCheckout(input: { userId: string; email: string; customerId: string | null; interval: BillingInterval; investments: boolean; mode?: BillingMode; discountPercent?: number; successUrl: string; cancelUrl: string }) {
+    // Percentual inválido (negativo, fracionado, NaN, acima de 100) é erro de quem chamou: recusa antes de qualquer chamada ao provedor.
+    const requested = input.discountPercent ?? 0;
+    if (requested !== 0 && (!Number.isInteger(requested) || requested < 1 || requested > 100)) throw new BillingProviderError("DISCOUNT_INVALID", "Percentual de desconto inválido");
     const r = await this.resolved();
     const basic = r.basic[input.interval];
     if (!basic) throw new BillingProviderError("PLAN_NOT_CONFIGURED", "Plano sem preço configurado para este ciclo");
@@ -244,6 +284,13 @@ export class StripeProvider implements BillingProvider {
       locale: "pt-BR",
       allow_promotion_codes: "true",
     };
+    // Desconto de insígnias: o Stripe não aceita `discounts` junto de `allow_promotion_codes`, então com desconto o campo de código promocional sai
+    // (o desconto das insígnias é o que vale; não se somam).
+    const discountPercent = input.discountPercent ?? 0;
+    if (discountPercent > 0) {
+      form["discounts[0][coupon]"] = await this.ensureCoupon(discountPercent);
+      delete form.allow_promotion_codes;
+    }
     if ((input.mode ?? "recurring") === "once") {
       // Pagamento avulso, por um período fechado (sem renovação). O valor é o MESMO do plano no ciclo escolhido, lido do provedor; a sessão
       // leva o que o servidor precisa para conceder o acesso quando o dinheiro entrar (Pix pode demorar: o aviso vem depois).
@@ -251,6 +298,7 @@ export class StripeProvider implements BillingProvider {
       form["metadata[kind]"] = "prepaid";
       form["metadata[interval]"] = input.interval;
       form["metadata[investments]"] = addon ? "true" : "false";
+      form["metadata[discount_percent]"] = String(discountPercent);
       [basic, ...(addon ? [addon] : [])].forEach((item, i) => {
         form[`line_items[${i}][quantity]`] = "1";
         form[`line_items[${i}][price_data][currency]`] = item.price.currency.toLowerCase();
@@ -263,6 +311,7 @@ export class StripeProvider implements BillingProvider {
       form["line_items[0][price]"] = basic.priceId;
       form["line_items[0][quantity]"] = "1";
       form["subscription_data[metadata][user_id]"] = input.userId;
+      form["subscription_data[metadata][discount_percent]"] = String(discountPercent);
       if (addon) {
         form["line_items[1][price]"] = addon.priceId;
         form["line_items[1][quantity]"] = "1";
@@ -296,7 +345,13 @@ export class StripeProvider implements BillingProvider {
     const userId = s.metadata?.user_id ?? s.client_reference_id ?? null;
     // Só vale o que foi aberto por este servidor como pagamento avulso (mode=payment e a marca nos metadados).
     if (s.mode !== "payment" || s.metadata?.kind !== "prepaid" || !userId || (interval !== "month" && interval !== "year")) return null;
-    return { sessionId, userId, interval, investments: s.metadata?.investments === "true", paid: s.payment_status === "paid", customerId: idOf(s.customer) };
+    return { sessionId, userId, interval, investments: s.metadata?.investments === "true", discountPercent: percentOf(s.metadata?.discount_percent), paid: s.payment_status === "paid", customerId: idOf(s.customer) };
+  }
+
+  async setSubscriptionDiscount(input: { subscriptionId: string; percent: number }): Promise<void> {
+    const coupon = await this.ensureCoupon(input.percent);
+    // `discounts` substitui o desconto anterior; o metadado guarda o percentual para o servidor saber o que está aplicado.
+    await this.call("POST", `subscriptions/${enc(input.subscriptionId)}`, { "discounts[0][coupon]": coupon, "metadata[discount_percent]": String(input.percent) });
   }
 
   async createPortal(input: { customerId: string; returnUrl: string }) {
@@ -352,6 +407,7 @@ export class StripeProvider implements BillingProvider {
       currentPeriodEnd: typeof periodEndSeconds === "number" ? new Date(periodEndSeconds * 1000) : null,
       cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end) || (typeof sub.cancel_at === "number" && sub.cancel_at > 0),
       interval: intervalOf(planItem?.price),
+      discountPercent: percentOf(sub.metadata?.discount_percent),
       investmentsAddon: Boolean(addonItem),
       investmentsItemId: addonItem?.id ?? null,
     };

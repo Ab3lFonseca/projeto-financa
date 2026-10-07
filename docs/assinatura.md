@@ -125,6 +125,28 @@ A tela de assinatura oferece duas formas, com o mesmo preço lido do Stripe:
 - **Testar o Pix no modo de teste:** escolha "Pagar uma vez", na página do Stripe selecione Pix; no ambiente de teste o próprio Stripe oferece o botão para simular
   o pagamento. Se o Stripe pedir CPF, o de teste é `000.000.000-00`.
 
+### Desconto por insígnias
+
+Quem junta insígnias no nível Ouro ou acima ganha **5% de desconto a cada 5 insígnias, até 15%** (regras em [insignias.md](insignias.md#desconto-na-assinatura)).
+Como funciona do lado do pagamento:
+
+- **Cupons por degrau, criados sozinhos.** Na primeira vez que alguém precisa de um degrau, o servidor cria no Stripe o cupom `financa-badges-5`,
+  `financa-badges-10` ou `financa-badges-15` (`percent_off` do degrau, `duration=forever`) e o reaproveita depois. Se já existir um cupom com esse id mas com
+  **outro percentual** (ou inválido), o pagamento é **recusado** (`DISCOUNT_COUPON_MISMATCH`): nunca se cobra um desconto diferente do prometido. **Não edite nem
+  apague esses cupons no painel.**
+- **Permissão da chave restrita (`rk_`)**: além das listadas no passo 7, precisa de **escrita em Coupons** (criar o cupom). Com a chave completa (`sk_`) não há o
+  que ajustar.
+- **No pagamento**, o cupom entra em `discounts` da sessão do Checkout (assinatura e pagamento único). O Stripe **não aceita `discounts` junto de
+  `allow_promotion_codes`**, então, quando há desconto de insígnias, o campo "código promocional" sai da página (o desconto das insígnias é o que vale; não se somam).
+  O preço do plano continua o do Stripe; quem reduz é o cupom.
+- **Quem já assina e ganha um degrau novo**: quando a pessoa lê as insígnias (ao abrir o app e depois de salvar algo), o servidor vê o degrau novo e troca o cupom da
+  assinatura (`POST subscriptions/{id}` com `discounts`). Vale **nas próximas cobranças**; o que já foi cobrado não é devolvido. Só sobe, nunca desce. Se o Stripe falhar,
+  a leitura das insígnias não quebra e a próxima leitura tenta de novo.
+- **O servidor guarda o que está aplicado** em `subscriptions.discount_percent` (migration `20261009000200_discount_percent`, aditiva) e nos metadados do Stripe
+  (`discount_percent`), que o webhook relê. O **painel do administrador** desconta esse percentual da receita mensal estimada.
+- **Limites conhecidos:** o desconto vale sobre o **total** da assinatura (plano + adicional Rendimentos); no Pix recorrente e no pagamento único funciona do mesmo jeito. **Não foi
+  exercitado com o Stripe real**, só com o de teste da suíte.
+
 ### Testar localmente
 
 - **Sem Stripe:** `BILLING_PROVIDER=dev` assina na hora (preços fictícios), para testar teste → somente leitura → assinatura.

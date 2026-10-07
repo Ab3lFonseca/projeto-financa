@@ -54,6 +54,10 @@ export class FakeStripe {
     ["prod_inv", { default_price: "price_inv" }],
     ["prod_inv_year", { default_price: "price_inv_year" }],
   ]);
+  /** Cupons criados (id → percentual e duração). */
+  readonly coupons = new Map<string, { percent_off: number; duration: string }>();
+  /** Cupom aplicado a cada assinatura pela API (id da assinatura → id do cupom). */
+  readonly subscriptionCoupons = new Map<string, string>();
   /** Sessões de pagamento abertas (o que o servidor enviou) e se a pessoa já pagou. */
   readonly sessions = new Map<string, { id: string; form: URLSearchParams; paid: boolean }>();
   /** A pessoa pagou a sessão (cartão na hora; Pix quando o dinheiro cai). */
@@ -71,6 +75,7 @@ export class FakeStripe {
   /** Resposta de erro do provedor para a próxima chamada (ex.: cartão recusado). */
   errorNext: { status: number; code: string; message: string } | null = null;
   private seq = 0;
+  private readonly salt = Math.random().toString(36).slice(2, 10);
 
   readonly fetch: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
@@ -110,7 +115,8 @@ export class FakeStripe {
     }
     if (method === "POST" && path === "checkout/sessions") {
       this.seq++;
-      const id = `cs_test_${this.seq}`;
+      // Único por instância, como no Stripe real: o banco de teste é compartilhado e o marcador de idempotência do pagamento avulso usa este id.
+      const id = `cs_test_${this.salt}_${this.seq}`;
       this.sessions.set(id, { id, form: new URLSearchParams(bodyText ?? ""), paid: false });
       return reply({ id, url: `https://checkout.stripe.com/c/pay/${id}` });
     }
@@ -123,6 +129,28 @@ export class FakeStripe {
         if (meta) metadata[meta[1]!] = v;
       }
       return reply({ id: s.id, mode: s.form.get("mode"), payment_status: s.paid ? "paid" : "unpaid", client_reference_id: s.form.get("client_reference_id"), customer: s.form.get("customer"), metadata });
+    }
+    if (method === "GET" && (m = path.match(/^coupons\/([\w-]+)$/))) {
+      const c = this.coupons.get(m[1]!);
+      return c ? reply({ id: m[1], valid: true, ...c }) : missing();
+    }
+    if (method === "POST" && path === "coupons") {
+      const form = new URLSearchParams(bodyText ?? "");
+      const id = form.get("id") ?? "";
+      if (this.coupons.has(id)) return reply({ error: { type: "invalid_request_error", code: "resource_already_exists" } }, 400);
+      const c = { percent_off: Number(form.get("percent_off")), duration: form.get("duration") ?? "" };
+      this.coupons.set(id, c);
+      return reply({ id, valid: true, ...c });
+    }
+    if (method === "POST" && (m = path.match(/^subscriptions\/([\w-]+)$/))) {
+      const sub = this.subscriptions.get(m[1]!);
+      if (!sub) return missing();
+      const form = new URLSearchParams(bodyText ?? "");
+      const coupon = form.get("discounts[0][coupon]");
+      if (coupon) this.subscriptionCoupons.set(sub.id, coupon);
+      const pct = form.get("metadata[discount_percent]");
+      if (pct !== null) sub.metadata = { ...(sub.metadata ?? {}), discount_percent: pct };
+      return reply(sub);
     }
     if (method === "POST" && path === "billing_portal/sessions") return reply({ url: "https://billing.stripe.com/p/session/test_portal" });
     if (method === "GET" && (m = path.match(/^subscriptions\/([\w-]+)$/))) {

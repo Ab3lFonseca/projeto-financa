@@ -2,9 +2,10 @@
  * Mural de atualizações: tudo o que chegou (do mais recente para o mais antigo) e o que está a caminho. Texto para o público: sem nome de
  * fornecedor e sem prometer data para o que ainda não existe.
  *
- * REGRA: toda mudança que a pessoa perceba entra aqui. Quando algo for lançado, crie o item com `status: "done"` e `since` (AAAA-MM-DD, a data
- * em que chegou); o mural ordena sozinho. O que está sendo feito fica em "building"/"soon" (sem data) e vira "done" quando chegar. Itens com
- * `preview` abrem a explicação (para que serve, como funciona e o que esperar).
+ * REGRA: toda mudança que a pessoa perceba entra aqui (visual ou de funcionalidade que influencie o cliente final). Quando algo for lançado, crie
+ * o item com `status: "done"` e `since` (AAAA-MM-DD, a data em que chegou); o mural ordena sozinho. O que está sendo feito fica em
+ * "building"/"soon" (sem data) e vira "done" quando chegar. **Todo item "done" TEM a caixinha `preview`** (um teste confere): o que aconteceu
+ * (`purpose`), o que mudou e como usar (`how`) e o que vale saber (`expect`). Em itens ainda não lançados a caixinha diz para que serve e como vai funcionar.
  */
 export type RoadmapStatus = "done" | "building" | "soon";
 
@@ -96,12 +97,61 @@ export const ROADMAP: readonly RoadmapItem[] = [
     },
   },
   {
+    id: "badge-discount",
+    title: "Desconto na assinatura com insígnias",
+    summary: "A cada 5 insígnias no nível Ouro ou acima você ganha 5% de desconto na assinatura, mensal ou anual, até 15%.",
+    icon: "percent",
+    status: "done",
+    since: "2026-10-07",
+    preview: {
+      purpose: "Premiar quem usa o Finança de verdade: quanto mais conquistas, mais barata fica a sua assinatura.",
+      how: [
+        "Cada 5 insígnias que estiverem no nível Ouro, Platina, Diamante ou Mestre valem 5% de desconto. Com 10 insígnias o desconto é de 10%, e com 15 chega a 15%, que é o máximo.",
+        "Bronze e Prata não contam para o desconto, mas continuam valendo pontos na sua coleção.",
+        "Em Mais → Minhas insígnias você vê quantas já contam e quantas faltam para o próximo degrau. Na tela de Assinatura, os preços aparecem com o desconto aplicado.",
+      ],
+      expect: [
+        "Os níveis que você ganhou nunca saem, então o desconto não diminui.",
+        "Vale no mensal e no anual. Quem já assina recebe o desconto novo nas próximas cobranças.",
+        "O desconto aparece quando a cobrança começar; durante o teste grátis nada é cobrado.",
+      ],
+    },
+  },
+  {
+    id: "novelty-rockets",
+    title: "Foguetes passando pelas Novidades",
+    summary: "Toda vez que você abre o mural, de 3 a 5 foguetes cruzam o quadro de cima bem rápido e somem.",
+    icon: "rocket",
+    status: "done",
+    since: "2026-10-07",
+    preview: {
+      purpose: "Deixar o mural de Novidades mais vivo, sem atrapalhar a leitura.",
+      how: [
+        "Ao abrir Novidades, de 3 a 5 foguetes atravessam o fundo do quadro do topo, em alturas diferentes, e desaparecem na borda.",
+        "Eles passam por trás do texto, então nada fica coberto, e a cena acontece uma vez por abertura.",
+      ],
+      expect: ["Se o seu aparelho estiver com “reduzir movimento” ligado, os foguetes não aparecem."],
+    },
+  },
+  {
     id: "trial-strip",
     title: "Quanto falta do teste grátis, sempre à vista",
     summary: "Uma faixa fixa nas telas principais mostra quantos dias restam do teste e até quando, com o botão para assinar já. Uma barra vai do verde ao vermelho escuro e, perto do fim, treme e começa a suar.",
     icon: "clock",
     status: "done",
     since: "2026-10-07",
+    preview: {
+      purpose: "Você sempre sabe em que ponto do teste grátis está e pode assinar na hora, sem precisar procurar.",
+      how: [
+        "Em Transações, Gráficos, Carteira, Investir e Mais aparece uma faixa fina sob o título; no Início, um cartão maior, com o título, a data do fim e o botão Assinar agora.",
+        "Uma barra enche conforme os dias passam e muda do verde ao vermelho, cada vez mais escuro. Na segunda metade do teste ela começa a tremer de leve e, nos últimos dias, solta gotinhas de suor.",
+        "O botão leva à escolha do plano (mensal ou anual) e da forma de pagar (renova sozinha ou paga uma vez, com Pix).",
+      ],
+      expect: [
+        "Só aparece durante o teste, no modo somente leitura e, para quem pagou uma vez, perto do fim do plano (com o botão Renovar).",
+        "Com “reduzir movimento” ligado no aparelho, a barra só muda de cor.",
+      ],
+    },
   },
   {
     id: "recurring-plus",
@@ -110,6 +160,18 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "calendar-clock",
     status: "done",
     since: "2026-10-07",
+    preview: {
+      purpose: "Automatizar o que se repete (aluguel, salário, reserva mensal) e dividir valores em parcelas, sem lançar tudo na mão.",
+      how: [
+        "Toque no + e escolha Recorrência. Escolha Despesa, Receita ou Transferência entre contas (por exemplo, guardar R$ 200 por mês na reserva).",
+        "Defina se repete por semana, mês ou ano, de quanto em quanto tempo (a cada 2 meses, por exemplo) e quando termina: nunca, depois de N vezes (o app mostra a data da última) ou em uma data.",
+        "Ao criar uma despesa ou receita, o campo Parcelas divide o total em um lançamento por mês, também na conta. Os meses seguintes ficam agendados até chegar o dia.",
+      ],
+      expect: [
+        "Os lançamentos são criados sozinhos nas datas certas. Dá para pausar, mudar ou tirar a data do fim e excluir; o que já foi criado continua no histórico.",
+        "Cada data de uma transferência recorrente vira uma transferência de verdade, com saída e entrada.",
+      ],
+    },
   },
   {
     id: "quick-add-menu",
@@ -118,6 +180,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "plus",
     status: "done",
     since: "2026-10-07",
+    preview: {
+      purpose: "Ter, num único botão, todas as formas de adicionar algo ao app.",
+      how: [
+        "Toque no + no Início ou em Transações: ele gira até virar um × e os ícones sobem, cada um com o seu nome.",
+        "Escolha Despesa, Receita, Transferência ou Recorrência para abrir a tela de cadastro correspondente.",
+      ],
+      expect: ["Para fechar sem escolher, toque no ×, fora do menu ou aperte Esc no computador."],
+    },
   },
   {
     id: "badges",
@@ -126,6 +196,18 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "gem",
     status: "done",
     since: "2026-10-07",
+    preview: {
+      purpose: "Tornar o hábito de cuidar do dinheiro mais divertido, com conquistas que mostram o seu progresso.",
+      how: [
+        "São 53 insígnias em 8 assuntos (constância, lançamentos, economia, planejamento, metas, cartões, organização e segurança). Cada uma tem 6 níveis: Bronze, Prata, Ouro, Platina, Diamante e Mestre.",
+        "Quando você conquista um nível, ele aparece na tela na hora, com uma comemoração. Criar a conta já dá a insígnia de Boas-vindas.",
+        "Veja a coleção em Mais → Minhas insígnias, com o que conta e como evoluir, e os próximos passos no cartão “Próximas conquistas” do Início.",
+      ],
+      expect: [
+        "Níveis ganhos nunca saem, nem se você apagar lançamentos.",
+        "Lançamentos automáticos não inflam as insígnias de anotar.",
+      ],
+    },
   },
   {
     id: "themes-families",
@@ -134,6 +216,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "palette",
     status: "done",
     since: "2026-10-07",
+    preview: {
+      purpose: "Dar mais jeitos de deixar o app com a sua cara, para todos os gostos.",
+      how: [
+        "Abra Configurações → Aparência e escolha entre as três novas famílias: opacos (cores cheias e chapadas), foscos (tons acinzentados) e pastéis (claros e delicados).",
+        "Cada família tem cinco temas. A troca vale para o app inteiro na hora.",
+      ],
+      expect: ["Os temas antigos (claro, escuro e as cores) continuam lá, e dá criar as suas próprias cores."],
+    },
   },
   {
     id: "living-background",
@@ -142,6 +232,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "layers",
     status: "done",
     since: "2026-10-07",
+    preview: {
+      purpose: "Dar identidade ao app com um fundo discreto e vivo, sem tirar o foco do que importa.",
+      how: [
+        "A logo completa aparece, bem apagada, ao fundo das telas, desenhada com muitos cubos.",
+        "No computador, os cubos reagem quando o mouse passa por perto (num círculo pequeno). No celular, eles se alternam, subindo e descendo sozinhos.",
+      ],
+      expect: ["É só decoração: não atrapalha o uso e fica bem apagada para não competir com os seus dados."],
+    },
   },
   {
     id: "two-factor",
@@ -150,6 +248,17 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "shield-check",
     status: "done",
     since: "2026-10-06",
+    preview: {
+      purpose: "Mesmo que alguém descubra a sua senha, sem o seu celular a conta não abre.",
+      how: [
+        "Ative em Configurações → Segurança: leia o QR code no Google Authenticator, no Authy ou em um app parecido e digite o código de 6 números.",
+        "Depois disso, o código é pedido a cada entrada e a cada abertura do app.",
+      ],
+      expect: [
+        "Depois de 3 códigos errados você é desconectado por segurança.",
+        "Dá para desligar quando quiser, no mesmo lugar.",
+      ],
+    },
   },
   {
     id: "my-account",
@@ -158,6 +267,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "user",
     status: "done",
     since: "2026-10-06",
+    preview: {
+      purpose: "Ter num só lugar os dados do seu cadastro e poder corrigi-los quando precisar.",
+      how: [
+        "Abra Minha conta para ver o que está cadastrado.",
+        "Troque o nome, o e-mail ou a senha.",
+      ],
+      expect: ["Há limites de trocas por mês e por ano, para que ninguém consiga mexer na sua conta repetidamente."],
+    },
   },
   {
     id: "celebrations",
@@ -166,6 +283,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "party-popper",
     status: "done",
     since: "2026-10-06",
+    preview: {
+      purpose: "Reconhecer as suas vitórias com uma comemoração, em vez de só mudar um número na tela.",
+      how: [
+        "Ao bater uma meta, guardar dinheiro ou ganhar uma insígnia, aparece uma tela cheia com brilhos, confete e um foguete.",
+        "Quando há mais de uma comemoração, elas entram uma de cada vez.",
+      ],
+      expect: ["Dá para fechar na hora, e com “reduzir movimento” ligado as animações ficam bem mais calmas."],
+    },
   },
   {
     id: "trial-notice",
@@ -174,6 +299,17 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "gift",
     status: "done",
     since: "2026-10-06",
+    preview: {
+      purpose: "Deixar claro, desde o começo, como funciona o período de teste e o que acontece depois.",
+      how: [
+        "No primeiro acesso aparece uma tela dizendo que você ganhou 30 dias grátis, com tudo liberado, e até que dia ele vale.",
+        "Ali mesmo há o caminho para ver os planos e assinar antes do fim, se quiser.",
+      ],
+      expect: [
+        "Sem cartão e sem compromisso: durante o teste nada é cobrado.",
+        "Quando o teste acaba sem assinatura, o app fica somente leitura: você continua vendo e exportando tudo, e nada é apagado.",
+      ],
+    },
   },
   {
     id: "support",
@@ -182,6 +318,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "life-buoy",
     status: "done",
     since: "2026-10-06",
+    preview: {
+      purpose: "Ter ajuda a um toque quando algo não ficar claro ou der problema.",
+      how: [
+        "Abra Mais → Ajuda e suporte.",
+        "Escolha falar pelo WhatsApp ou pelo e-mail: o app já abre a conversa para você.",
+      ],
+      expect: ["Nunca peça ou envie a sua senha por ali: a equipe não precisa dela."],
+    },
   },
   {
     id: "legal",
@@ -190,6 +334,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "file-text",
     status: "done",
     since: "2026-10-06",
+    preview: {
+      purpose: "Explicar, sem juridiquês, o que é feito com os seus dados e quais são os seus direitos.",
+      how: [
+        "Abra Mais → Privacidade e dados para ler os Termos de Uso e a Política de Privacidade.",
+        "Os textos trazem os seus direitos, as leis que protegem os seus dados e o que acontece ao exportar ou excluir a conta.",
+      ],
+      expect: ["Ficou com alguma dúvida sobre os seus dados? Fale com a gente em Mais → Ajuda e suporte."],
+    },
   },
   {
     id: "appearance",
@@ -198,6 +350,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "palette",
     status: "done",
     since: "2026-10-05",
+    preview: {
+      purpose: "Deixar o app confortável para os seus olhos e com a sua personalidade.",
+      how: [
+        "Abra Configurações → Aparência.",
+        "Escolha entre claro, escuro, azul, roxo, verde, vermelho ou monte as suas próprias cores. A mudança vale para todo o app.",
+      ],
+      expect: ["A escolha fica salva na sua conta, então vale também em outros aparelhos."],
+    },
   },
   {
     id: "tour",
@@ -206,6 +366,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "graduation-cap",
     status: "done",
     since: "2026-10-05",
+    preview: {
+      purpose: "Conhecer o app em poucos minutos, sem precisar descobrir tudo sozinho.",
+      how: [
+        "No primeiro acesso, um passo a passo destaca cada parte do app e explica para que ela serve.",
+        "Dá para pular a qualquer momento e rever depois em Mais → Tutorial.",
+      ],
+      expect: ["É curto e não muda nada nos seus dados."],
+    },
   },
   {
     id: "motion",
@@ -214,6 +382,14 @@ export const ROADMAP: readonly RoadmapItem[] = [
     icon: "sparkles",
     status: "done",
     since: "2026-10-04",
+    preview: {
+      purpose: "Fazer o app parecer mais leve e agradável de usar.",
+      how: [
+        "As telas entram com uma transição curta, as listas aparecem em cascata e botões, gráficos e abas respondem ao toque com movimentos suaves.",
+        "Se o seu aparelho estiver com “reduzir movimento”, o app diminui ou tira as animações.",
+      ],
+      expect: ["É só acabamento: nada muda no que o app faz com os seus dados."],
+    },
   },
 ] as const;
 

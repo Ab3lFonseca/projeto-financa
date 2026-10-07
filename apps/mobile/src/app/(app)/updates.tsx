@@ -41,7 +41,7 @@ export default function UpdatesScreen() {
   let order = 0;
   return (
     <Screen header={<ScreenHeader title="Novidades" subtitle="Mural de atualizações do Finança" />}>
-      <HeroBanner tone="slate" icon="rocket" badge="Mural de atualizações" title="Estamos sempre construindo" subtitle="Tudo o que é novo aparece aqui, com a data, do mais recente para o mais antigo. O que ainda vem por aí não tem data marcada: preferimos lançar quando estiver bom." rocket />
+      <HeroBanner tone="slate" icon="rocket" badge="Mural de atualizações" title="Estamos sempre construindo" subtitle="Tudo o que é novo aparece aqui, com a data, do mais recente para o mais antigo. O que ainda vem por aí não tem data marcada: preferimos lançar quando estiver bom." rocket flyby />
 
       {ROADMAP_SECTIONS.map((section) => {
         const items = itemsByStatus(section.status);
@@ -70,7 +70,7 @@ export default function UpdatesScreen() {
                   subtitle={item.summary}
                   rocket={look.rocket}
                   delay={delay}
-                  hint={item.preview ? "Toque para ver como vai funcionar" : undefined}
+                  hint={item.preview ? (item.status === "done" ? "Toque para ver o que mudou e como usar" : "Toque para ver como vai funcionar") : undefined}
                   onPress={item.preview ? () => setOpenId(item.id) : undefined}
                 />
               );
@@ -91,10 +91,10 @@ function PreviewSheet({ item, onClose }: { item: RoadmapItem | undefined; onClos
       {item?.preview && look ? (
         <View style={{ gap: 18, paddingBottom: 8 }}>
           <HeroBanner compact tone={look.tone} icon={item.icon} badge={look.badge} title={item.title} rocket={look.rocket} />
-          <Block title="Para que serve">
+          <Block title={item.status === "done" ? "O que aconteceu" : "Para que serve"}>
             <Text tone="muted">{item.preview.purpose}</Text>
           </Block>
-          <Block title="Como vai funcionar">
+          <Block title={item.status === "done" ? "O que mudou e como usar" : "Como vai funcionar"}>
             {item.preview.how.map((step, i) => (
               <View key={step} style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
                 <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", marginTop: 1 }}>
@@ -108,7 +108,7 @@ function PreviewSheet({ item, onClose }: { item: RoadmapItem | undefined; onClos
               </View>
             ))}
           </Block>
-          <Block title="O que esperar">
+          <Block title={item.status === "done" ? "Bom saber" : "O que esperar"}>
             {item.preview.expect.map((line) => (
               <View key={line} style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
                 <Icon name="circle-check" size={18} color={colors.positive} />

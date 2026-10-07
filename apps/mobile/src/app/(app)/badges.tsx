@@ -1,15 +1,16 @@
-import { BADGE_CATEGORIES, BADGES, TIER_LABEL, tierReached, type BadgeDef, type BadgeStateDTO } from "@app/shared";
+import { badgeDiscount, BADGE_CATEGORIES, BADGES, TIER_LABEL, tierReached, type BadgeDef, type BadgeStateDTO } from "@app/shared";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { BadgeArt } from "@/components/badges/BadgeArt";
 import { BadgeDetail } from "@/components/badges/BadgeDetail";
 import { tierColor } from "@/components/badges/badgeTheme";
-import { Chip, ChipRow, ProgressBar } from "@/components/ui/Controls";
+import { Icon } from "@/components/Icon";
+import { Badge, Chip, ChipRow, ProgressBar } from "@/components/ui/Controls";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/ui/Feedback";
-import { Card, Reveal, Screen, ScreenHeader } from "@/components/ui/Layout";
+import { Card, Reveal, Row, Screen, ScreenHeader } from "@/components/ui/Layout";
 import { Sheet } from "@/components/ui/Sheet";
 import { Text } from "@/components/ui/Text";
-import { filterBadges, tierName, type BadgeFilter } from "@/lib/badges";
+import { discountSummary, filterBadges, tierName, type BadgeFilter } from "@/lib/badges";
 import { useBadges } from "@/lib/hooks";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -68,6 +69,10 @@ export default function BadgesScreen() {
         </Card>
       </Reveal>
 
+      <Reveal index={1}>
+        <DiscountCard levels={data.items.map((i) => i.level)} />
+      </Reveal>
+
       <View style={{ gap: 10 }}>
         <ChipRow>
           <Chip label="Todas" selected={category === "all"} onPress={() => setCategory("all")} />
@@ -98,6 +103,33 @@ export default function BadgesScreen() {
         {opened ? <BadgeDetail def={opened.def} state={opened.state} /> : null}
       </Sheet>
     </Screen>
+  );
+}
+
+/** Desconto na assinatura: cada 5 insígnias no nível Ouro ou acima valem 5%, até 15%. O servidor é quem aplica; aqui só se mostra o progresso. */
+function DiscountCard({ levels }: { levels: number[] }) {
+  const { colors } = useTheme();
+  const d = badgeDiscount(levels);
+  const s = discountSummary(d);
+  return (
+    <Card style={{ gap: 10 }}>
+      <Row style={{ justifyContent: "space-between" }}>
+        <Row gap={10} style={{ flex: 1 }}>
+          <Icon name="percent" size={22} color={colors.positive} />
+          <Text weight="700" style={{ flex: 1 }}>
+            {s.title}
+          </Text>
+        </Row>
+        {d.percent > 0 ? <Badge label={`${d.percent}%`} tone="positive" /> : null}
+      </Row>
+      <ProgressBar value={s.progressPct} height={8} />
+      <Text variant="caption" tone="muted">
+        {s.detail}
+      </Text>
+      <Text variant="caption" tone="faint">
+        Ouro, Platina, Diamante e Mestre contam. Níveis ganhos nunca saem. O desconto vale na assinatura mensal e na anual, quando a cobrança começar.
+      </Text>
+    </Card>
   );
 }
 

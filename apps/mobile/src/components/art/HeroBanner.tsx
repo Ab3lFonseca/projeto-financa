@@ -8,6 +8,7 @@ import { Text } from "@/components/ui/Text";
 import { mix } from "@/theme/color";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Rocket } from "./Rocket";
+import { RocketFlyby } from "./RocketFlyby";
 import { Sparkle } from "./Sparkle";
 
 export type BannerTone = "primary" | "positive" | "warning" | "violet" | "slate";
@@ -50,6 +51,7 @@ export function HeroBanner({
   subtitle,
   badge,
   rocket = false,
+  flyby = false,
   compact = false,
   children,
   style,
@@ -64,6 +66,8 @@ export function HeroBanner({
   /** Etiqueta pequena acima do título (ex.: "Em breve"). */
   badge?: string;
   rocket?: boolean;
+  /** De 3 a 5 foguetes cruzam o fundo do banner, bem rápido, uma vez quando ele aparece (mural de Novidades). */
+  flyby?: boolean;
   compact?: boolean;
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -106,6 +110,8 @@ export function HeroBanner({
         {SPARKLES.map((s, i) => (
           <Sparkle key={i} size={s.size} color={s.color} delay={s.delay} duration={s.duration} style={{ left: s.left as never, top: s.top as never }} />
         ))}
+        {/* foguetes cruzando o fundo (3 a 5, uma vez por abertura da tela) */}
+        {flyby ? <RocketFlyby /> : null}
       </View>
 
       {rocket ? (

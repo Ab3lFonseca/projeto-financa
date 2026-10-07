@@ -25,7 +25,7 @@ describe("mural de novidades", () => {
     const dates = done.map((i) => i.since!);
     expect([...dates].sort().reverse()).toEqual(dates);
     expect(done.length).toBeGreaterThanOrEqual(10); // o mural lista tudo o que chegou, não só um resumo
-    expect(done[0]!.id).toBe("trial-strip");
+    expect(done[0]!.since).toBe(dates.reduce((a, b) => (a > b ? a : b)));
     // mesma data: mantém a ordem em que foram escritos
     const sameDay = done.filter((i) => i.since === done[0]!.since).map((i) => i.id);
     expect(sameDay).toEqual(ROADMAP.filter((i) => i.since === done[0]!.since).map((i) => i.id));
@@ -42,9 +42,27 @@ describe("mural de novidades", () => {
 
   it("as novidades recentes do app estão no mural (nada que a pessoa perceba fica de fora)", () => {
     const ids = new Set(ROADMAP.map((i) => i.id));
-    for (const id of ["badges", "themes-families", "living-background", "two-factor", "my-account", "celebrations", "trial-notice", "support", "legal", "appearance", "tour", "motion"]) {
+    for (const id of ["badges", "themes-families", "living-background", "two-factor", "my-account", "celebrations", "trial-notice", "support", "legal", "appearance", "tour", "motion", "trial-strip", "quick-add-menu", "recurring-plus", "badge-discount", "novelty-rockets"]) {
       expect(ids.has(id), id).toBe(true);
     }
+  });
+
+  it("TODA novidade que já chegou tem a caixinha explicando o que aconteceu, o que mudou e como usar", () => {
+    for (const i of ROADMAP.filter((x) => x.status === "done")) {
+      expect(i.preview, `${i.id} está sem a caixinha de explicação`).toBeDefined();
+      expect(i.preview!.purpose.length, i.id).toBeGreaterThan(30);
+      expect(i.preview!.how.length, i.id).toBeGreaterThanOrEqual(2);
+      expect(i.preview!.expect.length, i.id).toBeGreaterThanOrEqual(1);
+      for (const line of [i.preview!.purpose, ...i.preview!.how, ...i.preview!.expect]) expect(line.trim().length, i.id).toBeGreaterThan(10);
+    }
+  });
+
+  it("o desconto por insígnias descreve as regras certas (5 insígnias de Ouro ou acima = 5%, até 15%)", () => {
+    const text = JSON.stringify(roadmapItem("badge-discount"));
+    expect(text).toContain("5%");
+    expect(text).toContain("15%");
+    expect(text).toMatch(/Ouro/);
+    expect(text).toMatch(/nunca saem/);
   });
 
   it("a assinatura anual/mensal ainda não aparece como lançada (a cobrança não está aberta ao público)", () => {

@@ -41,6 +41,8 @@ export class DevBillingProvider implements BillingProvider {
   async fetchPrepaidSession(): Promise<never> {
     return this.unsupported();
   }
+  /** Não há assinatura externa: o serviço só grava o percentual no banco. */
+  async setSubscriptionDiscount(): Promise<void> {}
   /** Não há cliente externo para apagar. */
   async deleteCustomer(): Promise<void> {}
   verifyWebhook(): ParsedWebhook {

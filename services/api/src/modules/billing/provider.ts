@@ -40,6 +40,8 @@ export type NormalizedSubscription = {
   cancelAtPeriodEnd: boolean;
   /** Ciclo do plano (mensal ou anual), lido do item do plano básico; nulo se o provedor não informou ou não é mensal/anual simples. */
   interval: BillingInterval | null;
+  /** Desconto (%) de insígnias aplicado nesta assinatura (lido dos metadados que o servidor grava); 0 = sem desconto. */
+  discountPercent: number;
   /** Tem o item do adicional Rendimentos. */
   investmentsAddon: boolean;
   /** Id do item do adicional dentro da assinatura (para removê-lo depois). */
@@ -62,6 +64,8 @@ export type PrepaidPayment = {
   userId: string;
   interval: BillingInterval;
   investments: boolean;
+  /** Desconto (%) de insígnias que valeu neste pagamento (gravado na sessão ao abrir); 0 = sem desconto. */
+  discountPercent: number;
   /** O dinheiro já entrou? Pix aguarda a pessoa pagar: antes disso, `false`. */
   paid: boolean;
   customerId: string | null;
@@ -81,9 +85,13 @@ export interface BillingProvider {
     investments: boolean;
     /** `recurring` (padrão) = assinatura que renova; `once` = paga uma vez por um período fechado (aceita Pix). */
     mode?: BillingMode;
+    /** Desconto de insígnias (%) a aplicar neste pagamento (1 a 100); 0 ou ausente = sem desconto. Quem decide o valor é o servidor, nunca o app. */
+    discountPercent?: number;
     successUrl: string;
     cancelUrl: string;
   }): Promise<{ url: string }>;
+  /** Troca o desconto de insígnias (%) de uma assinatura que já existe (a pessoa ganhou um novo degrau). Vale para as próximas cobranças. */
+  setSubscriptionDiscount(input: { subscriptionId: string; percent: number }): Promise<void>;
   /** Lê um pagamento avulso (sessão de pagamento) no provedor. `null` se não for um pagamento avulso nosso. */
   fetchPrepaidSession(sessionId: string): Promise<PrepaidPayment | null>;
   createPortal(input: { customerId: string; returnUrl: string }): Promise<{ url: string }>;

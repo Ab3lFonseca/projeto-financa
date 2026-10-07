@@ -242,6 +242,62 @@ export function badgePoints(levels: number[]): number {
   return levels.reduce((sum, level) => sum + BADGE_TIERS.slice(0, level).reduce((s, t) => s + TIER_POINTS[t], 0), 0);
 }
 
+// ===================================================================================================================
+// Desconto na assinatura por insígnias
+// ===================================================================================================================
+
+/** Nível mínimo (1 = Bronze ... 6 = Mestre) para a insígnia contar no desconto: Ouro (3) ou acima (Platina, Diamante e Mestre também valem). */
+export const DISCOUNT_MIN_LEVEL = 3;
+/** A cada tantas insígnias nesse nível... */
+export const DISCOUNT_BADGES_PER_STEP = 5;
+/** ...a pessoa ganha tantos pontos percentuais de desconto na assinatura (mensal ou anual)... */
+export const DISCOUNT_STEP_PERCENT = 5;
+/** ...até este teto. */
+export const DISCOUNT_CAP_PERCENT = 15;
+
+export const badgeDiscountDTO = z.object({
+  /** Insígnias que já estão no nível Ouro ou acima (as que contam). */
+  qualifying: z.number().int().min(0),
+  /** Desconto que a pessoa tem agora, em % (0, 5, 10 ou 15). */
+  percent: z.number().int().min(0).max(100),
+  /** O teto do desconto, em %. */
+  capPercent: z.number().int(),
+  /** A cada quantas insígnias (Ouro ou acima) sobe um degrau. */
+  badgesPerStep: z.number().int(),
+  /** Quanto cada degrau vale, em pontos percentuais. */
+  stepPercent: z.number().int(),
+  /** Desconto do próximo degrau; `null` = já está no teto. */
+  nextPercent: z.number().int().nullable(),
+  /** Quantas insígnias faltam (Ouro ou acima) para o próximo degrau; `null` = já está no teto. */
+  badgesToNext: z.number().int().nullable(),
+});
+export type BadgeDiscount = z.infer<typeof badgeDiscountDTO>;
+
+/**
+ * Desconto na assinatura pelas insígnias: cada 5 insígnias no nível Ouro (ou acima) dão 5%, até 15%. `levels` são os níveis (0 a 6) de todas as
+ * insígnias da pessoa. Níveis ganhos nunca saem, então o desconto só cresce.
+ */
+export function badgeDiscount(levels: readonly number[]): BadgeDiscount {
+  const qualifying = levels.filter((l) => l >= DISCOUNT_MIN_LEVEL).length;
+  const steps = Math.floor(qualifying / DISCOUNT_BADGES_PER_STEP);
+  const percent = Math.min(DISCOUNT_CAP_PERCENT, steps * DISCOUNT_STEP_PERCENT);
+  const atCap = percent >= DISCOUNT_CAP_PERCENT;
+  return {
+    qualifying,
+    percent,
+    capPercent: DISCOUNT_CAP_PERCENT,
+    badgesPerStep: DISCOUNT_BADGES_PER_STEP,
+    stepPercent: DISCOUNT_STEP_PERCENT,
+    nextPercent: atCap ? null : percent + DISCOUNT_STEP_PERCENT,
+    badgesToNext: atCap ? null : (steps + 1) * DISCOUNT_BADGES_PER_STEP - qualifying,
+  };
+}
+
+/** Valor com o desconto aplicado (centavos, arredondado), como o provedor de pagamento calcula. */
+export function discountedCents(amountCents: number, percent: number): number {
+  return Math.round((amountCents * (100 - Math.min(100, Math.max(0, percent)))) / 100);
+}
+
 const brl = (cents: number) => `R$ ${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(Math.round(cents / 100))}`;
 
 /** Valor com a unidade, para as telas ("30 dias", "R$ 5.000", "40%"). */

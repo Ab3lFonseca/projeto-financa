@@ -393,7 +393,9 @@ model Subscription {
   /// Ciclo da assinatura paga no provedor: "month" ou "year". Nulo em cortesia, no teste grátis e em assinaturas anteriores a este campo
   /// (o painel do administrador as conta como mensais até o próximo webhook preencher).
   billingInterval  String?            @map("billing_interval") @db.VarChar(8)
-  canceledAt       DateTime?          @map("canceled_at") @db.Timestamptz(6)
+  /// Desconto (%) ganho com insígnias que já está aplicado na assinatura no provedor. 0 = sem desconto. Só o servidor grava.
+  discountPercent  Int                @default(0) @map("discount_percent") @db.SmallInt
+  canceledAt      DateTime?          @map("canceled_at") @db.Timestamptz(6)
   createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 

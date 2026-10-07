@@ -1,4 +1,4 @@
-import { BADGES, TIER_LABEL, TIER_TAGLINE, BADGE_TIERS, WELCOME_BADGE_ID, formatBadgeValue, tierReached, type BadgeCategoryId, type BadgeDef, type BadgeStateDTO, type BadgeTier } from "@app/shared";
+import { BADGES, TIER_LABEL, TIER_TAGLINE, BADGE_TIERS, WELCOME_BADGE_ID, formatBadgeValue, tierReached, type BadgeCategoryId, type BadgeDef, type BadgeDiscount, type BadgeStateDTO, type BadgeTier } from "@app/shared";
 
 /** O nível (1 a 6) como nome do nível. */
 export const tierName = (tier: number): BadgeTier => BADGE_TIERS[Math.max(1, Math.min(6, tier)) - 1]!;
@@ -94,6 +94,18 @@ export function nextGoals(items: readonly BadgeStateDTO[], limit = 3): NextGoal[
     });
   }
   return out.sort((a, b) => b.progress - a.progress || BADGES.indexOf(a.def) - BADGES.indexOf(b.def)).slice(0, limit);
+}
+
+/** Textos e progresso do cartão "Desconto na assinatura" (Insígnias e Assinatura), a partir do cálculo compartilhado `badgeDiscount`. */
+export function discountSummary(d: BadgeDiscount): { title: string; detail: string; progressPct: number; atCap: boolean } {
+  const atCap = d.nextPercent === null;
+  const count = (n: number) => `${n} ${n === 1 ? "insígnia" : "insígnias"}`;
+  const title = d.percent > 0 ? `Você tem ${d.percent}% de desconto na assinatura` : "Ganhe desconto na assinatura";
+  const detail = atCap
+    ? `Desconto máximo de ${d.capPercent}%, com ${count(d.qualifying)} no nível Ouro ou acima.`
+    : `${d.qualifying === 0 ? "Nenhuma insígnia" : count(d.qualifying)} no nível Ouro ou acima. Faltam ${d.badgesToNext} para ${d.nextPercent}% (a cada ${d.badgesPerStep}, até ${d.capPercent}%).`;
+  const progressPct = atCap ? 100 : ((d.qualifying % d.badgesPerStep) / d.badgesPerStep) * 100;
+  return { title, detail, progressPct, atCap };
 }
 
 export type BadgeFilter = { category: BadgeCategoryId | "all"; status: "all" | "earned" | "progress" | "locked" };

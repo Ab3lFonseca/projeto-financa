@@ -75,6 +75,38 @@ describe("resumo da situação", () => {
   });
 });
 
+describe("planos com desconto de insígnias", () => {
+  const price = (amountCents: number, interval: "month" | "year") => ({ amountCents, currency: "BRL", interval });
+  const prices = { month: price(1000, "month"), year: price(10000, "year") };
+
+  it("sem desconto: nenhum valor com desconto aparece", () => {
+    for (const o of planOffers(prices)) {
+      expect(o.discountedTotal).toBeNull();
+      expect(o.discountedPerMonth).toBeNull();
+    }
+    for (const o of planOffers(prices, 0)) expect(o.discountedTotal).toBeNull();
+  });
+
+  it("com 5%: o mensal e o anual mostram o valor final, e o anual mostra quanto dá por mês", () => {
+    const [yearly, monthly] = planOffers(prices, 5);
+    expect(yearly!.total.replace(/\s/g, " ")).toBe("R$ 100,00 / ano"); // o preço cheio segue igual (aparece riscado)
+    expect(yearly!.discountedTotal!.replace(/\s/g, " ")).toBe("R$ 95,00 / ano");
+    expect(yearly!.discountedPerMonth!.replace(/\s/g, " ")).toBe("R$ 7,92 por mês"); // 95 ÷ 12
+    expect(monthly!.discountedTotal!.replace(/\s/g, " ")).toBe("R$ 9,50 / mês");
+    expect(monthly!.discountedPerMonth).toBeNull();
+  });
+
+  it("no teto de 15% o valor cai 15%", () => {
+    const [yearly, monthly] = planOffers(prices, 15);
+    expect(yearly!.discountedTotal!.replace(/\s/g, " ")).toBe("R$ 85,00 / ano");
+    expect(monthly!.discountedTotal!.replace(/\s/g, " ")).toBe("R$ 8,50 / mês");
+  });
+
+  it("a economia do anual segue calculada pelos preços cheios (o desconto das insígnias é outra coisa)", () => {
+    expect(planOffers(prices, 10)[0]!.savings).toBe(planOffers(prices)[0]!.savings);
+  });
+});
+
 describe("forma de pagar", () => {
   it("oferece as duas: renova sozinha (padrão da assinatura) e pagar uma vez", () => {
     expect(PAYMENT_MODE_OPTIONS.map((o) => o.value)).toEqual(["recurring", "once"]);

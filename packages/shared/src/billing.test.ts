@@ -51,8 +51,10 @@ describe("contrato de cobrança", () => {
       interval: "year",
       autoRenew: false,
       prices: { basic: { month: price(1000, "month"), year: price(10000, "year") }, investments: { month: price(500, "month"), year: null } },
+      discount: { qualifying: 7, percent: 5, capPercent: 15, badgesPerStep: 5, stepPercent: 5, nextPercent: 10, badgesToNext: 3 },
     });
     expect(ok.success).toBe(true);
+    expect(billingDTO.safeParse({ ...ok.data, discount: undefined }).success).toBe(false);
     expect(billingDTO.safeParse({ ...ok.data, interval: "week" }).success).toBe(false);
   });
 });
